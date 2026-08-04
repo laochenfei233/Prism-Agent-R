@@ -35,7 +35,7 @@
 	{#if !agentStore.currentSession}
 		<div class="welcome">
 			<div class="welcome-content">
-				<img src="/icon.png" alt="Prism" width="64" height="64" />
+				<img src="/icon.svg" alt="Prism" width="64" height="64" />
 				<h1>Prism Agent</h1>
 				<p>选择一个 Agent 开始对话，或创建新的 Agent</p>
 			</div>

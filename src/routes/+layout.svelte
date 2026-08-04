@@ -38,7 +38,7 @@
 	<aside class="sidebar">
 		<div class="sidebar-header">
 			<div class="logo">
-				<img src="/icon.png" alt="Prism" width="28" height="28" />
+				<img src="/icon.svg" alt="Prism" width="28" height="28" />
 				<span class="logo-text">Prism Agent</span>
 			</div>
 		</div>
