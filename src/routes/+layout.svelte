@@ -326,7 +326,7 @@
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
+		overflow-y: auto;
 		background: var(--color-bg);
 	}
 </style>
