@@ -38,88 +38,108 @@
 	}
 </script>
 
-<div class="app-shell">
-	<!-- Left Sidebar -->
+<div class="app">
+	<!-- Sidebar -->
 	<aside class="sidebar">
+		<!-- Sidebar Header -->
 		<div class="sidebar-header">
 			<div class="logo">
-				<img src="/icon.svg" alt="Prism" width="28" height="28" />
-				<span class="logo-text">Prism Agent</span>
+				<img src="/icon.svg" alt="" width="24" height="24" />
+				<span class="logo-text">Prism</span>
 			</div>
+			<button class="icon-btn" onclick={() => goto('/settings')} title="设置">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+				</svg>
+			</button>
 		</div>
 
-		<div class="sidebar-content">
-			<!-- Agent List -->
-			<div class="section">
-				<div class="section-header">
-					<span>Agent</span>
-					<button class="btn-icon" onclick={() => showNewAgent = !showNewAgent}>+</button>
+		<!-- Agent Section -->
+		<div class="section">
+			<div class="section-header">
+				<span class="section-title">Agent</span>
+				<button class="icon-btn-sm" onclick={() => showNewAgent = !showNewAgent}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+					</svg>
+				</button>
+			</div>
+
+			{#if showNewAgent}
+				<div class="new-form">
+					<input
+						type="text"
+						placeholder="Agent 名称"
+						bind:value={newAgentName}
+						onkeydown={(e) => e.key === 'Enter' && handleCreateAgent()}
+					/>
+					<button class="btn-confirm" onclick={handleCreateAgent}>创建</button>
 				</div>
+			{/if}
 
-				{#if showNewAgent}
-					<div class="new-agent-form">
-						<input
-							type="text"
-							placeholder="Agent 名称"
-							bind:value={newAgentName}
-							onkeydown={(e) => e.key === 'Enter' && handleCreateAgent()}
-						/>
-						<button class="btn-sm" onclick={handleCreateAgent}>创建</button>
-					</div>
-				{/if}
-
+			<div class="list">
 				{#each agentStore.agents as agent}
 					<div
-						class="agent-item"
+						class="list-item"
 						class:active={agentStore.currentAgent?.id === agent.id}
+						onclick={() => agentStore.selectAgent(agent)}
+						role="button"
+						tabindex="0"
+						onkeydown={(e) => e.key === 'Enter' && agentStore.selectAgent(agent)}
 					>
-						<div class="agent-info" onclick={() => agentStore.selectAgent(agent)}>
-							<div class="agent-avatar">{agent.name[0]}</div>
-							<div class="agent-meta">
-								<span class="agent-name">{agent.name}</span>
-								{#if agent.description}
-									<span class="agent-desc">{agent.description}</span>
-								{/if}
-							</div>
+						<div class="avatar">{agent.name[0]}</div>
+						<div class="item-content">
+							<div class="item-title">{agent.name}</div>
+							{#if agent.description}
+								<div class="item-subtitle">{agent.description}</div>
+							{/if}
 						</div>
-						<button class="btn-icon btn-new-chat" onclick={() => handleNewSession(agent)} title="新建对话">+</button>
+						<button class="add-btn" onclick={(e) => { e.stopPropagation(); handleNewSession(agent); }} title="新建对话">
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+							</svg>
+						</button>
 					</div>
 				{/each}
 
 				{#if agentStore.agents.length === 0 && !showNewAgent}
-					<div class="empty-hint">
-						<p>暂无 Agent</p>
-						<button class="btn-sm" onclick={() => showNewAgent = true}>创建第一个</button>
+					<div class="empty">
+						<span>暂无 Agent</span>
+						<button class="btn-text" onclick={() => showNewAgent = true}>创建</button>
 					</div>
 				{/if}
 			</div>
+		</div>
 
-			<!-- Session List -->
-			{#if agentStore.currentAgent}
-				<div class="section">
-					<div class="section-header">
-						<span>会话</span>
-						<button class="btn-icon" onclick={() => handleNewSession(agentStore.currentAgent!)} title="新建对话">+</button>
-					</div>
+		<!-- Session Section -->
+		{#if agentStore.currentAgent}
+			<div class="section">
+				<div class="section-header">
+					<span class="section-title">会话</span>
+					<button class="icon-btn-sm" onclick={() => handleNewSession(agentStore.currentAgent!)}>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+						</svg>
+					</button>
+				</div>
+				<div class="list">
 					{#each agentStore.sessions as session}
 						<div
-							class="session-item"
+							class="list-item"
 							class:active={agentStore.currentSession?.id === session.id}
 							onclick={() => handleSelectSession(session)}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => e.key === 'Enter' && handleSelectSession(session)}
 						>
-							<span class="session-title">{session.title || '新会话'}</span>
+							<div class="item-content">
+								<div class="item-title">{session.title || '新会话'}</div>
+							</div>
 						</div>
 					{/each}
 				</div>
-			{/if}
-		</div>
-
-		<!-- Sidebar Footer -->
-		<div class="sidebar-footer">
-			<button class="settings-btn" onclick={() => goto('/settings')}>
-				⚙ 设置
-			</button>
-		</div>
+			</div>
+		{/if}
 	</aside>
 
 	<!-- Main Content -->
@@ -129,12 +149,14 @@
 </div>
 
 <style>
-	.app-shell {
+	.app {
 		display: flex;
 		height: 100vh;
 		overflow: hidden;
+		background: var(--color-bg);
 	}
 
+	/* ── Sidebar ────────────────────────────────── */
 	.sidebar {
 		width: 260px;
 		min-width: 260px;
@@ -146,192 +168,209 @@
 	}
 
 	.sidebar-header {
-		padding: var(--space-4);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 12px 16px;
 		border-bottom: 1px solid var(--color-separator);
+		min-height: 52px;
 	}
 
 	.logo {
 		display: flex;
 		align-items: center;
-		gap: var(--space-2);
+		gap: 8px;
 	}
 
 	.logo-text {
-		font-size: var(--text-lg);
-		font-weight: 700;
+		font-size: 17px;
+		font-weight: 600;
+		color: var(--color-fg);
+		letter-spacing: -0.41px;
 	}
 
-	.sidebar-content {
-		flex: 1;
-		overflow-y: auto;
-		padding: var(--space-2);
+	.icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		border: none;
+		background: transparent;
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+		transition: background 0.15s ease;
 	}
+	.icon-btn:hover { background: var(--color-bg-tertiary); }
 
+	/* ── Sections ───────────────────────────────── */
 	.section {
-		margin-bottom: var(--space-4);
+		padding: 8px 0;
 	}
 
 	.section-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: var(--space-2) var(--space-2);
-		font-size: var(--text-sm);
-		font-weight: 600;
-		color: var(--color-fg-secondary);
+		padding: 8px 16px 4px;
 	}
 
-	.btn-icon {
+	.section-title {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-fg-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.icon-btn-sm {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		width: 24px;
 		height: 24px;
-		border-radius: var(--radius-sm);
+		border-radius: 6px;
 		border: none;
 		background: transparent;
-		color: var(--color-fg-secondary);
+		color: var(--color-accent);
 		cursor: pointer;
-		font-size: 16px;
+		transition: background 0.15s ease;
+	}
+	.icon-btn-sm:hover { background: rgba(0, 113, 227, 0.1); }
+
+	/* ── List ───────────────────────────────────── */
+	.list {
+		padding: 0 8px;
+	}
+
+	.list-item {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-	}
-	.btn-icon:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
-
-	.new-agent-form {
-		display: flex;
-		gap: var(--space-1);
-		padding: var(--space-1) var(--space-2);
-	}
-	.new-agent-form input {
-		flex: 1;
-		padding: 4px 8px;
-		border: 1px solid var(--color-separator);
-		border-radius: var(--radius-sm);
-		background: var(--color-bg);
-		color: var(--color-fg);
-		font-size: var(--text-sm);
-	}
-	.btn-sm {
-		padding: 4px 10px;
-		border-radius: var(--radius-sm);
+		gap: 10px;
+		padding: 8px 10px;
+		border-radius: 8px;
 		border: none;
-		background: var(--color-accent);
-		color: #fff;
-		font-size: var(--text-xs);
+		background: transparent;
+		color: var(--color-fg);
 		cursor: pointer;
+		width: 100%;
+		text-align: left;
+		transition: background 0.15s ease;
 	}
+	.list-item:hover { background: var(--color-bg-tertiary); }
+	.list-item.active { background: var(--color-accent); color: #fff; }
 
-	.agent-item {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-2);
-		border-radius: var(--radius-md);
-		cursor: pointer;
-		transition: background var(--duration-fast);
-	}
-	.agent-item:hover { background: var(--color-bg-tertiary); }
-	.agent-item.active { background: var(--color-accent); color: #fff; }
-	.agent-item.active .agent-desc { color: rgba(255,255,255,0.7); }
-
-	.agent-info {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		flex: 1;
-		min-width: 0;
-	}
-
-	.agent-avatar {
+	.avatar {
 		width: 32px;
 		height: 32px;
-		border-radius: 50%;
+		border-radius: 8px;
 		background: var(--color-accent);
 		color: #fff;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		font-size: 14px;
 		font-weight: 600;
-		font-size: var(--text-sm);
 		flex-shrink: 0;
 	}
+	.list-item.active .avatar { background: rgba(255,255,255,0.2); }
 
-	.agent-meta {
+	.item-content {
 		flex: 1;
 		min-width: 0;
 	}
 
-	.agent-name {
-		display: block;
-		font-size: var(--text-sm);
+	.item-title {
+		font-size: 14px;
 		font-weight: 500;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.agent-desc {
-		display: block;
-		font-size: var(--text-xs);
+	.item-subtitle {
+		font-size: 12px;
 		color: var(--color-fg-secondary);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	.list-item.active .item-subtitle { color: rgba(255,255,255,0.7); }
 
-	.btn-new-chat {
-		opacity: 0.5;
-		transition: opacity var(--duration-fast);
-	}
-	.agent-item:hover .btn-new-chat { opacity: 1; }
-
-	.session-item {
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-md);
-		cursor: pointer;
-		font-size: var(--text-sm);
-		transition: background var(--duration-fast);
-	}
-	.session-item:hover { background: var(--color-bg-tertiary); }
-	.session-item.active { background: var(--color-bg-tertiary); font-weight: 500; }
-
-	.session-title {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		display: block;
-	}
-
-	.empty-hint {
-		padding: var(--space-4);
-		text-align: center;
-		color: var(--color-fg-secondary);
-		font-size: var(--text-sm);
-	}
-
-	.sidebar-footer {
-		padding: var(--space-3);
-		border-top: 1px solid var(--color-separator);
-	}
-
-	.settings-btn {
-		width: 100%;
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-md);
+	.add-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 6px;
 		border: none;
 		background: transparent;
 		color: var(--color-fg-secondary);
 		cursor: pointer;
-		font-size: var(--text-sm);
-		text-align: left;
-		transition: background var(--duration-fast);
+		opacity: 0.5;
+		transition: opacity 0.15s ease;
+		flex-shrink: 0;
 	}
-	.settings-btn:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
+	.add-btn:hover { opacity: 1; background: var(--color-bg-tertiary); }
+	.list-item.active .add-btn { color: #fff; }
 
+	.empty {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 12px 16px;
+		font-size: 14px;
+		color: var(--color-fg-secondary);
+	}
+
+	/* ── New Agent Form ─────────────────────────── */
+	.new-form {
+		display: flex;
+		gap: 6px;
+		padding: 4px 8px 8px;
+	}
+
+	.new-form input {
+		flex: 1;
+		padding: 6px 10px;
+		border-radius: 6px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg);
+		color: var(--color-fg);
+		font-size: 13px;
+		outline: none;
+	}
+	.new-form input:focus { border-color: var(--color-accent); }
+
+	.btn-confirm {
+		padding: 6px 12px;
+		border-radius: 6px;
+		border: none;
+		background: var(--color-accent);
+		color: #fff;
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+	.btn-confirm:hover { opacity: 0.9; }
+
+	.btn-text {
+		padding: 4px 8px;
+		border-radius: 6px;
+		border: none;
+		background: transparent;
+		color: var(--color-accent);
+		font-size: 13px;
+		cursor: pointer;
+	}
+
+	/* ── Content ────────────────────────────────── */
 	.content {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
 		overflow-y: auto;
-		background: var(--color-bg);
 	}
 </style>
