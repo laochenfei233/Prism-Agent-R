@@ -21,10 +21,14 @@
 	}
 
 	async function handleNewSession(agent: AgentDto) {
-		agentStore.selectAgent(agent);
-		await agentStore.createSession(agent.id, '新会话');
-		if (agentStore.currentSession) {
-			chatStore.loadHistory(agentStore.currentSession.id);
+		try {
+			agentStore.selectAgent(agent);
+			await agentStore.createSession(agent.id, '新会话');
+			if (agentStore.currentSession) {
+				chatStore.loadHistory(agentStore.currentSession.id);
+			}
+		} catch (e) {
+			console.error('Failed to create session:', e);
 		}
 	}
 

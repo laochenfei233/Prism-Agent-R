@@ -41,10 +41,17 @@ class AgentStore {
 	}
 
 	async createSession(agentId: string, title?: string) {
-		const session = await sessionApi.create(agentId, title);
-		this.sessions = [session, ...this.sessions];
-		this.currentSession = session;
-		return session;
+		try {
+			console.log('Creating session:', { agentId, title });
+			const session = await sessionApi.create(agentId, title);
+			console.log('Session created:', session);
+			this.sessions = [session, ...this.sessions];
+			this.currentSession = session;
+			return session;
+		} catch (e) {
+			console.error('Failed to create session:', e);
+			throw e;
+		}
 	}
 
 	async deleteSession(id: string) {
