@@ -27,7 +27,7 @@
 		loadingModels = true;
 		availableModels = [];
 		try {
-			const result = await invoke<{models: string[]}>('model_fetch_available', { provider_id: mProvider });
+			const result = await invoke<{models: string[]}>('model_fetch_available', { providerId: mProvider });
 			availableModels = result.models || [];
 		} catch (e) {
 			msg = '拉取失败: ' + String(e);
@@ -46,7 +46,7 @@
 		try {
 			await invoke('settings_add_provider', {
 				name: pName.trim(), kind: pKind,
-				base_url: pUrl.trim() || null, api_key: pKey.trim() || null
+				baseUrl: pUrl.trim() || null, apiKey: pKey.trim() || null
 			});
 			pName = ''; pUrl = ''; pKey = '';
 			await load();
@@ -60,8 +60,8 @@
 		if (!mProvider || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
 		try {
 			await invoke('settings_add_model', {
-				provider_id: mProvider, model_id: mModelId.trim(),
-				display_name: null, is_default: true
+				providerId: mProvider, modelId: mModelId.trim(),
+				displayName: null, isDefault: true
 			});
 			mModelId = '';
 			await load();

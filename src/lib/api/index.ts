@@ -51,9 +51,9 @@ export const agentApi = {
 // ── Session API ───────────────────────────────────────────
 
 export const sessionApi = {
-	list: (agent_id?: string) => invoke<SessionDto[]>('session_list', { agent_id }),
-	create: (agent_id: string, title?: string) =>
-		invoke<SessionDto>('session_create', { agent_id, title }),
+	list: (agentId?: string) => invoke<SessionDto[]>('session_list', { agentId }),
+	create: (agentId: string, title?: string) =>
+		invoke<SessionDto>('session_create', { agentId, title }),
 	rename: (id: string, title: string) =>
 		invoke<SessionDto>('session_rename', { id, title }),
 	delete: (id: string) => invoke<void>('session_delete', { id }),
@@ -62,10 +62,10 @@ export const sessionApi = {
 // ── Chat API ──────────────────────────────────────────────
 
 export const chatApi = {
-	history: (session_id: string, limit?: number) =>
-		invoke<MessageDto[]>('chat_history', { session_id, limit }),
-	send: (session_id: string, content: string) =>
-		invoke<MessageDto>('chat_send', { session_id, content }),
+	history: (sessionId: string, limit?: number) =>
+		invoke<MessageDto[]>('chat_history', { sessionId, limit }),
+	send: (sessionId: string, content: string) =>
+		invoke<MessageDto>('chat_send', { sessionId, content }),
 };
 
 // ── Stream Events ─────────────────────────────────────────
