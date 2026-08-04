@@ -1,256 +1,250 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { agentStore } from '$lib/stores/agents.svelte';
-	import { chatStore } from '$lib/stores/chat.svelte';
-	import type { MessageDto } from '$lib/api';
+	import { invoke } from '$lib/api/client';
+	import { agentApi } from '$lib/api';
 
-	let input = $state('');
-	let messagesEnd = $state<HTMLElement>();
+	let providers = $state<any[]>([]);
+	let models = $state<any[]>([]);
+	let showConfig = $state(false);
+
+	// Quick add provider
+	let providerName = $state('');
+	let providerKind = $state('openai');
+	let providerUrl = $state('');
+	let providerKey = $state('');
+
+	// Quick add model
+	let modelProviderId = $state('');
+	let modelId = $state('');
+	let modelDefault = $state(true);
+
+	let step = $state(1); // 1=add provider, 2=add model, 3=create agent
+	let message = $state('');
+
+	async function loadConfig() {
+		providers = await invoke<any[]>('model_providers');
+		models = await invoke<any[]>('model_list');
+		if (providers.length > 0) step = 2;
+		if (models.length > 0) step = 3;
+	}
+
+	async function addProvider() {
+		if (!providerName.trim()) return;
+		await invoke('settings_add_provider', {
+			name: providerName.trim(),
+			kind: providerKind,
+			base_url: providerUrl.trim() || null,
+			api_key: providerKey.trim() || null,
+		});
+		providerName = '';
+		providerUrl = '';
+		providerKey = '';
+		await loadConfig();
+		message = 'Provider 添加成功';
+		setTimeout(() => message = '', 2000);
+	}
+
+	async function addModel() {
+		if (!modelProviderId || !modelId.trim()) return;
+		await invoke('settings_add_model', {
+			provider_id: modelProviderId,
+			model_id: modelId.trim(),
+			display_name: null,
+			is_default: modelDefault,
+		});
+		modelId = '';
+		await loadConfig();
+		message = '模型添加成功';
+		setTimeout(() => message = '', 2000);
+	}
+
+	async function createAgent() {
+		const agent = await agentApi.create('助手', '一个有用的 AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
+		message = `Agent "${agent.name}" 创建成功`;
+		setTimeout(() => message = '', 2000);
+	}
 
 	$effect(() => {
-		if (messagesEnd && chatStore.messages.length > 0) {
-			messagesEnd.scrollIntoView({ behavior: 'smooth' });
-		}
+		loadConfig();
 	});
-
-	async function handleSend() {
-		if (!input.trim() || !agentStore.currentSession) return;
-		const content = input.trim();
-		input = '';
-		await chatStore.send(agentStore.currentSession.id, content);
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			handleSend();
-		}
-	}
-
-	function formatTime(ts: number) {
-		return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-	}
 </script>
 
 <div class="chat-page">
-	{#if !agentStore.currentSession}
+	{#if !showConfig && providers.length > 0 && models.length > 0}
+		<!-- Normal welcome -->
 		<div class="welcome">
 			<div class="welcome-content">
 				<img src="/icon.svg" alt="Prism" width="80" height="80" />
 				<h1>Prism Agent</h1>
 				<p>AI Agent 驱动的智能助手</p>
-
-				{#if agentStore.agents.length === 0}
-					<!-- Quick Setup Guide -->
-					<div class="quick-setup">
-						<h2>快速开始</h2>
-						<div class="setup-steps">
-							<div class="setup-step">
-								<span class="step-num">1</span>
-								<div>
-									<strong>配置模型</strong>
-									<p>添加 LLM Provider（OpenAI / Ollama / 自定义）</p>
-								</div>
-							</div>
-							<div class="setup-step">
-								<span class="step-num">2</span>
-								<div>
-									<strong>创建 Agent</strong>
-									<p>设置 Agent 名称和系统提示词</p>
-								</div>
-							</div>
-							<div class="setup-step">
-								<span class="step-num">3</span>
-								<div>
-									<strong>开始对话</strong>
-									<p>与 Agent 进行智能对话</p>
-								</div>
-							</div>
-						</div>
-						<button class="setup-btn" onclick={() => goto('/settings')}>
-							⚙ 前往设置，配置模型
-						</button>
-					</div>
-				{:else}
-					<p>选择左侧 Agent 开始对话，或点击 <strong>+</strong> 创建新 Agent</p>
-				{/if}
+				<p>选择左侧 Agent 开始对话，或点击 <strong>+</strong> 创建新 Agent</p>
+				<button class="link-btn" onclick={() => showConfig = true}>⚙ 修改配置</button>
 			</div>
 		</div>
 	{:else}
-		<!-- Chat Header -->
-		<div class="chat-header">
-			<h2>{agentStore.currentAgent?.name || 'Agent'}</h2>
-			<span class="session-label">{agentStore.currentSession.title || '新会话'}</span>
-		</div>
+		<!-- Quick Setup -->
+		<div class="setup-page">
+			<div class="setup-card">
+				<img src="/icon.svg" alt="Prism" width="48" height="48" />
+				<h1>Prism Agent</h1>
+				<p class="subtitle">快速配置，3 步开始</p>
 
-		<!-- Messages -->
-		<div class="messages">
-			{#each chatStore.messages as msg}
-				<div class="message" class:user={msg.role === 'user'} class:assistant={msg.role === 'assistant'}>
-					<div class="message-avatar">
-						{#if msg.role === 'user'}你{:else}{agentStore.currentAgent?.name?.[0] || 'A'}{/if}
-					</div>
-					<div class="message-body">
-						<div class="message-content">{msg.content}</div>
-						<div class="message-time">{formatTime(msg.created_at)}</div>
-					</div>
-				</div>
-			{/each}
-
-			{#if chatStore.streaming && chatStore.streamingText}
-				<div class="message assistant">
-					<div class="message-avatar">{agentStore.currentAgent?.name?.[0] || 'A'}</div>
-					<div class="message-body">
-						<div class="message-content">{chatStore.streamingText}<span class="cursor">|</span></div>
-					</div>
-				</div>
-			{/if}
-
-			<div bind:this={messagesEnd}></div>
-		</div>
-
-		<!-- Composer -->
-		<div class="composer">
-			<textarea
-				bind:value={input}
-				onkeydown={handleKeydown}
-				placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
-				rows="1"
-				disabled={chatStore.isGenerating}
-			></textarea>
-			<button
-				class="send-btn"
-				onclick={handleSend}
-				disabled={!input.trim() || chatStore.isGenerating}
-			>
-				{#if chatStore.isGenerating}
-					<span class="spinner"></span>
-				{:else}
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/>
-					</svg>
+				{#if message}
+					<div class="msg">{message}</div>
 				{/if}
-			</button>
+
+				<!-- Step 1: Provider -->
+				<div class="step" class:done={providers.length > 0}>
+					<div class="step-header">
+						<span class="num">{providers.length > 0 ? '✓' : '1'}</span>
+						<span>添加 Provider</span>
+					</div>
+					{#if providers.length === 0}
+						<div class="step-body">
+							<select bind:value={providerKind}>
+								<option value="openai">OpenAI 兼容</option>
+								<option value="ollama">Ollama (本地)</option>
+								<option value="custom">自定义</option>
+							</select>
+							<input placeholder="名称（如 OpenAI）" bind:value={providerName} />
+							<input
+								placeholder={providerKind === 'ollama' ? 'http://localhost:11434/v1' : 'Base URL'}
+								bind:value={providerUrl}
+							/>
+							<input type="password" placeholder="API Key" bind:value={providerKey} />
+							<button class="btn" onclick={addProvider}>保存 Provider</button>
+						</div>
+					{:else}
+						<div class="step-done">
+							{#each providers as p}
+								<span class="tag">{p.name}</span>
+							{/each}
+							<button class="link-btn small" onclick={() => showConfig = true}>管理</button>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Step 2: Model -->
+				<div class="step" class:done={models.length > 0} class:disabled={providers.length === 0}>
+					<div class="step-header">
+						<span class="num">{models.length > 0 ? '✓' : '2'}</span>
+						<span>添加模型</span>
+					</div>
+					{#if providers.length > 0 && models.length === 0}
+						<div class="step-body">
+							<select bind:value={modelProviderId}>
+								<option value="">选择 Provider</option>
+								{#each providers as p}
+									<option value={p.id}>{p.name}</option>
+								{/each}
+							</select>
+							<input placeholder="模型 ID（如 gpt-4o、qwen2.5）" bind:value={modelId} />
+							<label class="check">
+								<input type="checkbox" bind:checked={modelDefault} /> 设为默认
+							</label>
+							<button class="btn" onclick={addModel}>保存模型</button>
+						</div>
+					{:else if models.length > 0}
+						<div class="step-done">
+							{#each models as m}
+								<span class="tag">{m.display_name || m.model_id}{m.is_default ? ' ⭐' : ''}</span>
+							{/each}
+						</div>
+					{:else}
+						<p class="disabled-hint">请先添加 Provider</p>
+					{/if}
+				</div>
+
+				<!-- Step 3: Agent -->
+				<div class="step" class:disabled={models.length === 0}>
+					<div class="step-header">
+						<span class="num">3</span>
+						<span>创建 Agent</span>
+					</div>
+					{#if models.length > 0}
+						<div class="step-body">
+							<p class="hint">点击下方按钮创建默认 Agent</p>
+							<button class="btn" onclick={createAgent}>创建 Agent</button>
+						</div>
+					{:else}
+						<p class="disabled-hint">请先添加模型</p>
+					{/if}
+				</div>
+
+				{#if providers.length > 0 && models.length > 0}
+					<a href="/" class="done-link">→ 开始使用</a>
+				{/if}
+			</div>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.chat-page {
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-	}
+	.chat-page { height: 100%; }
 
 	.welcome {
-		flex: 1;
+		height: 100%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 	}
 	.welcome-content {
 		text-align: center;
-		gap: var(--space-4);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-	}
-	.welcome-content h1 {
-		font-size: var(--text-3xl);
-		font-weight: 700;
-		margin: 0;
-	}
-	.welcome-content p {
-		color: var(--color-fg-secondary);
-		font-size: var(--text-lg);
-		margin: 0;
-	}
-
-	.chat-header {
-		padding: var(--space-3) var(--space-6);
-		border-bottom: 1px solid var(--color-separator);
-		display: flex;
-		align-items: baseline;
 		gap: var(--space-3);
 	}
-	.chat-header h2 {
-		font-size: var(--text-lg);
-		font-weight: 600;
-		margin: 0;
-	}
-	.session-label {
-		font-size: var(--text-sm);
-		color: var(--color-fg-secondary);
-	}
+	.welcome-content h1 { font-size: var(--text-3xl); font-weight: 700; margin: 0; }
+	.welcome-content p { color: var(--color-fg-secondary); margin: 0; }
 
-	.messages {
-		flex: 1;
-		overflow-y: auto;
-		padding: var(--space-6);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-6);
-	}
-
-	.message {
-		display: flex;
-		gap: var(--space-3);
-		max-width: 800px;
-		width: 100%;
-	}
-	.message.user {
-		flex-direction: row-reverse;
-	}
-
-	.message-avatar {
-		width: 32px;
-		height: 32px;
-		border-radius: 50%;
-		background: var(--color-bg-secondary);
-		color: var(--color-fg-secondary);
+	.setup-page {
+		height: 100%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-weight: 600;
-		font-size: var(--text-sm);
-		flex-shrink: 0;
-	}
-	.message.user .message-avatar {
-		background: var(--color-accent);
-		color: #fff;
-	}
-
-	.message-body {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.quick-setup {
-		margin-top: var(--space-8);
 		padding: var(--space-6);
+	}
+	.setup-card {
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-xl);
-		text-align: left;
+		padding: var(--space-8);
 		max-width: 480px;
-	}
-	.quick-setup h2 {
-		font-size: var(--text-lg);
-		font-weight: 600;
-		margin: 0 0 var(--space-4);
-		text-align: center;
-	}
-	.setup-steps {
+		width: 100%;
 		display: flex;
 		flex-direction: column;
+		align-items: center;
 		gap: var(--space-4);
-		margin-bottom: var(--space-6);
 	}
-	.setup-step {
+	.setup-card h1 { font-size: var(--text-2xl); font-weight: 700; margin: 0; }
+	.subtitle { color: var(--color-fg-secondary); margin: 0; }
+
+	.msg {
+		padding: var(--space-2) var(--space-4);
+		border-radius: var(--radius-md);
+		background: var(--color-green);
+		color: #fff;
+		font-size: var(--text-sm);
+	}
+
+	.step {
+		width: 100%;
+		background: var(--color-bg);
+		border-radius: var(--radius-lg);
+		padding: var(--space-4);
+		transition: opacity var(--duration-fast);
+	}
+	.step.disabled { opacity: 0.5; pointer-events: none; }
+	.step.done { border: 2px solid var(--color-green); }
+
+	.step-header {
 		display: flex;
-		gap: var(--space-3);
-		align-items: flex-start;
+		align-items: center;
+		gap: var(--space-2);
+		font-weight: 600;
+		margin-bottom: var(--space-3);
 	}
-	.step-num {
+	.num {
 		width: 24px;
 		height: 24px;
 		border-radius: 50%;
@@ -259,122 +253,84 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-weight: 700;
 		font-size: var(--text-sm);
 		flex-shrink: 0;
 	}
-	.setup-step strong {
-		display: block;
-		font-size: var(--text-base);
-		margin-bottom: 2px;
-	}
-	.setup-step p {
-		margin: 0;
-		font-size: var(--text-sm);
-		color: var(--color-fg-secondary);
-	}
-	.setup-btn {
-		width: 100%;
-		padding: var(--space-3) var(--space-4);
-		border-radius: var(--radius-lg);
-		border: none;
-		background: var(--color-accent);
-		color: #fff;
-		font-size: var(--text-base);
-		font-weight: 600;
-		cursor: pointer;
-		transition: background var(--duration-fast);
-	}
-	.setup-btn:hover { background: var(--color-accent-hover); }
+	.step.done .num { background: var(--color-green); }
 
-	.message-content {
-		padding: var(--space-3) var(--space-4);
-		border-radius: var(--radius-lg);
-		font-size: var(--text-base);
-		line-height: 1.6;
-		white-space: pre-wrap;
-		word-break: break-word;
+	.step-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
-	.message.user .message-content {
-		background: var(--color-accent);
-		color: #fff;
-		border-bottom-right-radius: var(--radius-sm);
-	}
-	.message.assistant .message-content {
+
+	input, select {
+		padding: var(--space-2) var(--space-3);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
 		background: var(--color-bg-secondary);
 		color: var(--color-fg);
-		border-bottom-left-radius: var(--radius-sm);
-	}
-
-	.message-time {
-		font-size: var(--text-xs);
-		color: var(--color-fg-tertiary);
-		margin-top: var(--space-1);
-		padding: 0 var(--space-2);
-	}
-	.message.user .message-time {
-		text-align: right;
-	}
-
-	.cursor {
-		animation: blink 1s infinite;
-		color: var(--color-accent);
-	}
-
-	.composer {
-		padding: var(--space-4) var(--space-6);
-		border-top: 1px solid var(--color-separator);
-		display: flex;
-		gap: var(--space-3);
-		align-items: flex-end;
-	}
-
-	textarea {
-		flex: 1;
-		padding: var(--space-3);
-		border-radius: var(--radius-lg);
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
-		color: var(--color-fg);
-		font-size: var(--text-base);
-		font-family: var(--font-sans);
-		resize: none;
+		font-size: var(--text-sm);
 		outline: none;
-		min-height: 44px;
-		max-height: 150px;
-		transition: border-color var(--duration-fast);
 	}
-	textarea:focus {
-		border-color: var(--color-accent);
-	}
+	input:focus, select:focus { border-color: var(--color-accent); }
 
-	.send-btn {
-		width: 44px;
-		height: 44px;
-		border-radius: 50%;
+	.btn {
+		padding: var(--space-2) var(--space-4);
+		border-radius: var(--radius-md);
 		border: none;
 		background: var(--color-accent);
 		color: #fff;
+		font-size: var(--text-sm);
+		font-weight: 600;
 		cursor: pointer;
+		margin-top: var(--space-1);
+	}
+	.btn:hover { background: var(--color-accent-hover); }
+
+	.check {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		transition: background var(--duration-fast), transform var(--duration-fast) var(--spring);
-		flex-shrink: 0;
-	}
-	.send-btn:hover:not(:disabled) { background: var(--color-accent-hover); }
-	.send-btn:active:not(:disabled) { transform: scale(0.92); }
-	.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-	.spinner {
-		width: 18px;
-		height: 18px;
-		border: 2px solid rgba(255,255,255,0.3);
-		border-top-color: #fff;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
+		gap: var(--space-2);
+		font-size: var(--text-sm);
+		color: var(--color-fg-secondary);
+		cursor: pointer;
 	}
 
-	@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-	@keyframes spin { to { transform: rotate(360deg); } }
+	.step-done {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		align-items: center;
+	}
+	.tag {
+		padding: 2px 10px;
+		border-radius: var(--radius-pill);
+		background: rgba(52, 199, 89, 0.15);
+		color: var(--color-green);
+		font-size: var(--text-sm);
+	}
+
+	.link-btn {
+		background: none;
+		border: none;
+		color: var(--color-accent);
+		cursor: pointer;
+		font-size: var(--text-sm);
+		padding: 0;
+		text-decoration: underline;
+	}
+	.link-btn.small { font-size: var(--text-xs); }
+
+	.done-link {
+		color: var(--color-accent);
+		font-size: var(--text-lg);
+		font-weight: 600;
+		text-decoration: none;
+		margin-top: var(--space-2);
+	}
+	.done-link:hover { text-decoration: underline; }
+
+	.hint { font-size: var(--text-sm); color: var(--color-fg-secondary); margin: 0; }
+	.disabled-hint { font-size: var(--text-sm); color: var(--color-fg-tertiary); margin: 0; }
 </style>
