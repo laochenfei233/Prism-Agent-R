@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import type { MessageDto } from '$lib/api';
@@ -35,9 +36,44 @@
 	{#if !agentStore.currentSession}
 		<div class="welcome">
 			<div class="welcome-content">
-				<img src="/icon.svg" alt="Prism" width="64" height="64" />
+				<img src="/icon.svg" alt="Prism" width="80" height="80" />
 				<h1>Prism Agent</h1>
-				<p>选择一个 Agent 开始对话，或创建新的 Agent</p>
+				<p>AI Agent 驱动的智能助手</p>
+
+				{#if agentStore.agents.length === 0}
+					<!-- Quick Setup Guide -->
+					<div class="quick-setup">
+						<h2>快速开始</h2>
+						<div class="setup-steps">
+							<div class="setup-step">
+								<span class="step-num">1</span>
+								<div>
+									<strong>配置模型</strong>
+									<p>添加 LLM Provider（OpenAI / Ollama / 自定义）</p>
+								</div>
+							</div>
+							<div class="setup-step">
+								<span class="step-num">2</span>
+								<div>
+									<strong>创建 Agent</strong>
+									<p>设置 Agent 名称和系统提示词</p>
+								</div>
+							</div>
+							<div class="setup-step">
+								<span class="step-num">3</span>
+								<div>
+									<strong>开始对话</strong>
+									<p>与 Agent 进行智能对话</p>
+								</div>
+							</div>
+						</div>
+						<button class="setup-btn" onclick={() => goto('/settings')}>
+							⚙ 前往设置，配置模型
+						</button>
+					</div>
+				{:else}
+					<p>选择左侧 Agent 开始对话，或点击 <strong>+</strong> 创建新 Agent</p>
+				{/if}
 			</div>
 		</div>
 	{:else}
@@ -188,6 +224,68 @@
 		flex: 1;
 		min-width: 0;
 	}
+
+	.quick-setup {
+		margin-top: var(--space-8);
+		padding: var(--space-6);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-xl);
+		text-align: left;
+		max-width: 480px;
+	}
+	.quick-setup h2 {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		margin: 0 0 var(--space-4);
+		text-align: center;
+	}
+	.setup-steps {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		margin-bottom: var(--space-6);
+	}
+	.setup-step {
+		display: flex;
+		gap: var(--space-3);
+		align-items: flex-start;
+	}
+	.step-num {
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		background: var(--color-accent);
+		color: #fff;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 700;
+		font-size: var(--text-sm);
+		flex-shrink: 0;
+	}
+	.setup-step strong {
+		display: block;
+		font-size: var(--text-base);
+		margin-bottom: 2px;
+	}
+	.setup-step p {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--color-fg-secondary);
+	}
+	.setup-btn {
+		width: 100%;
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-lg);
+		border: none;
+		background: var(--color-accent);
+		color: #fff;
+		font-size: var(--text-base);
+		font-weight: 600;
+		cursor: pointer;
+		transition: background var(--duration-fast);
+	}
+	.setup-btn:hover { background: var(--color-accent-hover); }
 
 	.message-content {
 		padding: var(--space-3) var(--space-4);
