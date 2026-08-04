@@ -20,30 +20,46 @@
 
 	async function saveProvider() {
 		if (!pName.trim()) { msg = '请输入名称'; return; }
-		await invoke('settings-add-provider', {
-			name: pName.trim(), kind: pKind,
-			base_url: pUrl.trim() || null, api_key: pKey.trim() || null
-		});
-		pName = ''; pUrl = ''; pKey = '';
-		await load();
-		msg = '✓ Provider 已添加';
+		try {
+			console.log('Calling settings-add-provider', { name: pName.trim(), kind: pKind });
+			await invoke('settings-add-provider', {
+				name: pName.trim(), kind: pKind,
+				base_url: pUrl.trim() || null, api_key: pKey.trim() || null
+			});
+			pName = ''; pUrl = ''; pKey = '';
+			await load();
+			msg = '✓ Provider 已添加';
+		} catch (e) {
+			console.error('Error:', e);
+			msg = '错误: ' + String(e);
+		}
 	}
 
 	async function saveModel() {
 		if (!mProvider || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
-		await invoke('settings-add-model', {
-			provider_id: mProvider, model_id: mModelId.trim(),
-			display_name: null, is_default: true
-		});
-		mModelId = '';
-		await load();
-		msg = '✓ 模型已添加';
+		try {
+			await invoke('settings-add-model', {
+				provider_id: mProvider, model_id: mModelId.trim(),
+				display_name: null, is_default: true
+			});
+			mModelId = '';
+			await load();
+			msg = '✓ 模型已添加';
+		} catch (e) {
+			console.error('Error:', e);
+			msg = '错误: ' + String(e);
+		}
 	}
 
 	async function createAgent() {
-		await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
-		msg = '✓ Agent 已创建，可以开始对话了';
-		await load();
+		try {
+			await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
+			msg = '✓ Agent 已创建，可以开始对话了';
+			await load();
+		} catch (e) {
+			console.error('Error:', e);
+			msg = '错误: ' + String(e);
+		}
 	}
 
 	$effect(() => { load(); });
