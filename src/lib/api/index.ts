@@ -39,33 +39,33 @@ export interface MessageDto {
 // ── Agent API ─────────────────────────────────────────────
 
 export const agentApi = {
-	list: () => invoke<AgentDto[]>('agent-list'),
-	get: (id: string) => invoke<AgentDto>('agent-get', { id }),
+	list: () => invoke<AgentDto[]>('agent_list'),
+	get: (id: string) => invoke<AgentDto>('agent_get', { id }),
 	create: (name: string, description?: string, system_prompt?: string) =>
-		invoke<AgentDto>('agent-create', { name, description, system_prompt }),
+		invoke<AgentDto>('agent_create', { name, description, system_prompt }),
 	update: (id: string, data: Partial<AgentDto>) =>
-		invoke<AgentDto>('agent-update', { id, ...data }),
-	delete: (id: string) => invoke<void>('agent-delete', { id }),
+		invoke<AgentDto>('agent_update', { id, ...data }),
+	delete: (id: string) => invoke<void>('agent_delete', { id }),
 };
 
 // ── Session API ───────────────────────────────────────────
 
 export const sessionApi = {
-	list: (agentId?: string) => invoke<SessionDto[]>('session-list', { agent_id: agentId }),
+	list: (agentId?: string) => invoke<SessionDto[]>('session_list', { agent_id: agentId }),
 	create: (agentId: string, title?: string) =>
-		invoke<SessionDto>('session-create', { agent_id: agentId, title }),
+		invoke<SessionDto>('session_create', { agent_id: agentId, title }),
 	rename: (id: string, title: string) =>
-		invoke<SessionDto>('session-rename', { id, title }),
-	delete: (id: string) => invoke<void>('session-delete', { id }),
+		invoke<SessionDto>('session_rename', { id, title }),
+	delete: (id: string) => invoke<void>('session_delete', { id }),
 };
 
 // ── Chat API ──────────────────────────────────────────────
 
 export const chatApi = {
 	history: (sessionId: string, limit?: number) =>
-		invoke<MessageDto[]>('chat-history', { session_id: sessionId, limit }),
+		invoke<MessageDto[]>('chat_history', { session_id: sessionId, limit }),
 	send: (sessionId: string, content: string) =>
-		invoke<MessageDto>('chat-send', { session_id: sessionId, content }),
+		invoke<MessageDto>('chat_send', { session_id: sessionId, content }),
 };
 
 // ── Stream Events ─────────────────────────────────────────

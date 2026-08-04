@@ -14,15 +14,14 @@
 	let mModelId = $state('');
 
 	async function load() {
-		providers = await invoke<any[]>('model-providers');
-		models = await invoke<any[]>('model-list');
+		providers = await invoke<any[]>('model_providers');
+		models = await invoke<any[]>('model_list');
 	}
 
 	async function saveProvider() {
 		if (!pName.trim()) { msg = '请输入名称'; return; }
 		try {
-			console.log('Calling settings-add-provider', { name: pName.trim(), kind: pKind });
-			await invoke('settings-add-provider', {
+			await invoke('settings_add_provider', {
 				name: pName.trim(), kind: pKind,
 				base_url: pUrl.trim() || null, api_key: pKey.trim() || null
 			});
@@ -38,7 +37,7 @@
 	async function saveModel() {
 		if (!mProvider || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
 		try {
-			await invoke('settings-add-model', {
+			await invoke('settings_add_model', {
 				provider_id: mProvider, model_id: mModelId.trim(),
 				display_name: null, is_default: true
 			});
