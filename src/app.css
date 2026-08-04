@@ -1,0 +1,40 @@
+/* Prism Agent — Global Styles */
+@import './lib/design-system/styles/tokens.css';
+@import './lib/design-system/styles/reset.css';
+@import './lib/design-system/styles/utilities.css';
+
+:root {
+	font-family: var(--font-sans);
+	color: var(--color-fg);
+	background: var(--color-bg);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+}
+
+*, *::before, *::after {
+	box-sizing: border-box;
+}
+
+::selection {
+	background: var(--color-accent);
+	color: #fff;
+}
+
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--color-separator);
+	border-radius: 3px;
+}
