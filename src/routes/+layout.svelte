@@ -99,6 +99,7 @@
 				<div class="section">
 					<div class="section-header">
 						<span>会话</span>
+						<button class="btn-icon" onclick={() => handleNewSession(agentStore.currentAgent!)} title="新建对话">+</button>
 					</div>
 					{#each agentStore.sessions as session}
 						<div
@@ -278,7 +279,7 @@
 	}
 
 	.btn-new-chat {
-		opacity: 0;
+		opacity: 0.5;
 		transition: opacity var(--duration-fast);
 	}
 	.agent-item:hover .btn-new-chat { opacity: 1; }
