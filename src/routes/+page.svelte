@@ -140,7 +140,7 @@
 </div>
 
 <style>
-	.page { height: 100%; display: flex; align-items: center; justify-content: center; }
+	.page { height: 100%; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 40px 20px; }
 	.center {
 		text-align: center;
 		display: flex;
