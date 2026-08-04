@@ -92,6 +92,48 @@ platform: windows | macos | linux
   → 消息持久化 SQLite → 记忆系统更新
 ```
 
+### 新会话创建流程（参考 prism-agent 原版）
+
+**双模式创建**（对齐 prism-agent 的经典/Draft 设计）：
+
+| 模式 | 触发 | 行为 | 适用场景 |
+|------|------|------|----------|
+| **直接创建** | 点击 Agent 旁的 `+` / `Ctrl+N` | 立即在 DB 创建空 Session（title=''），跳转到会话 | 经典布局、明确要新建 |
+| **Draft 模式** | 侧边栏点击 Agent 名称 | 不立即创建 Session，显示空对话界面，发送首条消息时才创建 | 快速进入、不确定是否需要持久化 |
+
+**直接创建流程**：
+```
+用户触发 → session:create { agent_id, title: '' }
+  → DB 插入（order_key=0，置顶）
+  → setActiveSession(newSession)
+  → 跳转对话界面
+  → 用户发送首条消息 → chat:send → AI 自动重命名
+```
+
+**Draft 模式流程**：
+```
+用户触发 → 显示空对话界面（无 session_id）
+  → 用户输入首条消息 → session:create + chat:send 同时执行
+  → 流式响应 → AI 自动重命名
+```
+
+**自动重命名**（AI 生成标题）：
+- 触发条件：会话内消息数 ≥ 2（至少一来一回）
+- 实现：取最后 5 条消息 → LLM 生成简短标题（≤30 字符）
+- 前端通过 `session:rename` 更新 title
+- 用户可手动编辑标题（`isNameManuallyEdited` 标记）
+
+**复用空 Session 机制**：
+- 同一 Agent 下如果已有未使用过的空 Session（无消息），直接复用而非重复创建
+- 判断条件：`session.messages_count == 0 && session.created_at == session.updated_at`
+
+**IPC 命令扩展**：
+| 命令 | 参数 | 返回 | 说明 |
+|------|------|------|------|
+| `session:create` | `{agent_id, title?}` | `SessionDto` | 创建会话（默认 title=''） |
+| `session:rename` | `{id, title}` | `SessionDto` | 重命名（含 AI 自动重命名） |
+| `chat:send` | `{session_id, content}` | `MessageDto` | 发送消息 |
+
 ---
 
 ## 2. 技术选型
@@ -3919,3 +3961,48 @@ impl serde::Serialize for AppError {
 - [ ] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + 前端 (covers: S2-10.3, S2-10.3.1~10.3.8; depends: T5, T6)
 - [ ] T17: 安全与设置 — Key 加密存储 + capabilities 权限 + 设置页 (covers: S2-12; depends: T6)
 - [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: S2-11, S2-13, S2-14; depends: T6, T8, T12, T15)
+
+---
+
+## MVP Phase 1 完成报告
+
+### 已完成任务
+
+| 任务 | 状态 | 内容 |
+|------|------|------|
+| T1 | ✅ 完成 | Tauri 2.x + Svelte 5 + SvelteKit 脚手架、Cargo 工作区、Vite 6、CI 三平台构建矩阵 |
+| T2 | ✅ 完成 | 设计系统 MVP — 19 个基础组件 + iOS 18 设计令牌 + 毛玻璃 CSS |
+| T3 | ✅ 完成 | 数据库层 — sqlx + 5 个迁移（init/rag/meeting/workflow/glossary+memory）+ 数据模型 |
+| T4 | ✅ 完成 | ADK 组件层 — ModelProvider/ToolExecutor/MemoryStore 三个 Trait + PromptBuilder + ToolRegistry |
+| T5 | ✅ 完成 | Rig 核心层 — RigAgent agentic loop + StreamPipeline + OpenAI/Ollama Provider 适配器 |
+| T6 | ✅ 完成 | 服务层 — Agent/Session/Chat/Model/Settings 服务 + 16 个 IPC 命令 |
+| T11 | ✅ 完成 | 对话前端 — Apple Design 风格三栏布局 + 流式渲染 + 会话管理 + 设置向导 |
+
+### 已实现功能
+
+1. **项目初始化**：Tauri 2.x + Svelte 5 + SvelteKit + Vite 6 + CI 三平台构建
+2. **设计系统**：iOS 18 风格设计令牌、毛玻璃效果、19 个基础组件
+3. **数据库层**：sqlx SQLite + 5 个迁移文件、完整数据模型
+4. **ADK 组件层**：ModelProvider/ToolExecutor/MemoryStore 三个 Trait
+5. **Rig 核心层**：RigAgent agentic loop + OpenAI/Ollama Provider 适配器
+6. **服务层**：Agent/Session/Chat/Model/Settings CRUD + IPC 命令
+7. **对话前端**：Apple Design 风格 UI、设置向导、对话界面、流式渲染
+8. **图标导入**：从原版 prism-agent 项目导入 logo 和图标
+
+### 技术要点
+
+- **Tauri 2.x 参数命名**：Rust `snake_case` 自动转为前端 `camelCase`
+- **Tauri 2.x API**：使用 `@tauri-apps/api/core` 而非 `window.__TAURI__`
+- **Svelte 5 事件处理**：不支持事件修饰符，需用函数包装
+- **Svelte 5 嵌套限制**：button 不能嵌套 button，改用 div + role="button"
+- **iOS 18 设计规范**：系统颜色、SF Pro 字体、12px/16px 圆角、毛玻璃导航栏
+
+### 后续工作（Phase 2 & 3）
+
+- T8: MCP 层（stdio/http 传输）
+- T9: 技能系统（安装/启停/注入）
+- T15: AutoAgents 编排
+- T16: 记忆系统
+- T7: 主页面板 + 任务设计区
+- T10: Agent 侧边栏
+- T12-T14: Wiki/RAG、翻译/OCR、会议系统
