@@ -5,332 +5,214 @@
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
-	let showConfig = $state(false);
-
-	// Quick add provider
-	let providerName = $state('');
-	let providerKind = $state('openai');
-	let providerUrl = $state('');
-	let providerKey = $state('');
-
-	// Quick add model
-	let modelProviderId = $state('');
-	let modelId = $state('');
-	let modelDefault = $state(true);
-
-	let step = $state(1); // 1=add provider, 2=add model, 3=create agent
 	let message = $state('');
 
-	async function loadConfig() {
+	// Form state
+	let pName = $state('');
+	let pKind = $state('openai');
+	let pUrl = $state('');
+	let pKey = $state('');
+	let mProvider = $state('');
+	let mModelId = $state('');
+
+	async function load() {
 		providers = await invoke<any[]>('model_providers');
 		models = await invoke<any[]>('model_list');
-		if (providers.length > 0) step = 2;
-		if (models.length > 0) step = 3;
 	}
 
-	async function addProvider() {
-		if (!providerName.trim()) return;
+	async function saveProvider() {
+		if (!pName.trim()) return alert('请输入 Provider 名称');
 		await invoke('settings_add_provider', {
-			name: providerName.trim(),
-			kind: providerKind,
-			base_url: providerUrl.trim() || null,
-			api_key: providerKey.trim() || null,
+			name: pName.trim(), kind: pKind,
+			base_url: pUrl.trim() || null, api_key: pKey.trim() || null
 		});
-		providerName = '';
-		providerUrl = '';
-		providerKey = '';
-		await loadConfig();
-		message = 'Provider 添加成功';
+		pName = ''; pUrl = ''; pKey = '';
+		await load();
+		message = '✓ Provider 已添加';
 		setTimeout(() => message = '', 2000);
 	}
 
-	async function addModel() {
-		if (!modelProviderId || !modelId.trim()) return;
+	async function saveModel() {
+		if (!mProvider || !mModelId.trim()) return alert('请选择 Provider 并输入模型 ID');
 		await invoke('settings_add_model', {
-			provider_id: modelProviderId,
-			model_id: modelId.trim(),
-			display_name: null,
-			is_default: modelDefault,
+			provider_id: mProvider, model_id: mModelId.trim(),
+			display_name: null, is_default: true
 		});
-		modelId = '';
-		await loadConfig();
-		message = '模型添加成功';
+		mModelId = '';
+		await load();
+		message = '✓ 模型已添加';
 		setTimeout(() => message = '', 2000);
 	}
 
 	async function createAgent() {
-		const agent = await agentApi.create('助手', '一个有用的 AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
-		message = `Agent "${agent.name}" 创建成功`;
+		await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
+		message = '✓ Agent 已创建';
 		setTimeout(() => message = '', 2000);
+		await load();
 	}
 
-	$effect(() => {
-		loadConfig();
-	});
+	$effect(() => { load(); });
 </script>
 
-<div class="chat-page">
-	{#if !showConfig && providers.length > 0 && models.length > 0}
-		<!-- Normal welcome -->
-		<div class="welcome">
-			<div class="welcome-content">
-				<img src="/icon.svg" alt="Prism" width="80" height="80" />
-				<h1>Prism Agent</h1>
-				<p>AI Agent 驱动的智能助手</p>
-				<p>选择左侧 Agent 开始对话，或点击 <strong>+</strong> 创建新 Agent</p>
-				<button class="link-btn" onclick={() => showConfig = true}>⚙ 修改配置</button>
-			</div>
+<div class="page">
+	{#if providers.length > 0 && models.length > 0}
+		<!-- 已配置：显示欢迎 -->
+		<div class="center">
+			<img src="/icon.svg" alt="" width="72" height="72" />
+			<h1>Prism Agent</h1>
+			<p>选择左侧 Agent 开始对话</p>
+			<button class="link" onclick={() => goto('/settings')}>⚙ 设置</button>
 		</div>
 	{:else}
-		<!-- Quick Setup -->
-		<div class="setup-page">
-			<div class="setup-card">
-				<img src="/icon.svg" alt="Prism" width="48" height="48" />
-				<h1>Prism Agent</h1>
-				<p class="subtitle">快速配置，3 步开始</p>
+		<!-- 未配置：显示设置向导 -->
+		<div class="center">
+			<img src="/icon.svg" alt="" width="56" height="56" />
+			<h1>Prism Agent</h1>
+			<p>开始使用前，请先配置模型</p>
 
-				{#if message}
-					<div class="msg">{message}</div>
-				{/if}
+			{#if message}
+				<div class="toast">{message}</div>
+			{/if}
 
-				<!-- Step 1: Provider -->
-				<div class="step" class:done={providers.length > 0}>
-					<div class="step-header">
-						<span class="num">{providers.length > 0 ? '✓' : '1'}</span>
-						<span>添加 Provider</span>
+			<div class="wizard">
+				<!-- Step 1 -->
+				<div class="step" class:active={providers.length === 0}>
+					<div class="step-title">
+						<span class="badge">1</span> 添加 Provider
 					</div>
 					{#if providers.length === 0}
-						<div class="step-body">
-							<select bind:value={providerKind}>
+						<div class="fields">
+							<select bind:value={pKind}>
 								<option value="openai">OpenAI 兼容</option>
-								<option value="ollama">Ollama (本地)</option>
-								<option value="custom">自定义</option>
+								<option value="ollama">Ollama（本地）</option>
 							</select>
-							<input placeholder="名称（如 OpenAI）" bind:value={providerName} />
-							<input
-								placeholder={providerKind === 'ollama' ? 'http://localhost:11434/v1' : 'Base URL'}
-								bind:value={providerUrl}
-							/>
-							<input type="password" placeholder="API Key" bind:value={providerKey} />
-							<button class="btn" onclick={addProvider}>保存 Provider</button>
+							<input bind:value={pName} placeholder="名称，如 OpenAI" />
+							<input bind:value={pUrl} placeholder="Base URL" />
+							<input bind:value={pKey} type="password" placeholder="API Key" />
+							<button class="btn" onclick={saveProvider}>保存 Provider</button>
 						</div>
 					{:else}
-						<div class="step-done">
-							{#each providers as p}
-								<span class="tag">{p.name}</span>
-							{/each}
-							<button class="link-btn small" onclick={() => showConfig = true}>管理</button>
+						<div class="done">
+							{#each providers as p}<span class="tag">{p.name}</span>{/each}
 						</div>
 					{/if}
 				</div>
 
-				<!-- Step 2: Model -->
-				<div class="step" class:done={models.length > 0} class:disabled={providers.length === 0}>
-					<div class="step-header">
-						<span class="num">{models.length > 0 ? '✓' : '2'}</span>
-						<span>添加模型</span>
+				<!-- Step 2 -->
+				<div class="step" class:active={providers.length > 0 && models.length === 0} class:locked={providers.length === 0}>
+					<div class="step-title">
+						<span class="badge">{providers.length > 0 && models.length === 0 ? '2' : models.length > 0 ? '✓' : '2'}</span> 添加模型
 					</div>
 					{#if providers.length > 0 && models.length === 0}
-						<div class="step-body">
-							<select bind:value={modelProviderId}>
+						<div class="fields">
+							<select bind:value={mProvider}>
 								<option value="">选择 Provider</option>
-								{#each providers as p}
-									<option value={p.id}>{p.name}</option>
-								{/each}
+								{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
 							</select>
-							<input placeholder="模型 ID（如 gpt-4o、qwen2.5）" bind:value={modelId} />
-							<label class="check">
-								<input type="checkbox" bind:checked={modelDefault} /> 设为默认
-							</label>
-							<button class="btn" onclick={addModel}>保存模型</button>
+							<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o、qwen2.5" />
+							<button class="btn" onclick={saveModel}>保存模型</button>
 						</div>
 					{:else if models.length > 0}
-						<div class="step-done">
-							{#each models as m}
-								<span class="tag">{m.display_name || m.model_id}{m.is_default ? ' ⭐' : ''}</span>
-							{/each}
+						<div class="done">
+							{#each models as m}<span class="tag">{m.display_name || m.model_id}</span>{/each}
 						</div>
 					{:else}
-						<p class="disabled-hint">请先添加 Provider</p>
+						<p class="lock-hint">请先完成步骤 1</p>
 					{/if}
 				</div>
 
-				<!-- Step 3: Agent -->
-				<div class="step" class:disabled={models.length === 0}>
-					<div class="step-header">
-						<span class="num">3</span>
-						<span>创建 Agent</span>
+				<!-- Step 3 -->
+				<div class="step" class:active={models.length > 0} class:locked={models.length === 0}>
+					<div class="step-title">
+						<span class="badge">3</span> 创建 Agent
 					</div>
 					{#if models.length > 0}
-						<div class="step-body">
-							<p class="hint">点击下方按钮创建默认 Agent</p>
-							<button class="btn" onclick={createAgent}>创建 Agent</button>
+						<div class="fields">
+							<button class="btn" onclick={createAgent}>创建默认 Agent</button>
 						</div>
 					{:else}
-						<p class="disabled-hint">请先添加模型</p>
+						<p class="lock-hint">请先完成步骤 2</p>
 					{/if}
 				</div>
-
-				{#if providers.length > 0 && models.length > 0}
-					<a href="/" class="done-link">→ 开始使用</a>
-				{/if}
 			</div>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.chat-page { height: 100%; }
-
-	.welcome {
-		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-	.welcome-content {
+	.page { height: 100%; display: flex; align-items: center; justify-content: center; }
+	.center {
 		text-align: center;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: var(--space-3);
+		gap: 12px;
 	}
-	.welcome-content h1 { font-size: var(--text-3xl); font-weight: 700; margin: 0; }
-	.welcome-content p { color: var(--color-fg-secondary); margin: 0; }
+	h1 { font-size: 28px; font-weight: 700; margin: 0; }
+	p { color: var(--color-fg-secondary); margin: 0; font-size: 15px; }
 
-	.setup-page {
-		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: var(--space-6);
+	.link {
+		background: none; border: none; color: var(--color-accent);
+		cursor: pointer; font-size: 14px; margin-top: 8px;
 	}
-	.setup-card {
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-xl);
-		padding: var(--space-8);
-		max-width: 480px;
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: var(--space-4);
-	}
-	.setup-card h1 { font-size: var(--text-2xl); font-weight: 700; margin: 0; }
-	.subtitle { color: var(--color-fg-secondary); margin: 0; }
 
-	.msg {
-		padding: var(--space-2) var(--space-4);
-		border-radius: var(--radius-md);
-		background: var(--color-green);
-		color: #fff;
-		font-size: var(--text-sm);
+	.toast {
+		padding: 8px 16px; border-radius: 8px;
+		background: #34C759; color: #fff; font-size: 14px;
+	}
+
+	.wizard {
+		width: 380px; text-align: left;
+		display: flex; flex-direction: column; gap: 12px;
+		margin-top: 8px;
 	}
 
 	.step {
-		width: 100%;
-		background: var(--color-bg);
-		border-radius: var(--radius-lg);
-		padding: var(--space-4);
-		transition: opacity var(--duration-fast);
+		background: var(--color-bg-secondary);
+		border-radius: 12px; padding: 16px;
+		opacity: 0.5; transition: opacity 0.2s;
 	}
-	.step.disabled { opacity: 0.5; pointer-events: none; }
-	.step.done { border: 2px solid var(--color-green); }
+	.step.active { opacity: 1; border: 2px solid var(--color-accent); }
+	.step.locked { opacity: 0.3; }
 
-	.step-header {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		font-weight: 600;
-		margin-bottom: var(--space-3);
+	.step-title {
+		display: flex; align-items: center; gap: 8px;
+		font-weight: 600; font-size: 15px; margin-bottom: 12px;
 	}
-	.num {
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		background: var(--color-accent);
-		color: #fff;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: var(--text-sm);
-		flex-shrink: 0;
-	}
-	.step.done .num { background: var(--color-green); }
 
-	.step-body {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
+	.badge {
+		width: 22px; height: 22px; border-radius: 50%;
+		background: var(--color-accent); color: #fff;
+		display: flex; align-items: center; justify-content: center;
+		font-size: 12px; font-weight: 700; flex-shrink: 0;
+	}
+
+	.fields {
+		display: flex; flex-direction: column; gap: 8px;
 	}
 
 	input, select {
-		padding: var(--space-2) var(--space-3);
+		padding: 8px 12px; border-radius: 8px;
 		border: 1px solid var(--color-separator);
-		border-radius: var(--radius-md);
-		background: var(--color-bg-secondary);
-		color: var(--color-fg);
-		font-size: var(--text-sm);
-		outline: none;
+		background: var(--color-bg); color: var(--color-fg);
+		font-size: 14px; outline: none;
 	}
 	input:focus, select:focus { border-color: var(--color-accent); }
 
 	.btn {
-		padding: var(--space-2) var(--space-4);
-		border-radius: var(--radius-md);
-		border: none;
-		background: var(--color-accent);
-		color: #fff;
-		font-size: var(--text-sm);
-		font-weight: 600;
-		cursor: pointer;
-		margin-top: var(--space-1);
+		padding: 10px 16px; border-radius: 8px; border: none;
+		background: var(--color-accent); color: #fff;
+		font-size: 14px; font-weight: 600; cursor: pointer;
+		margin-top: 4px;
 	}
-	.btn:hover { background: var(--color-accent-hover); }
+	.btn:hover { opacity: 0.9; }
 
-	.check {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		font-size: var(--text-sm);
-		color: var(--color-fg-secondary);
-		cursor: pointer;
-	}
-
-	.step-done {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-2);
-		align-items: center;
-	}
+	.done { display: flex; flex-wrap: wrap; gap: 6px; }
 	.tag {
-		padding: 2px 10px;
-		border-radius: var(--radius-pill);
-		background: rgba(52, 199, 89, 0.15);
-		color: var(--color-green);
-		font-size: var(--text-sm);
+		padding: 4px 10px; border-radius: 12px;
+		background: rgba(52,199,89,0.15); color: #34C759;
+		font-size: 13px;
 	}
 
-	.link-btn {
-		background: none;
-		border: none;
-		color: var(--color-accent);
-		cursor: pointer;
-		font-size: var(--text-sm);
-		padding: 0;
-		text-decoration: underline;
-	}
-	.link-btn.small { font-size: var(--text-xs); }
-
-	.done-link {
-		color: var(--color-accent);
-		font-size: var(--text-lg);
-		font-weight: 600;
-		text-decoration: none;
-		margin-top: var(--space-2);
-	}
-	.done-link:hover { text-decoration: underline; }
-
-	.hint { font-size: var(--text-sm); color: var(--color-fg-secondary); margin: 0; }
-	.disabled-hint { font-size: var(--text-sm); color: var(--color-fg-tertiary); margin: 0; }
+	.lock-hint { font-size: 13px; color: var(--color-fg-tertiary); margin: 0; }
 </style>
