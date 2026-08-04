@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import type { AgentDto, SessionDto } from '$lib/api';
@@ -106,6 +107,13 @@
 					{/each}
 				</div>
 			{/if}
+		</div>
+
+		<!-- Sidebar Footer -->
+		<div class="sidebar-footer">
+			<button class="settings-btn" onclick={() => goto('/settings')}>
+				⚙ 设置
+			</button>
 		</div>
 	</aside>
 
@@ -294,6 +302,25 @@
 		color: var(--color-fg-secondary);
 		font-size: var(--text-sm);
 	}
+
+	.sidebar-footer {
+		padding: var(--space-3);
+		border-top: 1px solid var(--color-separator);
+	}
+
+	.settings-btn {
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-md);
+		border: none;
+		background: transparent;
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+		font-size: var(--text-sm);
+		text-align: left;
+		transition: background var(--duration-fast);
+	}
+	.settings-btn:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
 
 	.content {
 		flex: 1;

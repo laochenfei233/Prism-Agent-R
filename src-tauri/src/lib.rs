@@ -3,11 +3,15 @@ pub mod core;
 pub mod data;
 pub mod utils;
 
+use std::collections::HashMap;
 use data::Database;
 use tauri::Manager;
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 pub struct AppState {
     pub db: Database,
+    pub active_cancels: Mutex<HashMap<String, CancellationToken>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -21,7 +25,10 @@ pub fn run() {
             let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
             let db = rt.block_on(Database::new(&app_data_dir)).expect("failed to init database");
 
-            app.manage(AppState { db });
+            app.manage(AppState {
+                db,
+                active_cancels: Mutex::new(HashMap::new()),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -36,8 +43,12 @@ pub fn run() {
             commands::session::session_delete,
             commands::chat::chat_history,
             commands::chat::chat_send,
+            commands::chat::chat_abort,
             commands::model::model_list,
             commands::model::model_providers,
+            commands::settings::settings_save_provider_key,
+            commands::settings::settings_add_provider,
+            commands::settings::settings_add_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
