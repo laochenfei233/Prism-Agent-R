@@ -41,8 +41,8 @@ export interface MessageDto {
 export const agentApi = {
 	list: () => invoke<AgentDto[]>('agent_list'),
 	get: (id: string) => invoke<AgentDto>('agent_get', { id }),
-	create: (name: string, description?: string, system_prompt?: string) =>
-		invoke<AgentDto>('agent_create', { name, description, system_prompt }),
+	create: (name: string, description?: string, systemPrompt?: string) =>
+		invoke<AgentDto>('agent_create', { name, description, systemPrompt }),
 	update: (id: string, data: Partial<AgentDto>) =>
 		invoke<AgentDto>('agent_update', { id, ...data }),
 	delete: (id: string) => invoke<void>('agent_delete', { id }),
@@ -51,9 +51,9 @@ export const agentApi = {
 // ── Session API ───────────────────────────────────────────
 
 export const sessionApi = {
-	list: (agentId?: string) => invoke<SessionDto[]>('session_list', { agent_id: agentId }),
+	list: (agentId?: string) => invoke<SessionDto[]>('session_list', { agentId }),
 	create: (agentId: string, title?: string) =>
-		invoke<SessionDto>('session_create', { agent_id: agentId, title }),
+		invoke<SessionDto>('session_create', { agentId, title }),
 	rename: (id: string, title: string) =>
 		invoke<SessionDto>('session_rename', { id, title }),
 	delete: (id: string) => invoke<void>('session_delete', { id }),
@@ -63,9 +63,9 @@ export const sessionApi = {
 
 export const chatApi = {
 	history: (sessionId: string, limit?: number) =>
-		invoke<MessageDto[]>('chat_history', { session_id: sessionId, limit }),
+		invoke<MessageDto[]>('chat_history', { sessionId, limit }),
 	send: (sessionId: string, content: string) =>
-		invoke<MessageDto>('chat_send', { session_id: sessionId, content }),
+		invoke<MessageDto>('chat_send', { sessionId, content }),
 };
 
 // ── Stream Events ─────────────────────────────────────────
