@@ -39,20 +39,8 @@ class ChatStore {
 				console.log('Tool call:', call);
 			}),
 			streamEvents.onDone(sessionId, () => {
-				if (this.streamingText) {
-					const assistantMsg: MessageDto = {
-						id: crypto.randomUUID(),
-						session_id: sessionId,
-						role: 'assistant',
-						content: this.streamingText,
-						tool_calls: null,
-						tool_call_id: null,
-						model_id: null,
-						usage: null,
-						created_at: Date.now(),
-					};
-					this.messages = [...this.messages, assistantMsg];
-				}
+				// Reload history to get the assistant message from server
+				this.loadHistory(sessionId);
 				this.streaming = false;
 				this.isGenerating = false;
 				this.streamingText = '';

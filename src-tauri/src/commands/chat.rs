@@ -32,7 +32,7 @@ pub async fn chat_send(
     // 1. Save user message
     let user_msg = svc.save_message(&session_id, "user", &content, None, None, None, None).await?;
 
-    // 2. Get agent config from session
+    // 2. Get session and agent config
     let session_row = sqlx::query_as::<_, crate::data::models::SessionRow>(
         "SELECT id, agent_id, title, pinned, created_at, updated_at FROM sessions WHERE id = ?"
     )
@@ -41,7 +41,6 @@ pub async fn chat_send(
     .await?
     .ok_or_else(|| AppError::SessionNotFound(session_id.clone()))?;
 
-    // 3. Get agent's model config
     let agent_row = sqlx::query_as::<_, crate::data::models::AgentRow>(
         "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at FROM agents WHERE id = ?"
     )
@@ -50,7 +49,7 @@ pub async fn chat_send(
     .await?
     .ok_or_else(|| AppError::AgentNotFound(session_row.agent_id.clone()))?;
 
-    // 4. Find a configured model with provider
+    // 3. Find model
     let model_row = if let Some(ref mid) = agent_row.model_id {
         sqlx::query_as::<_, crate::data::models::ModelRow>(
             "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE id = ?"
@@ -59,7 +58,6 @@ pub async fn chat_send(
         .fetch_optional(&state.db.pool)
         .await?
     } else {
-        // Use default model
         sqlx::query_as::<_, crate::data::models::ModelRow>(
             "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE is_default = 1 LIMIT 1"
         )
@@ -70,7 +68,6 @@ pub async fn chat_send(
     let model_row = match model_row {
         Some(m) => m,
         None => {
-            // No model configured - return error message
             let err_msg = "未配置模型。请在设置中添加 Provider 并设置默认模型。";
             let msg = svc.save_message(&session_id, "assistant", err_msg, None, None, None, None).await?;
             app.emit("chat:stream:done", serde_json::json!({
@@ -82,7 +79,7 @@ pub async fn chat_send(
         }
     };
 
-    // 5. Get provider config
+    // 4. Get provider
     let provider_row = sqlx::query_as::<_, ProviderRow>(
         "SELECT id, name, kind, base_url, api_key_enc, is_enabled, created_at, updated_at FROM providers WHERE id = ?"
     )
@@ -93,16 +90,14 @@ pub async fn chat_send(
 
     let base_url = provider_row.base_url.unwrap_or_else(|| {
         match provider_row.kind.as_str() {
-            "openai" => "https://api.openai.com/v1".to_string(),
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
         }
     });
 
-    // TODO: Decrypt api_key_enc with AES-GCM. For now use empty key placeholder.
     let api_key = provider_row.api_key_enc.unwrap_or_default();
 
-    // 6. Build conversation history
+    // 5. Build history
     let history = svc.history(&session_id, Some(50)).await?;
     let mut messages = Vec::new();
     for msg in &history {
@@ -120,12 +115,11 @@ pub async fn chat_send(
         });
     }
 
-    // 7. Build system prompt
     let system_prompt = agent_row.system_prompt.clone().unwrap_or_else(|| {
         "你是一个有用的 AI 助手。请用中文回答用户的问题。".to_string()
     });
 
-    // 8. Create provider and run agent
+    // 6. Create provider and run
     let provider = Arc::new(OpenAiProvider::new(
         model_row.provider_id.clone(),
         model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone()),
@@ -135,11 +129,7 @@ pub async fn chat_send(
     ));
 
     let agent = RigAgent::new(provider, system_prompt, ToolRegistry::new());
-
-    let request = GenerationRequest {
-        messages,
-        ..Default::default()
-    };
+    let request = GenerationRequest { messages, ..Default::default() };
 
     let cancel = CancellationToken::new();
     state.active_cancels.lock().await.insert(session_id.clone(), cancel.clone());
@@ -147,19 +137,19 @@ pub async fn chat_send(
     let session_id_clone = session_id.clone();
     let app_clone = app.clone();
     let pool = state.db.pool.clone();
+    let model_id = model_row.model_id.clone();
 
-    // Spawn streaming task
+    // Spawn task
     tokio::spawn(async move {
         let message_id = uuid::Uuid::new_v4().to_string();
         let _ = app_clone.emit("chat:stream:start", serde_json::json!({
             "session_id": session_id_clone,
             "message_id": message_id,
-            "model": model_row.model_id,
+            "model": model_id,
         }));
 
         match agent.run(request).await {
             Ok(result) => {
-                // Save assistant message
                 let now = chrono::Utc::now().timestamp_millis();
                 let _ = sqlx::query(
                     "INSERT INTO messages (id, session_id, role, content, tool_calls, tool_call_id, model_id, usage, created_at) VALUES (?, ?, 'assistant', ?, NULL, NULL, ?, NULL, ?)"
@@ -167,7 +157,7 @@ pub async fn chat_send(
                 .bind(&message_id)
                 .bind(&session_id_clone)
                 .bind(&result.text)
-                .bind(&model_row.model_id)
+                .bind(&model_id)
                 .bind(now)
                 .execute(&pool)
                 .await;
@@ -189,9 +179,6 @@ pub async fn chat_send(
                 }));
             }
         }
-
-        // Cleanup cancel token
-        // state.active_cancels.lock().await.remove(&session_id_clone);
     });
 
     Ok(user_msg)
