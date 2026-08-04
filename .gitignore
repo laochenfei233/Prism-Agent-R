@@ -1,0 +1,28 @@
+# Local agent/editor config
+.mimocode/
+
+# Rust
+target/
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+build/
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# IDE
+.vscode/
+.idea/
