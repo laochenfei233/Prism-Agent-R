@@ -23,6 +23,9 @@ logs/
 src-tauri/target/
 src-tauri/gen/
 
+# Worktrees
+.worktrees/
+
 # IDE
 .vscode/
 .idea/
