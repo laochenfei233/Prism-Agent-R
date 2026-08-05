@@ -1,6 +1,6 @@
 ---
 feature: prism-agent-r
-status: designed
+status: in-progress
 updated: 2026-08-05
 branch: main
 commits: # filled at delivery
@@ -16,6 +16,8 @@ platform: windows | macos | linux
 
 ## Report
 
+**当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16，见文末「MVP Phase 1 完成报告」）；Phase 2（面板功能）与 Phase 3（扩展功能）进行中。
+
 ## [S0] 设计模式参考
 
 ### Agentic Design Patterns
@@ -29,22 +31,22 @@ platform: windows | macos | linux
 | 提示词链 (Prompt Chaining) | Ch.1 | Workflow 阶段模板 `render_template`，前一阶段输出注入下一阶段 | ✅ 已覆盖 |
 | 路由 (Routing) | Ch.2 | Coordinator 按角色匹配 AgentActor，任务派发到合适角色 | ✅ 已覆盖 |
 | 并行化 (Parallelization) | Ch.3 | tokio 并发 + TaskScheduler 任务池，多 Agent 可并行执行 | ✅ 已覆盖 |
-| 反思 (Reflection) | Ch.4 | **部分覆盖**：工作流有 writer→reviewer 阶段，但缺少 Agent 级自我反思循环 | ⚠️ 需增强 |
+| 反思 (Reflection) | Ch.4 | §10.9 反思模式：生产者-评审者循环 + ReflectionConfig | ✅ 已设计 |
 | 工具使用 (Tool Use) | Ch.5 | ToolExecutor trait + MCP 工具注册表 + RigAgent 内置/MCP 分发 | ✅ 已覆盖 |
 | 规划 (Planning) | Ch.6 | Workflow 定义 = 动态计划；预置工作流 = 固定计划；LLM 可通过工具自行规划 | ✅ 已覆盖 |
 | 多智能体协作 (Multi-Agent) | Ch.7 | AutoAgents Actor 模型 + Coordinator 层次化/顺序/辩论协作 | ✅ 已覆盖 |
 | 记忆管理 (Memory) | Ch.8 | 分层记忆 + checkpoint-writer + FTS5 搜索 + Active Recall 协议 | ✅ 已覆盖 |
 | 学习与适应 (Learning) | Ch.9 | **未覆盖**：Agent 无显式学习机制 | ❌ Out of Scope |
 | MCP 协议 | Ch.10 | 完整 MCP 客户端（stdio/SSE/HTTP）+ 工具目录缓存 + 权限控制 | ✅ 已覆盖 |
-| 目标设定与监控 (Goal/Monitoring) | Ch.11 | **部分覆盖**：工作流有状态（running/done/failed），但缺少 Agent 级目标定义与进度监控 | ⚠️ 需增强 |
+| 目标设定与监控 (Goal/Monitoring) | Ch.11 | §10.11 目标设定与监控：TaskGoal/GoalCriterion + GoalMonitor | ✅ 已设计 |
 | 异常处理与恢复 (Exception/Recovery) | Ch.12 | AppError 统一错误 + MCP 重试（指数退避）+ LSP 崩溃重启 | ✅ 已覆盖 |
-| 人机协同 (Human-in-the-Loop) | Ch.13 | **部分覆盖**：工具审批分级（read 自动/write 需审批），但缺少显式审批 UI 和升级机制 | ⚠️ 需增强 |
+| 人机协同 (Human-in-the-Loop) | Ch.13 | §10.10 人机协同：工具审批分级 + ToolApprovalDialog + 升级机制 | ✅ 已设计 |
 | 知识检索 (RAG) | Ch.14 | Wiki + RAG 引擎（分块/嵌入/混合检索） | ✅ 已覆盖 |
-| 智能体间通信 (A2A) | Ch.15 | **部分覆盖**：Actor 消息传递通信，但缺少跨进程/跨会话的 A2A 协议 | ⚠️ 需增强 |
-| 资源感知优化 | Ch.16 | **部分覆盖**：Token 预算管理、上下文窗口监控，但缺少动态资源调度 | ⚠️ 需增强 |
-| 推理技术 (Reasoning) | Ch.17 | **部分覆盖**：LLM 自带推理，但缺少显式 CoT/ToT/GoT 推理框架 | ⚠️ 需增强 |
-| 安全护栏 (Guardrails) | Ch.18 | **部分覆盖**：API Key 加密 + 路径校验 + 工具权限，但缺少输入/输出内容过滤 | ⚠️ 需增强 |
-| 评估与监控 (Evaluation) | Ch.19 | **部分覆盖**：model:test 连通性检查，但缺少 Agent 输出质量评估和轨迹分析 | ⚠️ 需增强 |
+| 智能体间通信 (A2A) | Ch.15 | **部分覆盖**：Actor 消息传递通信，但缺少跨进程/跨会话的 A2A 协议 | ⚠️ 后续迭代 |
+| 资源感知优化 | Ch.16 | **部分覆盖**：Token 预算管理、上下文窗口监控，但缺少动态资源调度 | ⚠️ 后续迭代 |
+| 推理技术 (Reasoning) | Ch.17 | **部分覆盖**：LLM 自带推理，但缺少显式 CoT/ToT/GoT 推理框架 | ⚠️ 后续迭代 |
+| 安全护栏 (Guardrails) | Ch.18 | §10.12 安全护栏：四层防御 + InjectionDetector + ToxicityFilter | ✅ 已设计 |
+| 评估与监控 (Evaluation) | Ch.19 | §10.13 评估与监控：AgentTrace 轨迹 + AgentJudge + 性能仪表盘 | ✅ 已设计 |
 | 优先级管理 (Prioritization) | Ch.20 | **未覆盖** | ❌ Out of Scope |
 | 探索与发现 (Exploration) | Ch.21 | **未覆盖** | ❌ Out of Scope |
 
@@ -151,7 +153,7 @@ Prism Agent R 对应：
 - **Agent 能力有限**：缺乏多 Agent 协作、工作流编排能力
 - **生态依赖重**：Vercel AI SDK 等 JS 生态依赖多，锁版本困难
 
-目标：用 **Rust 重写全部后端**（Tauri 2.x 壳），**Svelte 5 重写前端**，构建一个高性能、轻量级（包体 <15MB、内存 <100MB）、类型安全的 **跨平台（Windows / macOS / Linux）** AI Agent 平台，保留原项目的全部核心功能（Agent 系统、技能系统、MCP、LLM Wiki、RAG、会议纪要、翻译、OCR），并新增 **主页面板（多 Agent 总控制台 + 任务设计区）** 与 **Agent 运行时侧边栏**。
+目标：用 **Rust 重写全部后端**（Tauri 2.x 壳），**Svelte 5 重写前端**，构建一个高性能、轻量级（包体 <20MB、内存 <120MB）、类型安全的 **跨平台（Windows / macOS / Linux）** AI Agent 平台，保留原项目的全部核心功能（Agent 系统、技能系统、MCP、LLM Wiki、RAG、会议纪要、翻译、OCR），并新增 **主页面板（多 Agent 总控制台 + 任务设计区）** 与 **Agent 运行时侧边栏**。
 
 ## [S2] Design
 
@@ -209,10 +211,10 @@ Prism Agent R 对应：
   → ADK PromptBuilder 组装系统提示（注入技能/记忆/Wiki上下文）
   → Rig Agent 流式调用 LLM
   → 循环：
-    ├─ 收到 text delta → emit('chat:chunk', delta) → 前端渲染
+    ├─ 收到 text delta → emit('chat:stream:delta', delta) → 前端渲染
     ├─ 收到 tool_call → ToolExecutor 执行（内置/MCP）
     │   └─ 结果回填 → Rig 继续生成
-    └─ 收到 finish → emit('chat:done') → 前端收尾
+    └─ 收到 finish → emit('chat:stream:done') → 前端收尾
   → 消息持久化 SQLite → 记忆系统更新
 ```
 
@@ -245,11 +247,11 @@ Prism Agent R 对应：
 - 触发条件：会话内消息数 ≥ 2（至少一来一回）
 - 实现：取最后 5 条消息 → LLM 生成简短标题（≤30 字符）
 - 前端通过 `session:rename` 更新 title
-- 用户可手动编辑标题（`isNameManuallyEdited` 标记）
+- 用户可手动编辑标题（`isNameManuallyEdited` 前端标记：手动编辑过则后续不自动重命名）
 
 **复用空 Session 机制**：
 - 同一 Agent 下如果已有未使用过的空 Session（无消息），直接复用而非重复创建
-- 判断条件：`session.messages_count == 0 && session.created_at == session.updated_at`
+- 判断条件：无消息（`COUNT(messages) == 0`，通过 SQL 聚合计算）+ `created_at == updated_at`
 
 **IPC 命令扩展**：
 | 命令 | 参数 | 返回 | 说明 |
@@ -279,7 +281,7 @@ Prism Agent R 对应：
 | 错误处理 | thiserror | 1.x | 类型化错误 |
 | 日志 | tracing + tracing-subscriber | 0.1 | 结构化日志 |
 | ID 生成 | uuid | 1.x | UUID v4 |
-| 加密 | aes-gcm / argon2 | - | API Key 加密存储 |
+| 加密 | aes-gcm | - | API Key 加密存储（AES-256-GCM） |
 | WebSocket | tokio-tungstenite | 0.2x | ASR/实时传输 |
 | 前端 CSS | CSS 变量 + @layer | - | 设计令牌系统 |
 | 前端动画 | 原生 CSS + Web Animations API | - | 毛玻璃/过渡 |
@@ -579,20 +581,28 @@ src-tauri/
     ├── lib.rs                         # Tauri Builder 组装
     ├── commands/                      # IPC 命令层（薄，仅做参数校验 + 调用服务）
     │   ├── mod.rs
-    │   ├── agent.rs                   # agent:list/create/update/delete/get
-    │   ├── session.rs                 # session:list/create/delete
-    │   ├── chat.rs                    # chat:send/abort/history
-    │   ├── model.rs                   # model:list/get-config/set-default
-    │   ├── mcp.rs                     # mcp:list/add/remove/call-tool/test
-    │   ├── skill.rs                   # skill:list/install/uninstall/toggle/search-market
-    │   ├── wiki.rs                    # wiki:create/list/delete/read-page/write-page
+    │   ├── agent.rs                   # agent:list/create/update/delete/get/stats
+    │   ├── session.rs                 # session:list/create/delete/rename/history
+    │   ├── chat.rs                    # chat:send/abort/regenerate/history
+    │   ├── model.rs                   # model:list/get-config/set-default/test
+    │   ├── mcp.rs                     # mcp:list/add/update/remove/test/tools/call-tool
+    │   ├── skill.rs                   # skill:list/install/uninstall/toggle/search-market/list-local
+    │   ├── wiki.rs                    # wiki:create/list/delete/read-page/write-page/list-pages/write-ai/ingest-ai/apply-plan/restore-trash
     │   ├── rag.rs                     # rag:ingest/list-documents/delete-document/search
-    │   ├── meeting.rs                 # meeting:create/start-record/stop-record/summary/qa/export
-    │   ├── file.rs                    # file:pick/read/write/list/preview
-    │   ├── translate.rs               # translate:translate/history
-    │   ├── ocr.rs                    # ocr:recognize
-    │   ├── workflow.rs                # workflow:run/list/get/stop
-    │   ├── settings.rs                # settings:get/set/provider-key
+    │   ├── meeting.rs                 # meeting:create/list/get/delete/start-recording/stop-recording/pause/resume/cancel/retranscribe/clean/summary/qa/push-to-agent/export
+    │   ├── asr.rs                     # asr:backends/model-catalog/model-installed/model-download/model-remove/test
+    │   ├── file.rs                    # file:pick/read-text/write/list/parse
+    │   ├── translate.rs               # translate:translate/batch/file/history/detect
+    │   ├── glossary.rs                # glossary:list/add/remove/import-csv
+    │   ├── ocr.rs                    # ocr:recognize/providers
+    │   ├── workflow.rs                # workflow:run/list/get/stop/result
+    │   ├── task.rs                    # task:save-template/run/validate/rerun
+    │   ├── memory.rs                  # memory:search/read/write/append-notes/reconcile/context-dump
+    │   ├── dashboard.rs               # dashboard:overview/usage:stats/usage:trend/mcp:status-all
+    │   ├── workspace.rs               # workspace:get/set/instructions/write-instructions/tree/read-file/open-file
+    │   ├── lsp.rs                     # lsp:list/diagnostics/start/stop/detect
+    │   ├── context.rs                 # context:agent
+    │   ├── settings.rs                # settings:get/set/providers/save-provider-key
     │   └── system.rs                  # system:info/open-external
     ├── core/                          # 三层 Agent 框架
     │   ├── mod.rs
@@ -633,7 +643,7 @@ src-tauri/
     ├── data/
     │   ├── mod.rs
     │   ├── db.rs                      # DatabasePool（sqlx SqlitePool + 迁移）
-    │   ├── migrations/                # 001_init.sql / 002_rag.sql / 003_meeting.sql ...
+    │   ├── migrations/                # 001_init / 002_rag / 003_meeting / 004_workflow / 005_glossary / 006_memory / 007_workflow_templates / 008_agent_traces / 009_message_search / 010_indexes / 011_asr
     │   ├── models.rs                  # 全部数据模型（AgentRow/SessionRow/...）
     │   ├── cache.rs                   # LruCache 服务
     │   ├── rag/
@@ -701,13 +711,14 @@ src/
 │   │   │   └── motion.ts             # 动画曲线与时长
 │   │   ├── styles/
 │   │   │   ├── reset.css
+│   │   │   ├── semantic.css          # 语义别名 CSS 变量（--color-*，§9.1）
 │   │   │   ├── tokens.css            # CSS 变量（.light / .dark）
 │   │   │   ├── glass.css             # 毛玻璃工具类
 │   │   │   └── utilities.css         # 布局/间距工具类
 │   │   └── index.ts
 │   ├── components/
 │   │   ├── base/                     # 基础原子组件
-│   │   │   ├── Button.svelte         # 样式变体: primary/secondary/ghost/danger
+│   │   │   ├── Button.svelte         # 样式变体: primary/secondary/text/gray/destructive（见 §9.7）
 │   │   │   ├── IconButton.svelte
 │   │   │   ├── Input.svelte
 │   │   │   ├── Textarea.svelte
@@ -776,6 +787,7 @@ src/
 │   │   │   ├── MarkdownViewer.svelte
 │   │   │   ├── CodeBlock.svelte      # 高亮 + 复制
 │   │   │   ├── ToolCallCard.svelte   # 工具调用过程展示
+│   │   │   ├── ToolApprovalDialog.svelte # 工具审批弹窗（§10.10，风险工具调用确认）
 │   │   │   ├── Composer.svelte       # 输入区（多行/Shift+Enter/附件）
 │   │   │   ├── ModelSelector.svelte  # 模型切换下拉
 │   │   │   └── StopButton.svelte
@@ -861,7 +873,7 @@ src/
 │   │   ├── translate.ts
 │   │   ├── ocr.ts
 │   │   ├── workflow.ts
-│   │   └── events.ts                 # listen 封装（chat:chunk 等）
+│   │   └── events.ts                 # listen 封装（chat:stream:* 等）
 │   ├── hooks/                        # Svelte 组合式逻辑
 │   │   ├── use-streaming-chat.ts
 │   │   ├── use-keyboard.ts           # 快捷键
@@ -888,6 +900,8 @@ src/
 | `providers` | LLM Provider 配置（含加密 API Key） | 1:N models |
 | `models` | 模型注册表 | N:1 providers |
 | `agents` | Agent 定义 | 1:N sessions, N:N skills, N:N mcp_servers |
+| `agent_mcp_servers` | Agent × MCP 关联 | N:N junction |
+| `agent_skills` | Agent × 技能关联 | N:N junction |
 | `sessions` | 会话 | N:1 agents, 1:N messages |
 | `messages` | 消息（含工具调用） | N:1 sessions |
 | `skills` | 技能元数据 | N:N agents |
@@ -897,12 +911,18 @@ src/
 | `rag_chunks` | 分块（含向量） | N:1 rag_documents |
 | `meetings` | 会议 | 1:N meeting_transcripts |
 | `meeting_transcripts` | 转写片段 | N:1 meetings |
-| `asr_configs` | ASR 后端配置（§10.3.1） | - |
+| `asr_configs` | ASR 后端配置（§10.3.8） | - |
 | `workflows` | 工作流定义 | 1:N workflow_runs |
+| `workflow_runs` | 工作流运行 | N:1 workflows |
+| `stage_templates` | 可复用阶段模板（§10.6.4） | - |
+| `agent_traces` | Agent 执行轨迹（§10.13.1） | N:1 sessions |
 | `translate_history` | 翻译历史 | - |
 | `glossary_terms` | 翻译术语表（§10.5.2） | - |
-| `memory_fts` | 记忆全文索引（FTS5，§10.7.2） | - |
 | `preferences` | 键值偏好设置 | - |
+| `memory_fts` | 记忆全文索引（FTS5，§10.7.2） | 虚拟表 |
+| `messages_fts` | 消息全文索引（FTS5，§5.7.2） | 虚拟表 |
+| `sessions_fts` | 会话标题索引（FTS5，§5.7.4） | 虚拟表 |
+| `translate_fts` | 翻译历史索引（FTS5，§5.7.5） | 虚拟表 |
 
 ### 5.2 DDL（迁移 001_init.sql）
 
@@ -970,12 +990,13 @@ CREATE TABLE agent_skills (
 
 -- 会话
 CREATE TABLE sessions (
-    id         TEXT PRIMARY KEY,
-    agent_id   TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    title      TEXT,
-    pinned     INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    id           TEXT PRIMARY KEY,
+    agent_id     TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    title        TEXT,
+    pinned       INTEGER NOT NULL DEFAULT 0,
+    order_key    INTEGER NOT NULL DEFAULT 0,       -- 会话列表排序（§1 新会话创建）
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL
 );
 CREATE INDEX idx_sessions_agent ON sessions(agent_id, updated_at DESC);
 
@@ -1104,6 +1125,7 @@ CREATE TABLE workflows (
     name        TEXT NOT NULL,
     description TEXT,
     definition  TEXT NOT NULL,                 -- JSON: {stages:[...]}
+    source      TEXT NOT NULL DEFAULT 'builtin', -- builtin|user（§10.6.4）
     created_at  INTEGER NOT NULL,
     updated_at  INTEGER NOT NULL
 );
@@ -1186,7 +1208,7 @@ PRAGMA busy_timeout = 5000;       -- 写锁等待 5s（防忙等）
 #### 5.7.2 消息全文搜索（FTS5）
 
 ```sql
--- 迁移 008_message_search.sql
+-- 迁移 009_message_search.sql
 -- 消息 FTS5 虚拟表（覆盖 session 内搜索 + 跨会话全局搜索）
 CREATE VIRTUAL TABLE messages_fts USING fts5(
     content,                       -- 消息文本内容
@@ -1329,7 +1351,7 @@ pub async fn list_messages_cursor(
 #### 5.7.4 会话列表搜索
 
 ```sql
--- 会话标题 FTS（轻量级，标题短文本）
+-- 会话标题 FTS（轻量级，标题短文本）— 并入迁移 009_message_search.sql
 CREATE VIRTUAL TABLE sessions_fts USING fts5(
     title,
     session_id UNINDEXED,
@@ -1356,7 +1378,7 @@ LIMIT ?;
 #### 5.7.5 翻译历史搜索
 
 ```sql
--- 翻译历史 FTS
+-- 翻译历史 FTS — 并入迁移 009_message_search.sql
 CREATE VIRTUAL TABLE translate_fts USING fts5(
     source_text,
     translated,
@@ -1375,7 +1397,10 @@ CREATE VIRTUAL TABLE translate_fts USING fts5(
 pub async fn cleanup_old_data(&self, config: &CleanupConfig) -> Result<CleanupResult, AppError> {
     let now = chrono::Utc::now().timestamp_millis();
 
-    // 1. 清理过期消息（保留最近 N 天的完整消息，旧消息只保留摘要）
+    // 1. 清理过期消息（超过保留期的旧消息删除；置顶会话的消息受保护）
+    //    注：当前策略为直接删除（仅保留最新 N 天）；「摘要归档」为可选增强
+    //    （将旧消息压缩为 session 级摘要存入 sessions.summary 后再删），
+    //    默认关闭，避免摘要丢失原始细节。
     let msg_cutoff = now - (config.keep_messages_days * 86400_000) as i64;
     let archived = sqlx::query(
         "DELETE FROM messages WHERE created_at < ? AND id NOT IN (
@@ -1422,16 +1447,15 @@ pub struct CleanupConfig {
 #### 5.7.7 查询性能关键索引
 
 ```sql
--- 高频查询索引（迁移 009_indexes.sql）
-
--- 消息查询：按会话 + 时间排序（列表页）
-CREATE INDEX idx_messages_session_time ON messages(session_id, created_at DESC);
+-- 高频查询索引（迁移 010_indexes.sql）
+-- 注：以下索引已在 001_init.sql / 002_rag.sql 定义，此处不重复：
+--   idx_messages_session (session_id, created_at)     ← 001
+--   idx_sessions_agent (agent_id, updated_at DESC)    ← 001
+--   idx_rag_chunks_wiki (wiki_id)                     ← 002
+-- 本迁移仅新增以下索引：
 
 -- 消息查询：按 ID 查找（游标分页的 cursor lookup）
 CREATE INDEX idx_messages_id ON messages(id);
-
--- 会话查询：按 Agent + 最近更新排序（侧边栏）
-CREATE INDEX idx_sessions_agent_updated ON sessions(agent_id, updated_at DESC);
 
 -- 会话查询：按 pinned + 更新时间（置顶会话优先）
 CREATE INDEX idx_sessions_pinned_updated ON sessions(pinned DESC, updated_at DESC);
@@ -1444,9 +1468,6 @@ CREATE INDEX idx_translate_lang_time ON translate_history(source_lang, target_la
 
 -- Agent traces：按 Agent + 时间（性能仪表盘）
 CREATE INDEX idx_agent_traces_agent_time ON agent_traces(agent_id, started_at DESC);
-
--- RAG chunks：按 wiki + 向量检索（混合搜索）
-CREATE INDEX idx_rag_chunks_wiki ON rag_chunks(wiki_id);
 ```
 
 #### 5.7.8 大数据量边界与降级
@@ -1456,7 +1477,7 @@ CREATE INDEX idx_rag_chunks_wiki ON rag_chunks(wiki_id);
 | 消息 < 1 万 | 全量加载无压力 |
 | 消息 1~10 万 | 游标分页 + 虚拟滚动（每次 50 条） |
 | 消息 > 10 万 | 启用数据保留策略（自动归档旧消息） |
-| 单会话消息 > 5000 | PromptBuilder 启用滑动窗口（§10.7），仅注入最近 200 条 |
+| 单会话消息 > 5000 | PromptBuilder 启用滑动窗口（§13.1），仅注入最近 200 条 |
 | RAG chunks > 10 万 | 向量检索改用 HNSW 索引（`sqlite-vss` 扩展） |
 | FTS 碎片率 > 30% | 自动 `rebuild` 命令整理索引 |
 
@@ -1636,10 +1657,10 @@ impl StreamPipeline {
 
 ```rust
 pub struct ChatService {
-    active: Mutex<HashMap<String, CancellationToken>>,   // session_id → token
+    active_streams: Mutex<HashMap<String, CancellationToken>>,   // session_id → token
 }
 pub async fn abort(&self, session_id: &str) -> Result<(), AppError> {
-    if let Some(t) = self.active.lock().await.remove(session_id) { t.cancel(); }
+    if let Some(t) = self.active_streams.lock().await.remove(session_id) { t.cancel(); }
     Ok(())
 }
 ```
@@ -1669,9 +1690,11 @@ export function onStreamEvents(sessionId: string, handlers: StreamHandlers) {
 
 ```ts
 // lib/api/client.ts
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
     try {
-        return await window.__TAURI__.core.invoke<T>(cmd, args);
+        return await tauriInvoke<T>(cmd, args);
     } catch (e) {
         toast.error(String(e));   // AppError 已序列化为字符串
         throw e;
@@ -1690,6 +1713,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `agent:create` | `{name, description?, avatar?, system_prompt?, model_id?, plan_model_id?, small_model_id?, temperature?, max_tokens?, mcp_server_ids?, skill_ids?, disabled_tools?}` | `AgentDto` | 事务创建 + 关联 |
 | `agent:update` | `{id, ...partial}` | `AgentDto` | 更新 |
 | `agent:delete` | `{id, delete_sessions?}` | `()` | 删除 |
+| `agent:stats` | `{agent_id?, range?}` | `AgentStats` | 成功率/延迟/Token 效率/失败分布（§10.13.3） |
 
 **会话域** `commands/session.rs`
 
@@ -1708,12 +1732,14 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `chat:send` | `{session_id, content, attachments?}` | `MessageDto` | 立即返回 user 消息，流式走事件 |
 | `chat:abort` | `{session_id}` | `()` | 中断当前流 |
 | `chat:regenerate` | `{session_id, message_id}` | `()` | 重新生成最后一条助手消息 |
+| `chat:history` | `{session_id, before?, limit?}` | `Vec<MessageDto>` | 消息历史（游标分页，§5.7.3） |
 
 **模型域** `commands/model.rs`
 
 | 命令 | 参数 | 返回 |
 |------|------|------|
 | `model:list` | `{}` | `Vec<ModelDto>` |
+| `model:get-config` | `{model_id}` | `ModelConfig` |
 | `model:set-default` | `{model_id}` | `()` |
 | `model:test` | `{model_id}` | `{ok, latency_ms, error?}` |
 
@@ -1727,6 +1753,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `mcp:remove` | `{id}` | `()` |
 | `mcp:test` | `{id}` | `{ok, tools_count, error?}` |
 | `mcp:tools` | `{server_id?}` | `Vec<McpToolDto>` |
+| `mcp:call-tool` | `{server_id, tool_name, args, agent_id?}` | `McpCallResult` | 调用 MCP 工具（§6.5 权限校验） |
 
 **技能域** `commands/skill.rs`
 
@@ -1749,6 +1776,10 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `wiki:read-page` | `{wiki_id, path}` | `{content}` |
 | `wiki:write-page` | `{wiki_id, path, content}` | `()` |
 | `wiki:list-pages` | `{wiki_id}` | `Vec<WikiPage>` |
+| `wiki:write-ai` | `{wiki_id, info, preview?}` | `{plan?}` | LLM 自动入库（preview=true 仅返回计划，§10.1.1） |
+| `wiki:ingest-ai` | `{wiki_id, file_path}` | `{summary}` | 导入文件 + 自动入库 |
+| `wiki:apply-plan` | `{wiki_id, plan}` | `{result}` | 用户确认计划后执行 |
+| `wiki:restore-trash` | `{wiki_id, path}` | `()` | 从 .trash 恢复已删页面 |
 | `rag:ingest` | `{wiki_id, file_path}` | `{document_id, status}` |
 | `rag:list-documents` | `{wiki_id}` | `Vec<RagDocumentDto>` |
 | `rag:delete-document` | `{document_id}` | `()` |
@@ -1761,11 +1792,29 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `meeting:create` | `{title, participants?}` | `MeetingDto` |
 | `meeting:list` | `{}` | `Vec<MeetingDto>` |
 | `meeting:get` | `{id}` | `MeetingDto` |
+| `meeting:delete` | `{id}` | `()` |
 | `meeting:start-recording` | `{id, asr_config}` | `()` | 转写走事件 |
 | `meeting:stop-recording` | `{id}` | `{transcript}` |
+| `meeting:pause-recording` | `{id}` | `()` |
+| `meeting:resume-recording` | `{id}` | `()` |
+| `meeting:cancel-recording` | `{id}` | `()` |
+| `meeting:retranscribe` | `{id, asr_config}` | `()` | 换 ASR 模型重新转写 |
+| `meeting:clean` | `{id}` | `{cleaned}` |
 | `meeting:summary` | `{id}` | `{summary}` |
 | `meeting:qa` | `{id, question}` | `{answer}` |
-| `meeting:export` | `{id, format}` | `{path}` | md/docx |
+| `meeting:push-to-agent` | `{meeting_id, agent_id, session_id?}` | `()` |
+| `meeting:export` | `{id, format, options?}` | `{path}` | md/docx |
+
+**ASR 域** `commands/asr.rs`（会议子域，§10.3.8）
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `asr:backends` | `{}` | `Vec<AsrBackendInfo>` |
+| `asr:model-catalog` | `{}` | `Vec<AsrModelInfo>` |
+| `asr:model-installed` | `{}` | `Vec<InstalledAsrModel>` |
+| `asr:model-download` | `{model_id}` | `()` | 进度走事件 |
+| `asr:model-remove` | `{model_id}` | `()` |
+| `asr:test` | `{asr_config}` | `{ok, latency_ms, error?}` |
 
 **文件域** `commands/file.rs`
 
@@ -1781,9 +1830,17 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 
 | 命令 | 参数 | 返回 |
 |------|------|------|
-| `translate:translate` | `{text, source?, target, model_id?}` | `{translated, source}` |
-| `translate:history` | `{limit?}` | `Vec<TranslateEntry>` |
-| `ocr:recognize` | `{image_path, lang?}` | `{text, blocks?}` |
+| `translate:translate` | `{text, source?, target, model_id?}` | `{translated, source, from_cache}` |
+| `translate:batch` | `{texts, source?, target}` | `Vec<TranslateResult>` | 进度走 `translate:batch-progress` 事件 |
+| `translate:file` | `{path, source?, target, out_path?}` | `{content}` | 整文件翻译 |
+| `translate:history` | `{query?, limit?, offset?}` | `{items, total}` |
+| `translate:detect` | `{text}` | `{lang, confidence}` |
+| `glossary:list` | `{lang_pair?}` | `Vec<GlossaryTerm>` |
+| `glossary:add` | `{term}` | `()` |
+| `glossary:remove` | `{id}` | `()` |
+| `glossary:import-csv` | `{path}` | `{imported, failed}` |
+| `ocr:recognize` | `{image_path, lang?, provider?}` | `OcrResult` |
+| `ocr:providers` | `{}` | `Vec<OcrProviderInfo>` |
 
 **工作流域** `commands/workflow.rs`
 
@@ -1839,6 +1896,24 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 |------|------|------|
 | `context:agent` | `{agent_id, session_id?}` | `AgentContext` | 侧边栏聚合：用量/工作目录/指令/MCP/LSP/目录（见 9.10） |
 
+**记忆域** `commands/memory.rs`（§10.7.4）
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `memory:search` | `{query, scope?, type?, limit?}` | `Vec<MemoryHit>` |
+| `memory:read` | `{path}` | `{body}` |
+| `memory:write` | `{scope, key, body}` | `()` | 仅主 agent 规则类 |
+| `memory:append-notes` | `{scope, entry}` | `()` | 追加 notes.md |
+| `memory:reconcile` | `{}` | `{indexed, pruned}` |
+| `memory:context-dump` | `{}` | `Vec<MemoryDump>` |
+
+**系统域** `commands/system.rs`
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `system:info` | `{}` | `SystemInfo` | 平台/版本/资源信息 |
+| `system:open-external` | `{url}` | `()` | 打开外部链接 |
+
 ### 8.3 事件清单（后端 → 前端）
 
 | 事件 | 负载 | 触发时机 |
@@ -1856,12 +1931,29 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `workflow:stage` | `{run_id, stage_id, status, output?}` | 阶段完成 |
 | `workflow:done` | `{run_id, result}` | 工作流完成 |
 | `mcp:tools-changed` | `{server_id}` | 工具目录变更 |
+| `mcp:status-changed` | `{server_id, status}` | MCP 服务器状态变化（§9.10.7） |
 | `model:list-changed` | `{}` | 模型配置变更 |
 | `agent:changed` | `{event, agent}` | agent CRUD 事件 |
 | `usage:updated` | `{stats}` | 用量更新（消息完成后推送，刷新面板） |
 | `lsp:status-changed` | `{server_id, status}` | LSP 服务器状态变化 |
 | `lsp:diagnostics` | `{path, diagnostics}` | 诊断更新 |
 | `workspace:changed` | `{path}` | 工作目录切换 |
+| `tool:approval-request` | `{call_id, tool_name, arguments, agent_id, risk_level}` | 工具审批请求（§10.10） |
+| `tool:approval-response` | `{call_id, approved, reason?}` | 工具审批响应（前端 → 后端） |
+| `rag:progress` | `{document_id, status, progress?}` | RAG 摄取进度 |
+| `translate:batch-progress` | `{done, total}` | 批量翻译进度 |
+| `memory:changed` | `{path, scope, type}` | 记忆文件变更 |
+| `asr:model-download-progress` | `{model_id, downloaded, total}` | ASR 模型下载进度 |
+| `asr:backend-status` | `{backend_id, status}` | ASR 后端健康状态 |
+
+#### 8.3.1 事件清单（前端 → 后端）
+
+| 事件 | 负载 | 触发时机 |
+|------|------|----------|
+| `meeting:audio-chunk` | `{meeting_id, pcm: base64}` | 渲染进程音频块（§10.3.2） |
+| `tool:approval-response` | `{call_id, approved, reason?}` | 用户工具审批结果（§10.10） |
+
+> 注：其余前端 → 后端交互一律走 `invoke` 命令（§8.2），仅高频流（音频块）与异步响应（审批）走事件通道（§14.6 #34）。
 
 ---
 
@@ -1914,6 +2006,10 @@ export const primitives = {
     --color-secondary-grouped-background: #FFFFFF;
     --color-tertiary-grouped-background: #F2F2F7;
 
+    /* 表面层级 */
+    --color-card: #FFFFFF;              /* 卡片/面板 */
+    --color-popover: #FFFFFF;           /* 弹窗/菜单 */
+
     /* 填充（iOS 18 四级系统填充，用于输入框/搜索框背景） */
     --color-fill: rgba(120, 120, 128, 0.2);
     --color-secondary-fill: rgba(120, 120, 128, 0.16);
@@ -1953,6 +2049,10 @@ export const primitives = {
     --color-secondary-grouped-background: #1C1C1E;
     --color-tertiary-grouped-background: #2C2C2E;
 
+    /* 表面层级 */
+    --color-card: #1C1C1E;              /* 卡片/面板 */
+    --color-popover: #2C2C2E;           /* 弹窗/菜单 */
+
     --color-fill: rgba(120, 120, 128, 0.36);
     --color-secondary-fill: rgba(120, 120, 128, 0.32);
     --color-tertiary-fill: rgba(120, 120, 128, 0.24);
@@ -1980,9 +2080,9 @@ export const primitives = {
 **状态色完整变体**（iOS 18 风格）：
 
 ```css
-/* error — 以 red 为基础 */
---color-error: var(--primitives-red-light);       /* #FF3B30 */
---color-error-text: var(--primitives-red-light);
+/* error — 以 red 为基础（引用语义色板已有 token） */
+--color-error: var(--color-destructive);          /* #FF3B30 */
+--color-error-text: var(--color-destructive);
 --color-error-bg: rgba(255, 59, 48, 0.12);       /* iOS 系统 fill 风格 */
 --color-error-border: rgba(255, 59, 48, 0.3);
 
@@ -1994,10 +2094,10 @@ export const primitives = {
 | Token | 值 | iOS 18 用途 |
 |-------|-----|------------|
 | `--radius-xs` | 4px | 微圆角（badge/tag） |
-| `--radius-sm` | 8px | 按钮文字、输入框 |
-| `--radius-md` | 12px | 卡片、列表组、按钮 |
-| `--radius-lg` | 16px | 弹窗内容区 |
-| `--radius-xl` | 20px | 模态框、操作表 |
+| `--radius-sm` | 8px | 按钮文字、小元素 |
+| `--radius-md` | 10px | 输入框、搜索框（iOS 18 系统 fill） |
+| `--radius-lg` | 12px | 按钮、卡片、列表组 |
+| `--radius-xl` | 14px | 模态框、操作表（iOS 18 标准） |
 | `--radius-full` | 9999px | 圆形头像/按钮 |
 
 ### 9.2 排版令牌（tokens/typography.ts）
@@ -2257,6 +2357,10 @@ function project(initialVelocity: number, decelerationRate = 0.998): number {
 
 **参考**：Cherry Studio 50+ 原子组件 + 25+ 复合组件的分层模式。
 
+> **目录说明**：本节的 `primitives/` + `composites/` 两层结构是组件目录的**权威定义**；
+> §4.2 组件树中的 `components/base/`（早期命名）与 `components/chat/`、`components/agent/` 等业务目录
+> 在实现时并入本结构——base/ 归入 primitives/，业务组件归入 composites/ 或各自业务子目录，不重复实现。
+
 **分层原则**：
 - **原子组件（Primitives）**：无业务逻辑，纯 UI 原语，基于 Radix UI（Svelte 版用 bits-ui）
 - **复合组件（Composites）**：组合原子组件，包含布局逻辑，仍无业务逻辑
@@ -2267,7 +2371,7 @@ function project(initialVelocity: number, decelerationRate = 0.998): number {
 ```
 src/lib/components/
 ├── primitives/                    # 原子组件（50+，bits-ui 基础）
-│   ├── Button.svelte              # 7 变体 × 7 尺寸（primary/secondary/ghost/danger/outline/emphasis/link）
+│   ├── Button.svelte              # 5 变体 × 多尺寸（primary/secondary/text/gray/destructive，见 §9.7）
 │   ├── Input.svelte               # 文本输入
 │   ├── Textarea.svelte            # 多行输入
 │   ├── Select.svelte              # 下拉选择
@@ -2332,7 +2436,7 @@ src/lib/components/
 | 阴影策略 | 静止时扁平，hover/浮动时 `shadow-md` | Apple Design flat-at-rest |
 | 滚动条 | 6px 细滚动条，圆角 thumb | Cherry Studio |
 | 焦点环 | `ring-2 ring-primary/50` | 无障碍标准 |
-| 响应式断点 | 640/1024/1280px（mobile/tablet/desktop/wide） | Cherry Studio |
+| 响应式断点 | 640/1024/1280/1536px（mobile/tablet/desktop/wide/ultra-wide） | Cherry Studio |
 
 ### 9.5 Codex 风格三栏布局
 
@@ -2460,7 +2564,7 @@ export const chatStore = new ChatStore();
     to { opacity: 1; transform: scale(1); }
 }
 
-/* 开关（iOS 18 标准：51×31px，16px 圆形 thumb） */
+/* 开关（iOS 18 标准：51×31px，27px 圆形 thumb） */
 .toggle {
     width: 51px; height: 31px;
     background: rgba(120, 120, 128, 0.16);
@@ -2587,7 +2691,7 @@ pub struct DashboardOverview {
 
 - 点击卡片 → `session:create` + 跳转 `/chat/{sessionId}`（直接进入对话）
 - 卡片右键/⋮ 菜单：编辑 Agent、复制、删除、绑定工作目录
-- 卡片拖拽到任务画布 → 自动创建该 Agent 的阶段节点（见 9.9.2）
+- 卡片拖拽到任务画布 → 自动创建该 Agent 的阶段节点（见 9.9.1）
 - 排序：最近使用优先；支持拖拽重排（order_key）
 - 空态：无 Agent 时显示引导 + 创建按钮 + 预设模板（研究员/写作/翻译等）
 
@@ -2696,6 +2800,7 @@ pub struct TaskDefinition {
     pub description: String,
     pub inputs: Vec<TaskInput>,   // 运行前用户填写的参数声明
     pub stages: Vec<TaskStageDef>,
+    pub goals: Vec<TaskGoal>,     // 目标定义（§10.11，可空 = 不启用目标监控）
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -2708,6 +2813,9 @@ pub struct TaskStageDef {
     pub tools: Vec<String>,       // 工具白名单
     pub max_iterations: u32,
     pub depends_on: Vec<String>,  // 依赖阶段 id
+    pub reflection: Option<ReflectionConfig>, // 反思配置（§10.9，可空）
+    pub model_hint: Option<String>,           // 模型建议（如 "plan"，可空）
+    pub output_spec: Option<String>,          // 输出格式约定（可空）
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -2715,6 +2823,7 @@ pub struct TaskInput {
     pub key: String,              // 如 "topic"
     pub label: String,            // 如 "研究主题"
     pub kind: InputKind,          // Text | Textarea | Select | Number
+    pub options: Option<Vec<Value>>, // Select 的选项列表（kind=Select 时必填）
     pub default: Option<Value>,
     pub required: bool,
 }
@@ -2815,7 +2924,7 @@ pub struct TaskInput {
 - 进度条阈值着色：`<80%` 默认 / `80~95%` 橙 / `>95%` 红 + "建议开启新会话"提示条
 - 点击"查看用量趋势" → 展开内嵌 7 日迷你图（复用 UsageChart 组件，只读）
 - "重置会话计数" → 二次确认（ConfirmDialog），不删除消息仅清计数展示（纯前端状态）
-- 长会话自动截断提示：后端 PromptBuilder 已做滑动窗口（§10.7），此处仅展示窗口内有效 tokens
+- 长会话自动截断提示：后端 PromptBuilder 已做滑动窗口（§13.1），此处仅展示窗口内有效 tokens
 
 ### 9.10.2 Tab 2 — 工作目录 (SidebarWorkdir)
 
@@ -2907,7 +3016,7 @@ pub struct TaskInput {
 
 - 文件卡片点击 → 内嵌预览（`workspace:read-file`，默认只读渲染 Markdown/纯文本）
 - ✏ 编辑 → 切换 Textarea（语法高亮），💾 保存 → `workspace:write-instructions` → 重新注入标记 ✅
-- "未注入"文件提供 [注入此文件] 按钮 → 加入本次会话的 PromptBuilder（`session:inject-file` 命令，见 8.2 补充）
+- "未注入"文件提供 [注入此文件] 按钮 → 加入本次会话的 PromptBuilder（`session:inject-file` 命令，见 9.10.7 新增命令）
 - 文件变更（外部编辑器修改）→ 前端轮询或 `fs:watcher` 事件 → 显示"文件已变更，点击刷新"角标
 
 ### 9.10.4 Tab 4 — MCP (SidebarMcp)
@@ -3480,7 +3589,7 @@ pub struct AsrModelManager { models_dir: PathBuf }
 impl AsrModelManager {
     /// 可下载模型清单（内置 manifest，含大小/URL/校验和）
     pub fn catalog(&self) -> Vec<AsrModelInfo>;
-    /// 下载（断点续传 + 进度事件 model:download-progress）
+    /// 下载（断点续传 + 进度事件 asr:model-download-progress）
     pub async fn download(&self, model_id: &str, progress: ProgressSink) -> Result<PathBuf, AppError>;
     /// 已安装模型列表
     pub fn installed(&self) -> Vec<InstalledAsrModel>;
@@ -3846,7 +3955,7 @@ meeting:push-to-agent {meeting_id, agent_id, session_id?}
 
 **事件**：`meeting:transcript` / `meeting:translation` / `meeting:status`（现有）+ 新增 `asr:model-download-progress` / `asr:backend-status`。
 
-**数据库补充**（迁移 003 扩展）：
+**数据库补充**（迁移 011_asr.sql）：
 
 ```sql
 -- 会议增加 ASR 配置记录
@@ -4263,6 +4372,11 @@ impl WorkflowEngine {
 
 ```rust
 /// 阶段模板 = 可复用阶段定义（预置 + 用户保存）
+/// 与 TaskStageDef（§9.9.1）/ WorkflowStage（§3.4）的关系：
+///   - StageTemplate = 可复用的「阶段单元」（预置/用户保存，落库 stage_templates 表）
+///   - TaskStageDef  = 画布上的「任务阶段」= StageTemplate 字段 + agent_id + depends_on + reflection
+///   - WorkflowStage = 运行时「执行阶段」= TaskStageDef 的依赖部分（role/prompt_template/tools/depends_on）
+///   三者字段已对齐（§9.9.1 TaskStageDef 为超集），task:run 时 TaskStageDef → WorkflowStage 直接映射。
 #[derive(Serialize, Deserialize, Clone)]
 pub struct StageTemplate {
     pub id: String,                 // "research"
@@ -4274,6 +4388,7 @@ pub struct StageTemplate {
     pub max_iterations: u32,        // 工具循环上限
     pub model_hint: Option<String>, // 模型建议（如 "plan" = 规划模型；空 = Agent 默认）
     pub output_spec: Option<String>,// 输出格式约定（如 "markdown" / "json"），注入提示
+    pub reflection: Option<ReflectionConfig>, // 反思配置（§10.9，可空）
 }
 
 /// 预置工作流定义（= 阶段模板的有序组合 + 输入声明）
@@ -4432,7 +4547,7 @@ pub fn render_template(template: &str, inputs: &Value, outputs: &HashMap<String,
 | 模板继承 | 用户模板可基于预置修改（复制 → 改 inputs/stages） |
 
 ```sql
--- 迁移 006_workflow_templates.sql
+-- 迁移 007_workflow_templates.sql
 CREATE TABLE stage_templates (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
@@ -4441,6 +4556,9 @@ CREATE TABLE stage_templates (
     prompt_template TEXT NOT NULL,
     tools         TEXT NOT NULL DEFAULT '[]',
     max_iterations INTEGER DEFAULT 10,
+    model_hint    TEXT,                          -- 模型建议（§10.6.1）
+    output_spec   TEXT,                          -- 输出格式约定（§10.6.1）
+    reflection    TEXT,                          -- 反思配置 JSON（§10.9，可空）
     source        TEXT NOT NULL DEFAULT 'user',   -- builtin | user
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL
@@ -4517,6 +4635,19 @@ fn resolve_project_id(repo_path: &str) -> String {
 
 #### 10.7.2 存储实现（SQLite FTS5 索引 + Markdown 文件）
 
+```sql
+-- 迁移 006_memory.sql — 记忆 FTS5 虚拟表（可执行 DDL）
+CREATE VIRTUAL TABLE memory_fts USING fts5(
+    body,                          -- 记忆文件正文
+    fingerprint,                   -- 指纹（path+mtime+size）
+    scope UNINDEXED,               -- global|projects|sessions|cc
+    type UNINDEXED,                -- memory|notes|checkpoint|progress|free
+    path UNINDEXED,                -- 文件绝对路径
+    tokenize='unicode61'           -- Unicode 分词（CJK 安全）
+);
+-- 索引回填（reconcile 时执行）：INSERT INTO memory_fts(body, fingerprint, scope, type, path) SELECT ... FROM 磁盘文件
+```
+
 ```rust
 // data/services/memory/store.rs
 pub struct MemoryStoreImpl {
@@ -4524,11 +4655,6 @@ pub struct MemoryStoreImpl {
     base_dir: PathBuf,                     // {app_data}/memory
     fts: RwLock<FtsIndex>,                 // 内存中 FTS5 句柄
 }
-
-// SQLite FTS5 索引表（迁移 005_memory.sql）
-// CREATE VIRTUAL TABLE memory_fts USING fts5(
-//     body, fingerprint, scope UNINDEXED, type UNINDEXED, path UNINDEXED
-// );
 
 impl MemoryStoreImpl {
     /// 写入/更新一个记忆文件（Markdown），并增量索引 FTS
@@ -4573,14 +4699,14 @@ impl MemoryStoreImpl {
 **角色**：checkpoint-writer 是一个独立子 agent（Rust 内通过 AutoAgents Actor 实现），是会话 checkpoints 的**唯一策展人**。
 
 ```
-触发条件（上下文使用率阈值，默认 40% / 60% / 80%）：
+触发条件（上下文使用率阈值，默认 20% / 40% / 60% / 80%）：
   ├─ 达到阈值 → 唤醒 writer
   ├─ 用户显式触发（/checkpoint 命令）
   └─ 会话结束（summary 写入）
 
 writer 执行：
   1. 读取本会话对话原文（messages 表，role 过滤）
-  2. 生成/更新 checkpoint.md（11 节固定结构，见 10.7.4）
+  2. 生成/更新 checkpoint.md（11 节固定结构，见 10.7.3 节预算）
   3. 提炼新知识 → 追加/更新 MEMORY.md（Rules / Architecture decisions / Discovered durable knowledge）
   4. 清理过期任务（done/abandoned 归档）
 
@@ -4662,14 +4788,16 @@ pub fn quarantine_checkpoint(sid: &str) -> Result<(), AppError> { ... }
 
 #### 10.7.4 注入与召回（Active Recall）
 
-**上下文重建注入**（对齐 MiMo-Code 的 4 段注入，token 预算可配置）：
+**上下文重建注入**（对齐 MiMo-Code 的注入分段，token 预算可配置，与 §13.1 TokenBudget 对齐）：
 
 | 段 | 内容 | 预算（默认） |
 |----|------|--------------|
 | checkpoint.md | 会话检查点（全量或预算截断） | 11K tokens |
-| MEMORY.md（project + global） | 项目/全局记忆 | 10K tokens |
+| MEMORY.md（project） | 项目记忆 | 10K tokens |
+| MEMORY.md（global） | 全局记忆 | 6K tokens |
 | notes.md | 会话草稿 | 6K tokens |
-| tasks/*/progress.md | 进行中任务的进度 | 4K tokens |
+| tasks/*/progress.md | 进行中任务的进度 | 2K tokens |
+| recent_user | 最近用户输入（FIFO，单条 ≤2K） | 16K tokens |
 
 **注入标记**：截断时标注 `⚠️ Truncated at ~N tokens. Read(<path>, offset=L) for the rest.`，主 agent 按需 Read 尾部。
 
@@ -4985,7 +5113,7 @@ impl GoalMonitor {
     /// 评估当前状态是否满足目标
     pub async fn evaluate(&self, state: &WorkflowState) -> GoalStatus {
         let mut scores = Vec::new();
-        for goal in &self.goares {
+        for goal in &self.goals {
             for criterion in &goal.criteria {
                 let score = self.evaluate_criterion(criterion, state).await;
                 scores.push(score * criterion.weight);
@@ -5000,7 +5128,7 @@ impl GoalMonitor {
     }
 
     /// 偏离目标时触发重新规划或升级
-    pub async fn on偏离(&self, status: GoalStatus) -> RecoveryAction {
+    pub async fn on_drift(&self, status: GoalStatus) -> RecoveryAction {
         if status.score < 0.3 {
             RecoveryAction::EscalateToUser("目标严重偏离，建议人工介入".into())
         } else if status.score < 0.6 {
@@ -5181,7 +5309,26 @@ pub struct TraceStep {
 }
 ```
 
-**存储**：`agent_traces` 表（迁移 007），保留最近 1000 条轨迹，支持按 session/agent/outcome 查询。
+**存储**：`agent_traces` 表（迁移 008_agent_traces.sql），保留最近 1000 条轨迹，支持按 session/agent/outcome 查询。
+
+```sql
+-- 迁移 008_agent_traces.sql
+CREATE TABLE agent_traces (
+    id           TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    agent_id     TEXT NOT NULL,
+    trace_id     TEXT NOT NULL,               -- UUID
+    started_at   INTEGER NOT NULL,
+    finished_at  INTEGER,
+    steps        TEXT NOT NULL DEFAULT '[]',  -- JSON: TraceStep[]
+    total_tokens TEXT NOT NULL DEFAULT '{}',  -- JSON: {prompt_tokens, completion_tokens}
+    total_cost   REAL NOT NULL DEFAULT 0,
+    outcome      TEXT NOT NULL,               -- success|failure|abandoned|timeout
+    created_at   INTEGER NOT NULL
+);
+CREATE INDEX idx_agent_traces_session ON agent_traces(session_id, started_at DESC);
+CREATE INDEX idx_agent_traces_agent ON agent_traces(agent_id, started_at DESC);
+```
 
 #### 10.13.2 LLM-as-Judge 评估
 
@@ -5395,7 +5542,7 @@ impl serde::Serialize for AppError {
 ```rust
 /// 简单 token 估算（对齐 MiMo-Code util/token.ts）
 pub fn estimate_tokens(text: &str) -> usize {
-    text.len() / 4  // 英文约 4 字符/token，中文约 2 字符/token，取平均
+    text.len() / 4  // 英文约 4 字符/token，中文约 2 字符/token，取保守值 4
 }
 
 /// 上下文窗口（对齐 MiMo-Code overflow.ts Window）
@@ -5626,7 +5773,7 @@ runLoop 每次迭代：
 
 #### 配置选项（统一 TokenBudget）
 
-**所有 token 预算集中定义在此处**，§10.7.3 checkpoint 节预算和 §13.1 重建注入预算均从此配置读取：
+**所有 token 预算集中定义在此处**，§10.7.3 checkpoint 节预算和 §10.7.4 重建注入预算均从此配置读取：
 
 ```rust
 /// 统一 token 预算配置（Single Source of Truth）
@@ -5873,13 +6020,104 @@ impl Default for TokenBudget {
 
 ---
 
+## 各功能模块 MVP 内容清单
+
+> **用途**：按文档章节（§3~§14）逐模块列出「各阶段需要落地的最小内容」。实施时以本清单为验收基准，一个模块一个模块核对，避免遗漏。
+> **图例**：🟦 Phase 1（MVP 核心闭环）· 🟧 Phase 2（面板）· 🟩 Phase 3（扩展）· ⬜ 后续迭代
+
+### §3 Rust 后端分层架构
+
+| 层级 | 阶段 | MVP 内容 |
+|------|------|---------|
+| ADK 组件层 | 🟦 | ModelProvider/ToolExecutor/MemoryStore 三个 Trait + AgentError + PromptBuilder（基础注入） |
+| Rig 核心层 | 🟦 | RigAgent agentic loop + StreamPipeline + 2 Provider（OpenAI/Ollama）+ 内置工具（file/knowledge） |
+| AutoAgents 编排 | 🟦 | Actor Trait + Coordinator + TaskScheduler + WorkflowEngine + render_template + 1 预置工作流 |
+| AutoAgents 编排 | 🟧 | 其余预置工作流（代码审查/头脑风暴/翻译校对）+ 并行阶段执行 |
+| 反思模式（§10.9） | 🟩 | ReflectionConfig + run_reflection_loop + 评审者 Agent |
+
+### §5 数据库
+
+| 内容 | 阶段 | MVP 内容 |
+|------|------|---------|
+| 核心迁移 | 🟦 | 001_init（providers/models/agents/sessions/messages/skills/mcp_servers）+ 004_workflow（workflows/runs/preferences） |
+| 功能迁移 | 🟧 | 002_rag、003_meeting、005_glossary、007_workflow_templates（阶段模板） |
+| 记忆迁移 | 🟧 | 006_memory（memory_fts FTS5 虚拟表 + 回填策略） |
+| 搜索迁移 | 🟩 | 009_message_search（messages_fts/sessions_fts/translate_fts + 同步触发器） |
+| 评估迁移 | 🟩 | 008_agent_traces（AgentTrace 表） |
+| 性能迁移 | 🟩 | 010_indexes + 011_asr（asr_configs）+ PRAGMA 优化 + 数据保留策略（§5.7） |
+
+### §6 MCP 协议
+
+| 内容 | 阶段 | MVP 内容 |
+|------|------|---------|
+| 传输层 | 🟦 | stdio + http 两传输（McpTransport Trait） |
+| 运行时 | 🟦 | McpRuntime + McpCatalog + 工具目录缓存 + 工具权限校验 |
+| 远程传输 | 🟧 | SSE 传输 + OAuth 回调支持（远程 MCP） |
+| 事件同步 | 🟧 | `notifications/tools/list_changed` 监听 + mcp:status-changed 事件 |
+
+### §7 流式响应
+
+| 内容 | 阶段 | MVP 内容 |
+|------|------|---------|
+| 事件模型 | 🟦 | chat:stream:start/delta/tool_call/tool_result/done/error/aborted 全量 |
+| StreamPipeline | 🟦 | 流式转发 + 取消（CancellationToken）+ 前端消费封装 |
+| 上下文压缩（§13.1） | 🟩 | ContextWindow + 压力等级 + 工具裁剪 + Head/Tail 选择 + 溢出恢复 + TokenBudget |
+
+### §8 Tauri IPC
+
+| 内容 | 阶段 | MVP 内容 |
+|------|------|---------|
+| 核心域 | 🟦 | agent/session/chat/model 域命令 + 通用返回包装（@tauri-apps/api/core） |
+| 挂接域 | 🟦 | mcp/skill/workflow/task/memory 域 MVP 子集命令 |
+| 面板域 | 🟧 | dashboard/workspace/lsp/context 域命令 + agent:stats |
+| 扩展域 | 🟩 | meeting/asr/wiki-ai/translate+glossary/ocr 域全量命令 |
+
+### §9 Svelte 5 前端
+
+| 内容 | 阶段 | MVP 内容 |
+|------|------|---------|
+| 设计系统 | 🟦 | 设计令牌（两层架构）+ 基础组件 15+（Button/Input/Switch/Dialog 等） |
+| 对话前端 | 🟦 | 三栏布局 + MessageList/Composer + 流式渲染 + 会话管理 |
+| 主页面板 | 🟧 | HomePage + AgentLauncher + Usage 统计 + 任务设计区（TaskDesigner） |
+| Agent 侧边栏 | 🟧 | 六 Tab（用量/工作目录/指令/MCP/LSP/文件）+ context:agent 聚合 |
+| 组件架构完善 | 🟧 | primitives/composites 分层补齐 + ToolApprovalDialog |
+| 无障碍适配 | 🟩 | 对比度/触摸目标/reduced-motion 三媒体查询 + 八项设计原则落地 |
+
+### §10 特色功能
+
+| 功能 | 阶段 | MVP 内容 |
+|------|------|---------|
+| Wiki + RAG | 🟩 | WikiService + write_ai 计划执行 + 分块/嵌入/混合检索 + 摄取后台任务 |
+| 会议系统 | 🟩 | AsrBackend 可插拔架构 + 录音流 + 清洗/摘要/问答/导出 |
+| Skill 技能系统 | 🟦 | 安装/卸载/启停 + PromptBuilder 注入；🟧 市场三源搜索 |
+| 翻译 + OCR | 🟩 | TranslateService + Glossary + OcrService 多后端 |
+| 多 Agent 工作流 | 🟦 | WorkflowEngine + 1 预置工作流；🟧 阶段模板系统 + 用户自定义 |
+| 记忆系统 | 🟦 | 分层记忆（global/projects/sessions）+ 会话注入；🟧 FTS 搜索 + checkpoint-writer |
+| 人机协同 | 🟧 | 工具审批分级 + ToolApprovalDialog + 升级机制 |
+| 目标监控 | 🟩 | TaskGoal/GoalCriterion + GoalMonitor |
+| 安全护栏 | 🟩 | GuardrailPipeline + InjectionDetector + ToxicityFilter |
+| 评估监控 | 🟩 | AgentTrace 轨迹 + AgentJudge + 性能仪表盘 |
+
+### §11~§14 横切能力
+
+| 章节 | 阶段 | MVP 内容 |
+|------|------|---------|
+| §11 错误/日志 | 🟦 | AppError 统一类型 + tracing 初始化 + 关键操作日志 |
+| §12 安全 | 🟦 | API Key 加密（AES-GCM）+ capabilities 权限；🟩 护栏/SSRF 防护 |
+| §13 性能 | 🟦 | 冷启动 <1s + 内存 <120MB 基线；🟩 上下文压缩（§13.1） |
+| §14 旧版规避 | 🟦 | §14.1~14.4 关键规避（模型 ID/upsert 幂等/时序丢块/目录穿越）落地于对应实现；🟧🟩 全部 51 条对照 |
+
+**实施顺序建议**：每阶段内按「后端核心 → IPC → 前端」顺序推进，模块边界清晰，可独立验收。
+
+---
+
 ## Tasks
 
 **Phase 1 — MVP（Agent 核心闭环）**
 
 - [ ] T1: 项目初始化 — Tauri 2.x + Svelte 5 + SvelteKit 脚手架、Cargo 工作区、Vite 配置、**CI 三平台构建矩阵（Windows/macOS/Linux）** (covers: S2-1, S2-2)
 - [ ] T2: 设计系统（MVP 子集） — 设计令牌（colors/typography/spacing/motion）、glass 工具类、基础组件库 15+ (covers: S2-9.1~9.4; depends: T1)
-- [ ] T3: 数据库层 — sqlx 连接池 + 5 个迁移 + 全部模型 (covers: S2-5; depends: T1)
+- [ ] T3: 数据库层 — sqlx 连接池 + 11 个迁移 + 全部模型 (covers: S2-5; depends: T1)
 - [ ] T4: ADK 组件层 — ModelProvider/ToolExecutor/MemoryStore Trait + PromptBuilder + AgentError (covers: S2-3.2; depends: T3)
 - [ ] T5: Rig 核心层 — RigAgent agentic loop + 流式管道 + 内置工具 + Provider 适配器（MVP 先 OpenAI/Ollama，其余 Phase 3 补） (covers: S2-3.3, S2-7; depends: T4)
 - [ ] T6: 服务层（MVP 子集） — Agent/Session/Chat/Model 服务；dashboard/usage/workspace/lsp 命令随 Phase 2 落地 (covers: S2-8; depends: T3, T5)
@@ -5909,7 +6147,7 @@ impl Default for TokenBudget {
 - [ ] T22: **目标设定与监控** — TaskGoal/GoalCriterion 数据结构 + GoalMonitor 运行时评估 + 前端目标进度条 (covers: S2-10.11; depends: T15, T7)
 - [ ] T23: **评估与监控** — AgentTrace 轨迹记录 + agent_traces 表 + AgentJudge LLM-as-Judge + 性能仪表盘（agent:stats）+ 前端评估 Tab (covers: S2-10.13; depends: T6, T10)
 - [ ] T24: **上下文压缩** — CompactionAgent + ContextWindow + 压力等级 + 工具输出裁剪（soft trim/hard prune）+ Head/Tail 选择 + 溢出检测与恢复 + 微压缩 + TokenBudget 统一配置 (covers: S2-13.1; depends: T5, T16)
-- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: S2-11, S2-13, S2-13.1, S2-14; depends: T6, T8, T12, T15)
+- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+rpm+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: S2-11, S2-13, S2-13.1, S2-14; depends: T6, T8, T12, T15)
 
 ---
 
@@ -5921,7 +6159,7 @@ impl Default for TokenBudget {
 |------|------|------|
 | T1 | ✅ 完成 | Tauri 2.x + Svelte 5 + SvelteKit 脚手架、Cargo 工作区、Vite 6、CI 三平台构建矩阵 |
 | T2 | ✅ 完成 | 设计系统 MVP — 19 个基础组件 + iOS 18 设计令牌 + 毛玻璃 CSS |
-| T3 | ✅ 完成 | 数据库层 — sqlx + 5 个迁移（init/rag/meeting/workflow/glossary+memory）+ 数据模型 |
+| T3 | ✅ 完成 | 数据库层 — sqlx + 11 个迁移（init/rag/meeting/workflow/glossary/memory/workflow_templates/agent_traces/message_search/indexes/asr）+ 数据模型 |
 | T4 | ✅ 完成 | ADK 组件层 — ModelProvider/ToolExecutor/MemoryStore 三个 Trait + PromptBuilder + ToolRegistry |
 | T5 | ✅ 完成 | Rig 核心层 — RigAgent agentic loop + StreamPipeline + OpenAI/Ollama Provider 适配器 |
 | T6 | ✅ 完成 | 服务层 — Agent/Session/Chat/Model/Settings 服务 + 16 个 IPC 命令 |
@@ -5935,7 +6173,7 @@ impl Default for TokenBudget {
 
 1. **项目初始化**：Tauri 2.x + Svelte 5 + SvelteKit + Vite 6 + CI 三平台构建
 2. **设计系统**：iOS 18 风格设计令牌、毛玻璃效果、19 个基础组件
-3. **数据库层**：sqlx SQLite + 5 个迁移文件、完整数据模型
+3. **数据库层**：sqlx SQLite + 11 个迁移文件、完整数据模型
 4. **ADK 组件层**：ModelProvider/ToolExecutor/MemoryStore 三个 Trait
 5. **Rig 核心层**：RigAgent agentic loop + OpenAI/Ollama Provider 适配器
 6. **服务层**：Agent/Session/Chat/Model/Settings CRUD + IPC 命令
