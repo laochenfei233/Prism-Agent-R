@@ -1562,138 +1562,226 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 
 ### 9.1 设计令牌系统（两层架构）
 
-**参考**：Cherry Studio 两层 token 架构（原始 token → 主题别名）+ Apple Design 色彩体系。
+**参考**：Cherry Studio 两层 token 架构 + iOS 18 精确色值 + Apple Design 色彩体系。
 
-**Layer 1：原始令牌**（`tokens/primitives/`）— 定义颜色家族、色阶、基础值：
+**Layer 1：原始令牌**（`tokens/primitives/`）— iOS 18 系统色 + oklch 感知均匀空间：
 
 ```ts
-// tokens/primitives/colors.ts — Apple 色彩家族（oklch 感知均匀空间）
+// tokens/primitives/colors.ts
 export const primitives = {
-    // 中性色（界面退让，内容优先）
-    neutral: {
-        50:  "oklch(0.985 0 0)",    // 最浅
-        100: "oklch(0.967 0 0)",
-        200: "oklch(0.920 0 0)",
-        300: "oklch(0.870 0 0)",
-        400: "oklch(0.708 0 0)",    // 次要文字
-        500: "oklch(0.556 0 0)",    // 占位符
-        600: "oklch(0.450 0 0)",
-        700: "oklch(0.370 0 0)",
-        800: "oklch(0.270 0 0)",
-        900: "oklch(0.145 0 0)",    // 暗色卡片
-        950: "oklch(0.080 0 0)",    // 暗色背景
+    // iOS 18 系统语义色（精确 hex 值，对齐 HIG）
+    blue:   { light: "#007AFF", dark: "#0A84FF" },
+    green:  { light: "#34C759", dark: "#30D158" },
+    indigo: { light: "#5856D6", dark: "#5E5CE6" },
+    orange: { light: "#FF9500", dark: "#FF9F0A" },
+    pink:   { light: "#FF2D55", dark: "#FF375F" },
+    purple: { light: "#AF52DE", dark: "#BF5AF2" },
+    red:    { light: "#FF3B30", dark: "#FF453A" },
+    teal:   { light: "#5AC8FA", dark: "#64D2FF" },
+    yellow: { light: "#FFCC00", dark: "#FFD60A" },
+
+    // iOS 18 灰度（6 级）
+    gray: {
+        1:  { light: "#8E8E93", dark: "#8E8E93" },
+        2:  { light: "#AEAEB2", dark: "#636366" },
+        3:  { light: "#C7C7CC", dark: "#48484A" },
+        4:  { light: "#D1D1D6", dark: "#3A3A3C" },
+        5:  { light: "#E5E5EA", dark: "#2C2C2E" },
+        6:  { light: "#F2F2F7", dark: "#1C1C1E" },
     },
-    // Apple 品牌蓝
-    blue: {
-        50:  "oklch(0.960 0.015 250)",
-        100: "oklch(0.920 0.030 250)",
-        500: "oklch(0.546 0.240 255)",  // Apple blue
-        600: "oklch(0.480 0.240 255)",  // 暗色模式 accent
-        900: "oklch(0.300 0.150 250)",
-    },
-    // 状态色（完整 base/text/bg/border/hover/active 变体）
-    red:    { 50: "...", 500: "oklch(0.637 0.237 25)",  /* ... */ },
-    green:  { 50: "...", 500: "oklch(0.627 0.194 149)", /* ... */ },
-    amber:  { 50: "...", 500: "oklch(0.769 0.188 70)",  /* ... */ },
 } as const;
 ```
 
-**Layer 2：语义别名**（`tokens/semantic.css`）— 绑定到具体用途：
+**Layer 2：语义别名**（`tokens/semantic.css`）— iOS 18 背景/填充系统：
 
 ```css
-/* tokens/semantic.css — 亮色主题 */
+/* tokens/semantic.css — iOS 18 亮色主题 */
 :root {
-    --color-background: var(--primitives-neutral-50);
-    --color-foreground: oklch(0 0 0 / 0.9);
-    --color-foreground-secondary: oklch(0 0 0 / 0.6);
-    --color-foreground-muted: oklch(0 0 0 / 0.4);
-    --color-card: #ffffff;
-    --color-popover: #ffffff;
-    --color-border: oklch(0 0 0 / 0.1);
-    --color-primary: var(--primitives-blue-500);
-    --color-destructive: var(--primitives-red-500);
-    --color-success: var(--primitives-green-500);
-    --color-warning: var(--primitives-amber-500);
-    --color-info: var(--primitives-blue-500);
-    /* Apple 特色 */
+    /* 背景层级（iOS 18 三级系统背景） */
+    --color-background: #FFFFFF;
+    --color-secondary-background: #F2F2F7;
+    --color-tertiary-background: #FFFFFF;
+
+    /* 分组背景（设置页等分组列表） */
+    --color-grouped-background: #F2F2F7;
+    --color-secondary-grouped-background: #FFFFFF;
+    --color-tertiary-grouped-background: #F2F2F7;
+
+    /* 填充（iOS 18 四级系统填充，用于输入框/搜索框背景） */
+    --color-fill: rgba(120, 120, 128, 0.2);
+    --color-secondary-fill: rgba(120, 120, 128, 0.16);
+    --color-tertiary-fill: rgba(120, 120, 128, 0.12);
+    --color-quaternary-fill: rgba(120, 120, 128, 0.08);
+
+    /* 标签层级 */
+    --color-label: rgba(0, 0, 0, 0.85);
+    --color-secondary-label: rgba(60, 60, 67, 0.6);
+    --color-tertiary-label: rgba(60, 60, 67, 0.3);
+    --color-quaternary-label: rgba(60, 60, 67, 0.18);
+
+    /* 分隔线 */
+    --color-separator: rgba(60, 60, 67, 0.29);
+    --color-opaque-separator: #C6C6C8;
+
+    /* 语义色 */
+    --color-primary: #007AFF;
+    --color-destructive: #FF3B30;
+    --color-success: #34C759;
+    --color-warning: #FF9500;
+    --color-info: #5AC8FA;
+
+    /* Apple 毛玻璃材质 */
     --color-glass: rgba(255, 255, 255, 0.72);
     --color-glass-border: rgba(255, 255, 255, 0.5);
-    --color-separator: rgba(60, 60, 67, 0.29);
+    --glass-blur: blur(20px) saturate(180%);
 }
 
-/* 暗色主题 — 真反转，非简单变暗 */
+/* iOS 18 暗色主题 — 真反转 */
 .dark {
-    --color-background: oklch(0.145 0 0);      /* 非纯黑，略带层次 */
-    --color-foreground: oklch(1 0 0 / 0.9);
-    --color-card: oklch(0.209 0 0);
-    --color-popover: oklch(0.145 0 0);
-    --color-border: oklch(1 0 0 / 0.1);
-    --color-primary: var(--primitives-blue-600);
+    --color-background: #000000;
+    --color-secondary-background: #1C1C1E;
+    --color-tertiary-background: #2C2C2E;
+
+    --color-grouped-background: #000000;
+    --color-secondary-grouped-background: #1C1C1E;
+    --color-tertiary-grouped-background: #2C2C2E;
+
+    --color-fill: rgba(120, 120, 128, 0.36);
+    --color-secondary-fill: rgba(120, 120, 128, 0.32);
+    --color-tertiary-fill: rgba(120, 120, 128, 0.24);
+    --color-quaternary-fill: rgba(120, 120, 128, 0.18);
+
+    --color-label: rgba(255, 255, 255, 0.85);
+    --color-secondary-label: rgba(235, 235, 245, 0.6);
+    --color-tertiary-label: rgba(235, 235, 245, 0.3);
+    --color-quaternary-label: rgba(235, 235, 245, 0.18);
+
+    --color-separator: rgba(84, 84, 88, 0.65);
+    --color-opaque-separator: #38383A;
+
+    --color-primary: #0A84FF;
+    --color-destructive: #FF453A;
+    --color-success: #30D158;
+    --color-warning: #FF9F0A;
+    --color-info: #64D2FF;
+
     --color-glass: rgba(28, 28, 30, 0.72);
     --color-glass-border: rgba(255, 255, 255, 0.08);
-    --color-separator: rgba(84, 84, 88, 0.6);
 }
 ```
 
-**状态色完整变体**（参考 Cherry Studio status.css）：
+**状态色完整变体**（iOS 18 风格）：
 
 ```css
-/* error 状态色板 */
---color-error-base: var(--primitives-red-500);
---color-error-text: var(--primitives-red-700);
---color-error-bg: var(--primitives-red-50);
---color-error-border: var(--primitives-red-200);
---color-error-hover: var(--primitives-red-100);
---color-error-active: var(--primitives-red-200);
+/* error — 以 red 为基础 */
+--color-error: var(--primitives-red-light);       /* #FF3B30 */
+--color-error-text: var(--primitives-red-light);
+--color-error-bg: rgba(255, 59, 48, 0.12);       /* iOS 系统 fill 风格 */
+--color-error-border: rgba(255, 59, 48, 0.3);
 
-/* success / warning / info 同理 */
+/* success / warning / info 同理，使用对应系统色的 0.12 opacity 作为 bg */
 ```
 
-**圆角重映射**（参考 Cherry Studio radius.css）：
+**圆角系统**（iOS 18 标准）：
 
-| Token | 默认值 | Prism Agent R 值 | 说明 |
-|-------|--------|-----------------|------|
-| `rounded-sm` | 2px | 4px | 微圆角 |
-| `rounded-md` | 6px | 8px | 按钮/输入框 |
-| `rounded-lg` | 8px | 12px | 卡片/面板 |
-| `rounded-xl` | 12px | 16px | 弹窗/侧边栏 |
-| `rounded-3xl` | 24px | 22px | 大弹窗/对话框 |
+| Token | 值 | iOS 18 用途 |
+|-------|-----|------------|
+| `--radius-xs` | 4px | 微圆角（badge/tag） |
+| `--radius-sm` | 8px | 按钮文字、输入框 |
+| `--radius-md` | 12px | 卡片、列表组、按钮 |
+| `--radius-lg` | 16px | 弹窗内容区 |
+| `--radius-xl` | 20px | 模态框、操作表 |
+| `--radius-full` | 9999px | 圆形头像/按钮 |
 
 ### 9.2 排版令牌（tokens/typography.ts）
 
-**参考**：Apple Design 字体链 + Cherry Studio 单字体策略 + 两层 body/heading 尺寸体系。
+**参考**：iOS 18 Dynamic Type 完整字号系统 + Apple Design 排版规则（tracking 随字号变化、leading 与字号反比）。
 
 ```css
 :root {
-    /* 字体链：Apple 系统字体优先，降级到 Inter，最后 sans-serif */
-    --font-sans: -apple-system, "SF Pro Text", "PingFang SC", "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
-    --font-mono: "SF Mono", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    /* 字体链（iOS 18 标准） */
+    --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+                   "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    --font-mono: "SF Mono", "Menlo", "Monaco", "Cascadia Code", "Courier New", monospace;
 
-    /* Body 尺寸（4 级，Cherry Studio 模式） */
-    --text-xs: 12px;     /* 辅助文字、标签 */
-    --text-sm: 14px;     /* 次要内容 */
-    --text-base: 16px;   /* 正文默认 */
-    --text-lg: 18px;     /* 强调正文 */
+    /* iOS 18 Dynamic Type 完整字号系统 */
+    /* Large Title — 页面大标题 */
+    --text-large-title: 34px;
+    --line-height-large-title: 41px;
+    --weight-large-title: 700;
+    --tracking-large-title: 0.37px;
 
-    /* Heading 尺寸（6 级，Cherry Studio 模式） */
-    --text-heading-xs: 20px;
-    --text-heading-sm: 24px;
-    --text-heading-md: 32px;
-    --text-heading-lg: 40px;
-    --text-heading-xl: 48px;
-    --text-heading-2xl: 60px;
+    /* Title 1 — 一级标题 */
+    --text-title1: 28px;
+    --line-height-title1: 34px;
+    --weight-title1: 700;
+    --tracking-title1: 0.36px;
 
-    /* 字重 */
-    --font-weight-regular: 400;
-    --font-weight-medium: 500;
-    --font-weight-bold: 700;
+    /* Title 2 — 二级标题 */
+    --text-title2: 22px;
+    --line-height-title2: 28px;
+    --weight-title2: 700;
+    --tracking-title2: 0.35px;
 
-    /* 行高 */
-    --line-height-tight: 1.2;
-    --line-height-normal: 1.5;
-    --line-height-relaxed: 1.75;
+    /* Title 3 — 三级标题 */
+    --text-title3: 20px;
+    --line-height-title3: 25px;
+    --weight-title3: 600;
+    --tracking-title3: 0.38px;
+
+    /* Headline — 突出文本 */
+    --text-headline: 17px;
+    --line-height-headline: 22px;
+    --weight-headline: 600;
+    --tracking-headline: -0.41px;
+
+    /* Body — 正文 */
+    --text-body: 17px;
+    --line-height-body: 22px;
+    --weight-body: 400;
+    --tracking-body: -0.41px;
+
+    /* Callout — 辅助说明 */
+    --text-callout: 16px;
+    --line-height-callout: 21px;
+    --weight-callout: 400;
+    --tracking-callout: -0.32px;
+
+    /* Subheadline — 次要标题 */
+    --text-subheadline: 15px;
+    --line-height-subheadline: 20px;
+    --weight-subheadline: 400;
+    --tracking-subheadline: -0.24px;
+
+    /* Footnote — 脚注 */
+    --text-footnote: 13px;
+    --line-height-footnote: 18px;
+    --weight-footnote: 400;
+    --tracking-footnote: -0.08px;
+
+    /* Caption 1 — 注释 */
+    --text-caption1: 12px;
+    --line-height-caption1: 16px;
+    --weight-caption1: 400;
+    --tracking-caption1: 0px;
+
+    /* Caption 2 — 最小注释 */
+    --text-caption2: 11px;
+    --line-height-caption2: 13px;
+    --weight-caption2: 600;
+    --tracking-caption2: 0.07px;
 }
 ```
+
+**Apple Design 排版规则**（来自 WWDC *The Details of UI Typography*）：
+
+| 规则 | 说明 |
+|------|------|
+| **tracking 随字号变化** | 大标题用负 tracking（-0.41px），正文接近 0，小注释用正 tracking（0.07px）。永远不要一个 `letter-spacing` 值用于所有字号 |
+| **leading 与字号反比** | 大标题行高紧凑（41/34 ≈ 1.2），正文宽松（22/17 ≈ 1.29） |
+| **用 weight+size+leading 建立层级** | 不要只靠字号，用字重增加存在感 |
+| **尊重用户字体设置** | 用 `rem`/`em` 而非固定 px，支持 Dynamic Type |
+| **默认用系统字体** | 它已内建光学尺寸、tracking 表和可读性调优 |
 
 ### 9.3 毛玻璃实现（glass.css）
 
@@ -1707,30 +1795,158 @@ export const primitives = {
 
 ### 9.4 动画令牌（tokens/motion.ts）
 
-**参考**：Apple Design spring + Cherry Studio Framer Motion 配置 + `prefers-reduced-motion` 适配。
+**参考**：Apple Design fluid interface spring 参数 + iOS 18 缓动函数 + `prefers-reduced-motion` 适配。
 
 ```ts
 export const motion = {
-    // Spring 曲线（Apple 风格弹性）
+    // === Apple Design Spring 参数（Designing Fluid Interfaces）===
+    // 关键：spring 无固定时长，settling time 由参数涌现
+    // damping: 1.0 = 临界阻尼（无回弹）；< 1.0 = 欠阻尼（有回弹）
+    // response: 到达目标的速度（秒），非 duration
+
+    // 默认 UI spring（临界阻尼，无回弹，优雅不干扰）
+    springDefault: { damping: 1.0, response: 0.35 },
+    // 动量交互 spring（有回弹，仅当手势本身有动量时）
+    springMomentum: { damping: 0.8, response: 0.35 },
+    // 面板/抽屉 spring（Cherry Studio 风格）
+    springPanel: { damping: 30, stiffness: 350 },
+
+    // iOS 18 缓动曲线
+    ease: "cubic-bezier(0.25, 0.1, 0.25, 1)",
+    easeIn: "cubic-bezier(0.4, 0, 1, 1)",
+    easeOut: "cubic-bezier(0, 0, 0.2, 1)",
+    easeInOut: "cubic-bezier(0.4, 0, 0.2, 1)",
     spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
-    // Cherry Studio 风格 spring 参数（用于面板/弹窗）
-    springConfig: { damping: 30, stiffness: 350 },
-    // 缓动曲线
-    easeInOut: "cubic-bezier(0.42, 0, 0.58, 1)",
-    easeOut: "cubic-bezier(0, 0, 0.58, 1)",
-    // 时长
-    fast: 150,     // 微交互（hover/focus）
-    base: 250,     // 标准过渡
-    slow: 400,     // 页面切换
-    sheet: 500,    // 抽屉/面板
+
+    // iOS 18 时长规范
+    durationFast: 150,      // 按钮点击
+    durationBase: 200,      // 列表项出现、开关切换
+    durationNormal: 250,    // 模态框弹出
+    durationSlow: 300,      // 页面过渡
+    durationSheet: 350,     // 操作表/抽屉
 } as const;
 
-// 减弱动画适配（Cherry Studio 模式）
-// 所有动画必须尊重 prefers-reduced-motion: reduce
-// mediaQuery: "(prefers-reduced-motion: reduce)" → 禁用所有非必要动画
+// === Apple Design 交互规则 ===
+// 1. 按钮反馈在 pointer-down，不在 click/touch-up
+// 2. 拖拽全程 1:1 跟踪，不仅在释放时
+// 3. 所有动画可中断（interruptibility）
+// 4. 中断时从当前屏幕值（presentation value）开始，非目标值
+// 5. 反转时混合速度（velocity blending），不硬切
+// 6. 动量投射：用速度预测落点，非从释放点吸附
+// 7. 橡皮筋：边界处渐进阻力，不停硬停
 ```
 
-### 9.4.1 组件架构（Primitives + Composites）
+### 9.4.1 Fluid Interface 原则（Apple Design）
+
+**来源**：Apple WWDC *Designing Fluid Interfaces* — 接口何时停止像计算机，开始像自身的延伸。
+
+**核心理念**：当运动从当前屏幕值开始、继承用户速度、向前投射动量、且可在任意时刻抓取反转时，接口就「活」了。Spring 是使这一切自然的工具——它天然可中断且感知速度。
+
+**七项原则**：
+
+| # | 原则 | 说明 | Prism Agent R 应用 |
+|---|------|------|-------------------|
+| 1 | **响应** | 在 pointer-down 而非 release 时反馈；消除一切延迟 | 按钮 `:active` 立即 scale(0.97) |
+| 2 | **直接操纵** | 1:1 跟踪，尊重抓取偏移（where they grabbed） | 拖拽 Splitter、Drawer 跟手 |
+| 3 | **可中断性** | 从 presentation value 开始，不从 target value；反转时混合速度 | 所有 spring 动画可中断 |
+| 4 | **行为优于动画** | 用 spring 替代固定时长动画；spring 响应新输入只需改 target | 弹窗/面板用 springDefault |
+| 5 | **速度交接** | 手势结束时，动画以手指精确速度继续 | 抽屉释放速度 → spring initial velocity |
+| 6 | **动量投射** | 用速度预测落点，非从释放点吸附 | `project(velocity) → nearestSnap` |
+| 7 | **空间一致性** | 进出路径对称；锚定到触发源 | 右侧滑入 → 右侧滑出；菜单从按钮 origin 弹出 |
+
+**Apple 精确参数**：
+
+| 交互 | damping | response | 说明 |
+|------|---------|----------|------|
+| 移动/重定位（如 PiP） | 1.0 | 0.4s | 临界阻尼，无回弹 |
+| 旋转 | 0.8 | 0.4s | 轻微回弹 |
+| 抽屉/Sheet | 0.8 | 0.3s | 手势驱动，有回弹 |
+| 默认 UI 元素 | 1.0 | 0.3~0.4s | 优雅不干扰 |
+
+**橡皮筋公式**（边界软阻力）：
+
+```ts
+function rubberband(overshoot: number, dimension: number, constant = 0.55): number {
+    return (overshoot * dimension * constant) / (dimension + constant * Math.abs(overshoot));
+}
+```
+
+**动量投射公式**（Apple *Designing Fluid Interfaces* sample code）：
+
+```ts
+function project(initialVelocity: number, decelerationRate = 0.998): number {
+    return (initialVelocity / 1000) * decelerationRate / (1 - decelerationRate);
+}
+// element at y=50, target y=150 (100px to go), finger moving 50px/s
+// → projectedEndpoint = 50 + project(50) = 50 + 49.9 = ~100
+// → nearestSnapPoint(100) → target
+```
+
+**手势设计清单**：
+
+| 手势 | 规则 |
+|------|------|
+| Tap | pointer-down 即高亮（即时），touch-up 提交；~10px hysteresis；可拖离取消 |
+| Drag/Swipe | ~10px 阈值后锁定方向，然后 1:1 跟踪 |
+| 手势识别 | 从第一次 move 并行检测所有可能手势，确认后取消失败者 |
+| 双击 | 会延迟单击，仅在双击确实存在时使用 |
+
+### 9.4.2 材质与深度（Materials & Depth）
+
+**来源**：Apple Design — 半透明材质作为浮动功能层，用层次建立结构而不抢焦点。
+
+**层级系统**（表面颜色分层）：
+
+| 层级 | 亮色 | 暗色 | 用途 |
+|------|------|------|------|
+| Ground | `--color-background` | `#000000` | 页面背景 |
+| Surface | `--color-secondary-background` | `#1C1C1E` | 卡片/面板 |
+| Raised | `--color-popover` | `#2C2C2E` | 弹窗/菜单 |
+| Accent | `--color-fill` | `rgba(120,120,128,0.36)` | hover 背景 |
+
+**毛玻璃实现**（iOS 18 navbar/toolbar 标准）：
+
+```css
+.toolbar {
+    background: var(--color-glass);           /* rgba(255,255,255,0.72) 亮色 */
+    backdrop-filter: var(--glass-blur);       /* blur(20px) saturate(180%) */
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 0.5px solid var(--color-separator);
+}
+
+.dark .toolbar {
+    background: var(--color-glass);           /* rgba(28,28,30,0.72) 暗色 */
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+```
+
+**材质规则**（Apple Design）：
+
+| 规则 | 说明 |
+|------|------|
+| 内容在材质下滚动 | toolbar/sheet 是半透明层，内容从下方滚过，不是固定条 |
+| 材质重量编码层级 | 更暗/更重的材质分隔结构区域（侧边栏）；更轻的材质吸引交互元素 |
+| 禁止叠放轻材质 | 亮色半透明叠在另一个上 → 可读性崩溃 |
+| 大表面 = 更厚材质 | 更强 blur + 更深 shadow |
+| 减暗聚焦，分离保持流 | 模态任务用 scrim + 推回背景；非阻塞面板用半透明 + 偏移，无 scrim |
+| 滚动边缘效果 | 内容与浮动 chrome 交界处用渐变 mask，不用 1px border |
+
+**阴影系统**（7 级，扁平优先）：
+
+```css
+:root {
+    --shadow-2xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
+    --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.2);
+    --shadow-2xl: 0 32px 64px rgba(0, 0, 0, 0.25);
+}
+/* 静止时扁平（flat-at-rest），仅 hover/浮动时使用 shadow */
+```
+
+### 9.4.3 组件架构（Primitives + Composites）
 
 **参考**：Cherry Studio 50+ 原子组件 + 25+ 复合组件的分层模式。
 
@@ -1795,12 +2011,21 @@ src/lib/components/
 
 | 规范 | 值 | 来源 |
 |------|-----|------|
-| Button 默认样式 | 中性填充（非 primary 色），hover 时加深 | Cherry Studio：CTA 用 neutral strong，非 chromatic |
-| Dialog 圆角 | `rounded-xl`（16px） | Cherry Studio：`rounded-3xl`（22px）略大，Prism 用 16px 适配 Apple 风格 |
-| 阴影策略 | 静止时扁平，hover/浮动时 `shadow-md` | Cherry Studio：flat-at-rest principle |
-| 滚动条 | 6px 细滚动条，圆角 thumb | Cherry Studio：自定义 scrollbar |
+| Button 尺寸 | `min-height: 50px; padding: 16px 24px; font-size: 17px` | iOS 18 标准按钮 |
+| Button 圆角 | `12px`（iOS 18 标准） | iOS 18 |
+| Button 反馈 | `:active { transform: scale(0.98) }`（pointer-down 即触发） | Apple Design fluid interface |
+| Dialog 圆角 | `14px`（iOS 18 模态框标准） | iOS 18 |
+| Dialog 背景 | `rgba(255,255,255,0.72)` + `backdrop-filter: blur(20px) saturate(180%)` | iOS 18 毛玻璃 |
+| Modal 动画 | `scale(0.95) → scale(1)` + `opacity 0→1`，200ms ease | iOS 18 |
+| 开关尺寸 | `51×31px`，thumb `27px` 圆形 | iOS 18 Toggle |
+| 列表项 | `min-height: 44px`，`0.5px` 分隔线 | iOS 18 |
+| 输入框 | `background: rgba(120,120,128,0.12)`，`border-radius: 10px` | iOS 18 系统 fill |
+| 触摸目标 | `≥44×44pt` | iOS 18 无障碍 |
+| 对比度 | 正文 `4.5:1`，大文本/图标 `3:1` | iOS 18 无障碍 |
+| 阴影策略 | 静止时扁平，hover/浮动时 `shadow-md` | Apple Design flat-at-rest |
+| 滚动条 | 6px 细滚动条，圆角 thumb | Cherry Studio |
 | 焦点环 | `ring-2 ring-primary/50` | 无障碍标准 |
-| 响应式断点 | 640/1024/1280px（mobile/tablet/desktop/wide） | Cherry Studio responsive.css |
+| 响应式断点 | 640/1024/1280px（mobile/tablet/desktop/wide） | Cherry Studio |
 
 ### 9.5 Codex 风格三栏布局
 
@@ -1854,9 +2079,11 @@ export const chatStore = new ChatStore();
 
 ### 9.7 基础组件示例（Button.svelte）
 
+**iOS 18 按钮规范**（来自 ios18-design-system skill）：
+
 ```svelte
 <script lang="ts">
-    type Variant = "primary" | "secondary" | "ghost" | "danger";
+    type Variant = "primary" | "secondary" | "text" | "gray" | "destructive";
     let { variant = "primary", disabled = false, onclick, children }: {
         variant?: Variant; disabled?: boolean; onclick?: () => void; children: Snippet;
     } = $props();
@@ -1868,17 +2095,99 @@ export const chatStore = new ChatStore();
 
 <style>
     .btn {
-        border-radius: 980px; border: none; cursor: pointer;
-        font-weight: 600; font-size: 15px; padding: 7px 16px;
-        transition: transform 0.15s var(--spring);
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: 8px; padding: 16px 24px; min-height: 50px;
+        font-size: 17px; font-weight: 600; font-family: var(--font-system);
+        border: none; border-radius: 12px; cursor: pointer;
+        transition: all 0.2s var(--ease);
     }
-    .btn:active { transform: scale(0.96); }
-    .btn-primary { background: var(--color-accent); color: #fff; }
-    .btn-secondary { background: var(--color-bg-secondary); color: var(--color-fg); }
-    .btn-ghost { background: transparent; color: var(--color-accent); }
-    .btn-danger { background: var(--color-red); color: #fff; }
+    /* Apple Design: 反馈在 pointer-down，不在 click */
+    .btn:active { transform: scale(0.98); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Primary — iOS 18 蓝色填充 */
+    .btn-primary { background: var(--color-primary); color: #FFFFFF; }
+    .btn-primary:hover { background: #0066D6; }
+
+    /* Secondary — iOS 18 系统填充背景 */
+    .btn-secondary {
+        color: var(--color-primary);
+        background: rgba(0, 122, 255, 0.12);
+    }
+    .btn-secondary:hover { background: rgba(0, 122, 255, 0.18); }
+
+    /* Text — 无背景 */
+    .btn-text {
+        padding: 8px 12px; min-height: auto;
+        color: var(--color-primary); background: transparent;
+    }
+    .btn-text:hover { background: rgba(0, 122, 255, 0.08); }
+
+    /* Gray — iOS 18 灰色填充 */
+    .btn-gray {
+        color: var(--color-primary);
+        background: rgba(120, 120, 128, 0.12);
+    }
+
+    /* Destructive — iOS 18 红色 */
+    .btn-destructive {
+        color: var(--color-destructive);
+        background: rgba(255, 59, 48, 0.12);
+    }
 </style>
+```
+
+**iOS 18 组件 CSS 参考**（关键组件的精确实现值）：
+
+```css
+/* 模态框（iOS 18 标准：270px 宽，毛玻璃背景，14px 圆角） */
+.modal-content {
+    width: 270px;
+    background: var(--color-glass);
+    backdrop-filter: var(--glass-blur);
+    border-radius: 14px;
+    animation: modalEnter 0.2s var(--ease);
+}
+@keyframes modalEnter {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* 开关（iOS 18 标准：51×31px，16px 圆形 thumb） */
+.toggle {
+    width: 51px; height: 31px;
+    background: rgba(120, 120, 128, 0.16);
+    border-radius: 16px; cursor: pointer;
+    transition: background 0.2s var(--ease);
+}
+.toggle::after {
+    content: ''; position: absolute;
+    top: 2px; left: 2px; width: 27px; height: 27px;
+    background: #FFFFFF; border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s var(--ease);
+}
+.toggle.active { background: #34C759; }
+.toggle.active::after { transform: translateX(20px); }
+
+/* 列表项（iOS 18 标准：44px 最小高度，0.5px 分隔线） */
+.list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; min-height: 44px;
+    border-bottom: 0.5px solid var(--color-separator);
+    transition: background 0.15s var(--ease);
+}
+.list-item:active { background: rgba(0, 0, 0, 0.06); }
+
+/* 输入框（iOS 18 标准：系统 fill 背景，10px 圆角） */
+.input {
+    width: 100%; padding: 12px 16px;
+    font-size: 17px; color: var(--color-label);
+    background: var(--color-fill);
+    border: none; border-radius: 10px; outline: none;
+    transition: background 0.2s var(--ease);
+}
+.input:focus { background: rgba(120, 120, 128, 0.18); }
 ```
 
 ### 9.8 快捷键体系
@@ -4669,6 +4978,68 @@ impl serde::Serialize for AppError {
 - `tracing` + `tracing-subscriber`：文件（`{app_data}/logs/prism.log`，按天轮转）+ 控制台
 - 关键操作（agent CRUD、MCP 连接、技能安装）打 INFO；工具调用打 DEBUG（含参数脱敏）
 - Tauri 命令层统一 `#[tracing::instrument]` 记录耗时
+
+---
+
+## 11A. 无障碍设计（Accessibility）
+
+**来源**：iOS 18 无障碍规范 + Apple Design 可访问性原则。
+
+### 对比度要求
+
+| 元素 | 最小对比度 | 说明 |
+|------|-----------|------|
+| 正文文本 | 4.5:1 | `--color-label` on `--color-background` |
+| 大文本（>18pt） | 3:1 | 标题、heading |
+| 图标 | 3:1 | SF Symbols / Lucide |
+| 非文本元素 | 3:1 | 分隔线、边框 |
+
+### 触摸/点击目标
+
+| 元素 | 最小尺寸 | iOS 18 标准 |
+|------|---------|------------|
+| 按钮 | 44×44pt | `min-height: 50px` |
+| 图标按钮 | 44×44pt | 含 padding 热区 |
+| 列表项 | 44pt 高度 | `min-height: 44px` |
+| 链接 | 44×44pt 热区 | 可点击区域扩展 |
+
+### Reduced Motion 适配
+
+```css
+/* Apple Design: reduced motion ≠ 无反馈，而是更温和的等价替代 */
+@media (prefers-reduced-motion: reduce) {
+    /* 用 opacity cross-fade 替代 slide/spring */
+    .sheet { transition: opacity 200ms ease; transform: none !important; }
+    .modal { animation: none; opacity: 1; }
+    /* 禁用弹性/回弹 */
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Apple Design: reduced transparency — 材质变实心 */
+@media (prefers-reduced-transparency: reduce) {
+    .toolbar { background: white; backdrop-filter: none; }
+    .glass { background: var(--color-card); backdrop-filter: none; }
+}
+
+/* Apple Design: high contrast — 实心背景 + 明确边框 */
+@media (prefers-contrast: more) {
+    .list-item { border: 1px solid var(--color-label); }
+    .input { border: 1px solid var(--color-label); }
+}
+```
+
+### Apple Design 八项设计原则（WWDC 2026 *Principles of Great Design*）
+
+| # | 原则 | 说明 |
+|---|------|------|
+| 1 | **Purpose** | 有意为之；决定不做什么；每个功能消耗用户的时间/注意力/信任 |
+| 2 | **Agency** | 让人保持控制；提供选择而非强制路径；轻易 undo |
+| 3 | **Responsibility** | 以用户利益行事；隐私/安全/可预见误用 |
+| 4 | **Familiarity** | 基于已有认知；使用隐喻（trash = 删除）；一致的行为 |
+| 5 | **Flexibility** | 适配不同上下文/设备/能力；允许个性化 |
+| 6 | **Simplicity** | 剥离不必要；层级清晰；常用路径优先，高级选项藏深一层 |
+| 7 | **Craft** | 对细节的不懈关注；每个 spacing/timing/alignment 值都可辩护 |
+| 8 | **Delight** | 其他七项做对的结果，不是贴在顶部的 confetti |
 
 ---
 
