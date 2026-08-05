@@ -612,7 +612,7 @@ src/
 | `agents` | Agent 定义 | 1:N sessions, N:N skills, N:N mcp_servers |
 | `agent_mcp_servers` | Agent × MCP 关联 | N:N junction |
 | `agent_skills` | Agent × 技能关联 | N:N junction |
-| `sessions` | 会话 | N:1 agents, 1:N messages |
+| `sessions` | 会话（archived_at 列由迁移 014 补，§9.5.1） | N:1 agents, 1:N messages |
 | `messages` | 消息（含工具调用） | N:1 sessions |
 | `skills` | 技能元数据 | N:N agents |
 | `mcp_servers` | MCP 服务器配置 | N:N agents |
@@ -629,6 +629,8 @@ src/
 | `translate_history` | 翻译历史 | - |
 | `glossary_terms` | 翻译术语表（§10.5.2，phase3-extend.md） | - |
 | `preferences` | 键值偏好设置 | - |
+| `prompt_templates` | 提示词模板（§9.8.2，迁移 015） | - |
+| `workflow_versions` | 工作流版本历史（§10.6.4.1，迁移 016） | N:1 workflows |
 | `memory_fts` | 记忆全文索引（FTS5，§10.7.2） | 虚拟表 |
 | `messages_fts` | 消息全文索引（FTS5，§5.7.2，迁移 009） | 虚拟表 |
 | `sessions_fts` | 会话标题索引（FTS5，§5.7.4，phase2-panel.md，迁移 012） | 虚拟表 |
@@ -1207,7 +1209,7 @@ pub trait SyncBackend: Send + Sync {
 
 /// 同步单元 = 导出的 JSON 快照（含 schema 版本号）
 pub struct SyncSnapshot {
-    pub schema_version: u32,             // 迁移 001-013 任一版本
+    pub schema_version: u32,             // 迁移 001-016 任一版本
     pub entries: Vec<SyncEntry>,         // {path, fingerprint, content}
 }
 ```
@@ -1217,7 +1219,7 @@ pub struct SyncSnapshot {
 2. 手动触发或定时（默认 30min）`sync:push` / `sync:pull`
 3. **冲突策略**：同 path 且双方都有变更 → 保留 updated_at 新的；双方相同 → 跳过
 4. 拉取前校验 schema_version 兼容（高版本数据拒绝降级导入）
-5. 敏感操作（首次连接/全量覆盖）走 §10.10 审批模式
+5. 敏感操作（首次连接/全量覆盖）走 §10.10 审批模式（见 phase2-panel.md）
 
 **命令**：
 
@@ -1229,6 +1231,17 @@ pub struct SyncSnapshot {
 | `sync:status` | `{}` | `SyncStatus` |
 
 **安全**：传输 TLS；数据先 AES-GCM 加密再上传（Key 派生自用户主密钥，不随云端存储）；API Key 永不上传。
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 后端连接失败（网络/DNS） | 连接超时（默认 15s） | 指数退避重试 3 次 → 标记离线 | 「同步服务不可用，稍后自动重试」 |
+| 凭据无效（401/403） | 响应状态码 | 停止同步 + 要求重配 | 「凭据无效，请在设置中重新配置」 |
+| 磁盘/本地读写失败 | 本地 IO 异常 | 跳过该 entry + 继续 | 「本地文件读取失败：{path}」 |
+| schema 版本不兼容 | 拉取时版本校验 | 拒绝导入 + 提示升级 | 「云端数据版本较新，请升级应用」 |
+| 冲突无法自动解决 | 双方同时间戳 | 标记 conflict 列表 + 用户选择 | 「N 项冲突待处理」→ 冲突解决 UI |
+| 加密失败（Key 丢失） | 解密异常 | 保留本地副本 + 提示重建 | 「同步数据无法解密，已保留本地」 |
 
 ---
 
@@ -1622,7 +1635,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `workspace:tree` | `{path?, depth?, max_entries?}` | `DirTree` | 目录树（单层/递归，忽略 .git/node_modules 等） |
 | `workspace:read-file` | `{path}` | `{content, mime}` | 读取文件（文本截断保护） |
 | `workspace:open-file` | `{path}` | `()` | 用默认程序打开 |
-| `fs:watch` | `{workdir, enable}` | `()` | 开启/关闭工作目录变更监听（Phase 2，§9.10.7） |
+| `fs:watch` | `{workdir, enable}` | `()` | 开启/关闭工作目录变更监听（Phase 2，§9.10.7，见 phase2-panel.md） |
 
 **LSP 域** `commands/lsp.rs`
 
@@ -1876,6 +1889,16 @@ export const primitives = {
 - **限制**：主题仅覆盖已定义的 CSS 变量，不改变组件结构（避免碎片化）
 
 **前端 UI**：设置页 → 外观 → 主题列表（预览缩略图）+ [导入] [导出] + 社区浏览入口。
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| theme.json 非法（字段缺失/类型错） | 加载时 schema 校验 | 回退默认主题 + 标记该主题无效 | 「主题文件无效，已使用默认」 |
+| 主题名冲突 | 目录已存在 | 询问覆盖/改名（复用 §10.4 重名策略） | 「主题 X 已存在」 |
+| 导入 zip 损坏 | 解压失败 | 删除临时文件 + 报错 | 「主题包损坏，无法导入」 |
+| CSS 注入被浏览器拦截 | 样式注入异常 | 回退默认 + 日志 | 无感 |
+| 应用后对比度不达标 | WCAG 校验（可选） | 提示但不阻止 | 「该主题对比度可能不足」 |
 
 ### 9.2 排版令牌（tokens/typography.ts）
 
@@ -2258,6 +2281,15 @@ src/lib/components/
 - **与 pinned 关系**：pinned（置顶）与 archived（隐藏）互斥——置顶会话不可归档，归档后取消置顶
 - **清理**：归档超过保留期（如 180 天）的可由用户「彻底删除」，不影响 §5.7.6 的活跃数据清理
 
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 归档/解冻并发冲突（多窗口） | 行版本/updated_at 校验 | 拒绝 + 刷新列表 | 「会话状态已变化，请刷新」 |
+| 迁移 014 在旧库失败 | sqlx 迁移异常 | 单迁移隔离（§14.3#30）不阻断启动 | 日志告警 |
+| 归档会话仍被后台流引用 | 会话关联检查 | 先中止活动流再归档（§7.4） | 「会话正在生成，已先停止」 |
+| 彻底删除误操作 | 二次确认 | ConfirmDialog（§10.10 审批模式（见 phase2-panel.md）） | 「确认删除？此操作不可恢复」 |
+
 ### 9.6 状态管理（Svelte 5 Runes）
 
 ```ts
@@ -2440,6 +2472,15 @@ export const chatStore = new ChatStore();
 ] }
 ```
 
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| commands.json 解析失败 | serde 解析异常 | 回退内置命令 + 标记文件损坏 | 「自定义命令文件无效，已用内置」 |
+| 命令动作引用不存在的工作流/技能 | 引用校验（启动时） | 该命令标红禁用 | 「命令 X 引用的工作流不存在」 |
+| 命令执行超时（工作流） | 阶段超时 | 复用 §10.6 超时处理 | 「命令执行超时」 |
+| 关键词冲突（两条命令同词） | 注册时检测 | 保留先注册者 + 提示 | 「命令 Y 与 X 关键词重复」 |
+
 #### 9.8.2 提示词模板库（后续迭代，[S5] ⭐ 中）
 
 **定位**：常用提示词片段管理，插入 Composer。
@@ -2451,6 +2492,15 @@ export const chatStore = new ChatStore();
 - **命令**：`prompt:list` / `prompt:save {name, content}` / `prompt:delete {id}` / `prompt:import {path}`
 - **默认模板**：内置少量（翻译/总结/代码审查/周报），用户可增删改
 - **与技能系统关系**：模板是轻量片段（无脚本/资产），技能是完整 SKILL.md 包——两者互补，模板注入 Composer、技能注入 system prompt
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 模板变量未填（required） | 插入时校验 | 阻止插入 + 高亮缺失变量 | 「请填写必填变量：{var}」 |
+| 模板文件/表损坏 | 加载异常 | 回退内置模板 | 「模板库损坏，已用内置」 |
+| 模板名冲突 | 保存时检测 | 询问覆盖/改名 | 「模板 X 已存在」 |
+| 插入超长模板（截断） | 长度检查（如 >8K 字符） | 提示分段插入 | 「模板过长，建议分段」 |
 
 ## 10. 特色功能详细设计（Phase 1 部分）
 
@@ -2533,6 +2583,16 @@ Phase 1 仅实现技能安装/卸载/启停/注入（本节约 10.4 主体）；
 - **市场**：复用 phase2 §10.4.1 的三源搜索框架（Agent 市场作为第 4 源或独立源）；Agent 模板包的安装走 `agent:install-from-market`
 - **安全**：导入的 Agent 视为不可信——system_prompt 仅作文本（不执行脚本）；绑定技能/工具需用户确认（§10.10 审批）
 - **与 Agent 创建关系**：导入 = 预填 AgentEditor 表单 + 一键创建（不覆盖现有 Agent）
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| agent.json schema 非法 | 导入时校验 | 拒绝导入 + 指出缺失字段 | 「模板无效：缺少 {field}」 |
+| zip 包损坏/路径穿越 | 解压 + canonicalize 校验 | 拒绝 + 清理临时文件 | 「模板包损坏或不安全」 |
+| 依赖技能缺失 | 安装后比对 skills.txt | 创建 Agent 但技能禁用 + 提示 | 「依赖技能 X 未安装」 |
+| 导入 Agent 名冲突 | name 唯一性检查 | 自动加后缀（-copy） | 「已存在同名 Agent，已另存为 X-copy」 |
+| 市场下载失败 | 网络异常 | 重试 1 次 → 报错 | 「下载失败，请检查网络」 |
 
 ### 10.6 多 Agent 工作流详细设计
 
@@ -2790,6 +2850,16 @@ CREATE TABLE workflow_versions (
     UNIQUE (workflow_id, version)
 );
 ```
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 回滚到损坏版本（definition 解析失败） | 回滚时 serde 校验 | 阻止回滚 + 标记该版本异常 | 「版本 X 数据损坏，无法回滚」 |
+| 版本号冲突（并发保存） | UNIQUE 冲突 | 重试（刷新 version+1） | 无感（自动） |
+| 版本超上限（20 条） | 写入时计数 | 删除最旧版本后再写 | 无感（自动清理） |
+| 回滚后运行失败 | 工作流执行异常 | 提示可再回滚上一版 | 「回滚后运行失败，可回退」 |
+| diff 对比超大（大量 stages） | diff 计算超限 | 只显示 stage 级差异摘要 | 「差异过大，已折叠」 |
 
 ### 10.7 记忆系统
 
@@ -3180,6 +3250,17 @@ pub fn inject_active_recall(session_dir: &Path) -> String {
 | `session:export-all` | `{agent_id?, format}` | `Vec<{id, path}>` |
 | `session:import` | `{path}` | `SessionDto` |
 
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 导入 JSON 解析失败 | serde 校验 | 拒绝导入 + 错误行号 | 「文件格式无效」 |
+| schema 版本过高 | 版本校验 | 拒绝降级导入 | 「文件由更新版本导出，请升级」 |
+| 附件路径缺失/穿越 | 路径 canonicalize | 跳过附件 + 提示 | 「部分附件缺失：{name}」 |
+| 导出内容含敏感信息 | 无（用户自主） | 导出前提示含 Key/隐私？ | 「导出文件包含 API Key，确认？」 |
+| 导入超大会话（>1 万条） | 消息数检查 | 分页写入 + 进度 | 「大会话导入中…」 |
+| Markdown 渲染注入 | sanitize（§12） | 过滤后渲染 | 无感（自动过滤） |
+
 ## 11. 错误处理与日志
 
 ### 11.1 统一错误类型
@@ -3332,7 +3413,7 @@ impl serde::Serialize for AppError {
 | WebView | WebView2 (Edge) | WKWebView | WebKitGTK | Tauri 2.x 自动选择，无需代码分支 |
 | 应用数据目录 | `%APPDATA%\prism-agent\` | `~/Library/Application Support/prism-agent/` | `~/.local/share/prism-agent/` | `dirs` crate + `app_data_dir()`，禁止硬编码 |
 | 本地 ASR 二进制（sherpa-onnx） | `sherpa-onnx.exe` | `sherpa-onnx` | `sherpa-onnx` | 按平台打包对应二进制（§10.3.1，见 phase3-extend.md）；未找到时降级提示 |
-| LSP 可执行文件查找 | `where` 命令 | `which` | `which` | `std::process` 按 `cfg!(windows)` 分支选 `where`/`which`（§9.10.5） |
+| LSP 可执行文件查找 | `where` 命令 | `which` | `which` | `std::process` 按 `cfg!(windows)` 分支选 `where`/`which`（§9.10.5，见 phase2-panel.md） |
 | 路径分隔符 | `\` | `/` | `/` | 一律 `std::path::PathBuf`，禁止字符串拼接路径 |
 | 命令行工具调用 | `cmd /c` | `sh -c` | `sh -c` | 统一封装 `run_command(cmd, args)` 抽象（§10.3/§10.5 复用，见 phase3-extend.md） |
 | 打包格式 | NSIS / MSI | .dmg | .deb / .rpm / AppImage | `tauri build` 三平台产物；CI 三平台矩阵（T1/T18） |
@@ -3351,6 +3432,17 @@ impl serde::Serialize for AppError {
 - **检查策略**：启动时 + 手动「检查更新」；静默下载、安装前提示重启
 - **回滚**：Tauri updater 支持回滚到上一版本（`app.setVersion` 前的备份）；异常启动（连续崩溃）自动回滚提示
 - **注意**：CI 三平台各自原生 runner 生成更新包（§14.5 打包格式表），发布动作显式控制（§14.7 #49 教训）
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 更新清单获取失败（网络/404） | check() 异常 | 静默跳过 + 下次再查 | 「检查更新失败」 |
+| 签名校验失败 | 验签异常 | 拒绝安装 + 记录 | 「更新包签名无效，已拒绝」 |
+| 下载中断 | 下载进度异常 | 断点续传（updater 内置）或重试 | 「下载中断，正在重试」 |
+| 安装失败（文件占用） | install() 异常 | 提示关闭其他实例后重试 | 「安装失败，请关闭应用后重试」 |
+| 更新后启动崩溃 | 连续启动崩溃检测 | 自动回滚上一版本 | 「新版本异常，已回滚」 |
+| 磁盘空间不足 | 下载失败（ENOSPC） | 提示清理 | 「磁盘空间不足，无法更新」 |
 
 ### 14.6 IPC / 命令层 / 前端渲染类（必须规避）
 

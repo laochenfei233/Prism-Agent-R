@@ -21,9 +21,9 @@ platform: windows | macos | linux
 | 文件 | 阶段 | 内容 | 约行数 |
 |------|------|------|--------|
 | [`phase1-core.md`](../design/phase1-core.md) | **Phase 1 — Agent 核心闭环** | §3 后端三层架构 · §4 目录结构 · §5 数据库（含 §5.7 数据存储跨阶段基础：PRAGMA/消息FTS/分页/保留/索引） · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础（设计系统+对话） · §10.4 Skill（含市场搜索详设） · §10.6 工作流引擎+模板系统 · §10.7 记忆系统（完整设计） · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能基线（§13.1 见 phase3） · §14 旧版规避 | ~3150 |
-| [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~865 |
-| [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~1770 |
-| 本文件 | 总览 | 设计模式参考 · 问题定义 · 架构总览 · 技术选型 · MVP 规划 · 各功能 MVP 清单 · Tasks · Phase 1 完成报告 | ~610 |
+| [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.4.1-10.4.4 市场搜索 · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~889 |
+| [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~1828 |
+| 本文件 | 总览 | 设计模式参考 · 问题定义 · 架构总览（含 §1.1/§1.2） · 技术选型 · MVP 规划 · 各功能 MVP 清单 · [S4] 错误矩阵 · [S5] 功能建议 · Tasks · Phase 1 完成报告 | ~817 |
 
 **阅读建议**：
 - **新对话/新 agent 起步**：先读本索引（[S0]/[S1]/§1/§2 + MVP 清单 + Tasks）了解全局，再按任务阶段读对应详细文件。
@@ -48,6 +48,9 @@ platform: windows | macos | linux
 | 011_asr | ASR 配置 | asr_configs + meetings 扩展 | phase3 §10.3.8 | 🟩 |
 | 012_session_fts | 会话标题 FTS | sessions_fts | phase2 §5.7.4 | 🟧 |
 | 013_translate_fts | 翻译历史 FTS | translate_fts | phase3 §5.7.5 | 🟩 |
+| 014_session_archive | 会话归档 | sessions.archived_at 列 | phase1 §9.5.1 | 后续 |
+| 015_prompt_templates | 提示词模板 | prompt_templates | phase1 §9.8.2 | 后续 |
+| 016_workflow_versions | 工作流版本 | workflow_versions | phase1 §10.6.4.1 | 后续 |
 
 > ⚠️ **本文档由原单文件 `docs/compose/specs/prism-agent-r.md` 按阶段拆分而来**，章节编号与设计内容保持不变。
 
@@ -150,7 +153,7 @@ platform: windows | macos | linux
 | 任务依赖拓扑排序 | 按 `depends_on` 顺序执行 | `topological_sort(&wf.stages)` 已实现 |
 | 并行任务分发 | 独立 task 分发给 subagent，各带 worktree | tokio 并发 + Semaphore 限流（§3.4） |
 | Verify/Review 分离 | 先跑验证命令，再分派 fresh reviewer | 工作流 `verify` 阶段 + `review` 阶段（critic 角色） |
-| 决策解析（Grill） | `question` 工具逐轴解析用户选择 | 工作流 `inputs` 参数填充对话框（§9.9.1） |
+| 决策解析（Grill） | `question` 工具逐轴解析用户选择 | 工作流 `inputs` 参数填充对话框（§9.9.1，见 phase2-panel.md） |
 | 规格文档持久化 | `docs/compose/spec/<feature>.md`，status: designed→in-progress→delivered | WorkflowRun 状态机 + 结果持久化到 workflow_runs 表 |
 | 终结不自动完成 | 报告分支/SHA，由用户决定 merge/PR/push | 工作流 `done` 状态 + 前端结果展示，用户手动触发下一步 |
 
@@ -277,6 +280,14 @@ Prism Agent R 对应：
 
 **数据流**：子窗口 `chat:send` → 同一 ChatService（共享 active_streams）→ 事件 `emitTo(child_label)` 定向渲染。
 
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 子窗口创建失败（资源不足） | Webview 创建异常 | 降级为弹窗内嵌只读视图 | 「无法打开独立窗口，已改为内嵌」 |
+| 事件广播错窗（label 未注册） | emitTo 抛错 | 回退 emitAll + 前端按 session_id 过滤 | 无感（自动） |
+| 多窗口并发写同一 session | 无（设计约束） | Composer 仅主窗口可用，子窗口只读 | 子窗口输入框禁用 |
+
 ### 1.2 托盘驻留 + 全局快捷键（后续迭代，[S5] 🔸 低）
 
 **定位**：关闭窗口时驻留系统托盘，全局快捷键快速唤起。
@@ -297,6 +308,15 @@ Tauri tray-icon + menu:
 - **全局快捷键**：`tauri-plugin-global-shortcut`，注册/注销按平台（Windows/macOS/Linux 键位差异见 §14.5）
 - **唤起行为**：窗口显示 + 聚焦 + 若有关联会话则恢复最后激活 Tab
 - **生命周期**：托盘退出 → 正常关闭（先 flush 未保存状态，§14.6#39 autosave 教训）
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 全局快捷键冲突（被其他应用占用） | 注册失败 | 提示 + 允许改键 | 「快捷键被占用，请更换」 |
+| 托盘图标加载失败 | 图标资源异常 | 降级为窗口关闭即退出 | 无感（日志） |
+| 托盘点击无响应（Linux DE 差异） | 事件未触发 | 菜单 + 左键双击双通道 | 无感（兼容层） |
+| 退出时 flush 失败 | 保存异常 | 保留未保存数据到恢复文件 | 「部分内容未保存，已暂存」 |
 
 ### 新会话创建流程（参考 prism-agent 原版）
 
@@ -474,7 +494,7 @@ Tauri tray-icon + menu:
 
 | 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
 |----------|---------|---------|---------|
-| 阶段执行失败 | 阶段返回 Err | 可配置：跳过 / 重试 / 暂停等用户决策（§10.10.2） | 时间线标红 + 选项 |
+| 阶段执行失败 | 阶段返回 Err | 可配置：跳过 / 重试 / 暂停等用户决策（§10.10.2，见 phase2-panel.md） | 时间线标红 + 选项 |
 | 模板变量引用缺失 | render_template 校验 | 构建期报错（带缺失变量名） | 「模板引用了不存在的变量 X」 |
 | 阶段图有环 | 拓扑排序失败 | 拒绝运行（task:validate） | 「检测到循环依赖」 |
 | Agent 角色不匹配 | Coordinator 查找失败 | 报错 + 建议可用角色 | 「角色 X 无对应 Agent」 |
@@ -500,11 +520,11 @@ Tauri tray-icon + menu:
 | ⭐ 高 | **消息/session 导出与导入** | 会话导出 Markdown/JSON，可导入恢复；利于备份与分享 | phase1 §10.8.1 |
 | ⭐ 高 | **用量预警** | 接近 token/费用阈值时主动通知（复用 §5.7.6 保留策略的信号） | phase2 §9.10.1 |
 | ⭐ 中 | **快捷指令/命令面板扩展** | ⌘K 面板支持自定义命令序列（复用 §10.6 工作流引擎） | phase1 §9.8.1 |
-| ⭐ 中 | **多窗口/独立对话窗口** | 从会话拖出独立窗口，支持同时查看多个 Agent | phase1 §1.1 |
+| ⭐ 中 | **多窗口/独立对话窗口** | 从会话拖出独立窗口，支持同时查看多个 Agent | 本文件 §1.1 |
 | ⭐ 中 | **主题商店** | 用户主题上传/下载（CSS 变量覆盖，参考 Cherry Studio） | phase1 §9.1.1 |
 | ⭐ 中 | **提示词模板库** | 常用提示词片段管理，插入 Composer | phase1 §9.8.2 |
 | ⭐ 中 | **会话归档/冻结** | 不删除但冻结的会话，减少列表噪音（复用 pinned） | phase1 §9.5.1 |
-| 🔸 低 | **托盘驻留 + 全局快捷键** | 后台常驻，快速唤起 | phase1 §1.2 |
+| 🔸 低 | **托盘驻留 + 全局快捷键** | 后台常驻，快速唤起 | 本文件 §1.2 |
 | 🔸 低 | **Agent 市场** | 分享/下载 Agent 配置模板（复用技能市场机制） | phase1 §10.4.5 |
 | 🔸 低 | **自更新** | Tauri updater 自动更新 | phase1 §14.5.1 |
 | 🔸 低 | **工作流版本控制** | 模板历史版本对比/回滚 | phase1 §10.6.4.1 |

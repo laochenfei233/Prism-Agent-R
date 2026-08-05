@@ -274,6 +274,17 @@ pub async fn hybrid_search(&self, wiki_id: &str, query: &str, top_k: usize) -> R
 - **查询**：Agent 会话注入「项目索引就绪」标记 → PromptBuilder 可按需检索（与 §10.7 记忆互补）
 - **开关**：设置页可关（默认开，仅对 `workspace:set` 绑定过的目录生效）；索引状态显示在侧边栏文件 Tab
 
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 文件解析失败（二进制/损坏） | file:parse 异常 | 跳过该文件 + 标记 | 「文件 X 无法解析，已跳过」 |
+| 嵌入 API 失败 | 嵌入请求异常 | 批内重试 → 失败文件标 error | 「部分文件嵌入失败」 |
+| 目录过大（首次全量） | 文件计数 > 阈值 | 后台任务 + 进度事件 | 「项目索引构建中…」 |
+| watcher 事件风暴 | 高频变更（>10/s） | 延长 debounce + 合并批 | 无感（自动） |
+| 索引目录被删除 | watcher 删除事件 | 清空该目录索引 | 无感（自动清理） |
+| 与用户 Wiki 冲突 | 命名空间隔离检查 | 拒绝写入用户 wiki 空间 | 无感（隔离保证） |
+
 ### 10.3 会议纪要系统详细设计
 
 **参考实现**：prism-agent 原项目（`MeetingService.ts` / `AsrServiceFactory.ts` / `AudioStreamManager.ts` / `ExportService.ts` / `MeetingToAgentService.ts`）与 **huiji（言记）**（`asr_service.dart` 1202 行 / `sherpa_adapter.dart` / `model_download_service.dart` / `audio_recorder_service.dart`）。本设计吸收两者的架构，并**扩展为多 ASR 后端可插拔架构**——不再局限于 MiMo 与 FunASR。
@@ -795,6 +806,17 @@ CREATE TABLE asr_configs (
 - **命令**：`tts:speak {text, lang?, rate?}` / `tts:stop` / `tts:voices`（列出可用音色）
 - **注意**：播报不打断 Agent 工作流（独立通道）；长文本分段 + 队列（复用 §10.3.3 音频通道的并发控制思路）
 
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 系统 TTS 不可用（无音色） | voices 为空 | 降级云端/本地引擎 | 「系统语音不可用，已切换」 |
+| 云端 TTS 网络失败 | 请求异常 | 降级系统 TTS | 「云端语音失败，已用本地」 |
+| 长文本截断 | 分段超限 | 按句分段 + 队列 | 「长文已分段播报」 |
+| 播报被中断（用户停止） | 显式 stop | 清空队列 + 释放音频 | 无感 |
+| 音频设备被占用 | 播放异常 | 停止 + 提示 | 「音频设备被占用」 |
+| 文本含敏感/不适内容 | 无（用户自主） | 播报前展示文本（可选确认） | 「将播报以下内容，确认？」 |
+
 ### 10.5 翻译 + OCR 详细设计
 
 #### 10.5.1 翻译服务（TranslateService）
@@ -899,7 +921,7 @@ impl TranslateService {
 }
 ```
 
-**输出清洗**（`strip_artifacts`）：去除 LLM 常见的包裹——首尾引号（`"`/`"`）、``` 代码围栏、`Translation:` 前缀。
+**输出清洗**（`strip_artifacts`）：去除 LLM 常见的包裹——首尾引号（`"`/`"`）、<code>```</code> 代码围栏、`Translation:` 前缀。
 
 #### 10.5.2 术语表（Glossary）
 
