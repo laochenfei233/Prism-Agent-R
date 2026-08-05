@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { invoke } from '$lib/api/client';
-	import { agentApi } from '$lib/api';
+	import { agentApi, mcpApi, skillApi } from '$lib/api';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
+	let mcpServers = $state<any[]>([]);
+	let skills = $state<any[]>([]);
 	let msg = $state('');
 
+	// Provider/Model
 	let pName = $state('');
 	let pKind = $state('openai');
 	let pUrl = $state('');
@@ -14,6 +17,16 @@
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
+
+	// MCP
+	let mcName = $state('');
+	let mcType = $state('stdio');
+	let mcCommand = $state('');
+	let mcArgs = $state('');
+	let mcUrl = $state('');
+
+	// Skill
+	let skillPath = $state('');
 
 	async function fetchModels() {
 		if (!mProvider) return;
@@ -32,6 +45,8 @@
 	async function load() {
 		providers = await invoke<any[]>('model_providers');
 		models = await invoke<any[]>('model_list');
+		try { mcpServers = await mcpApi.list(); } catch (e) {}
+		try { skills = await skillApi.list(); } catch (e) {}
 	}
 
 	async function saveProvider() {
@@ -65,6 +80,56 @@
 			await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
 			msg = '✓ Agent 已创建';
 			await load();
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	// MCP
+	async function addMcp() {
+		if (!mcName.trim()) { msg = '请输入 MCP 名称'; return; }
+		try {
+			const args = mcArgs.trim() ? mcArgs.split(/\s+/) : [];
+			if (mcType === 'stdio') {
+				await mcpApi.add({ name: mcName.trim(), type: 'stdio', command: mcCommand.trim(), args });
+			} else {
+				await mcpApi.add({ name: mcName.trim(), type: 'http', base_url: mcUrl.trim(), args });
+			}
+			mcName = ''; mcCommand = ''; mcArgs = ''; mcUrl = '';
+			await load();
+			msg = '✓ MCP 服务器已添加';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function removeMcp(id: string) {
+		try {
+			await mcpApi.remove(id);
+			await load();
+			msg = '✓ MCP 已删除';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function testMcp(id: string) {
+		try {
+			const result = await mcpApi.test(id);
+			msg = result.ok ? `✓ 连接成功 (${result.tools_count} 个工具, ${result.latency_ms}ms)` : `✗ 连接失败: ${result.error}`;
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	// Skill
+	async function installSkill() {
+		if (!skillPath.trim()) { msg = '请输入技能目录路径'; return; }
+		try {
+			await skillApi.install(skillPath.trim());
+			skillPath = '';
+			await load();
+			msg = '✓ 技能已安装';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function uninstallSkill(id: string) {
+		try {
+			await skillApi.uninstall(id);
+			await load();
+			msg = '✓ 技能已卸载';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
@@ -171,6 +236,74 @@
 		<div class="group-header">Agent</div>
 		<div class="group-body">
 			<button class="btn-green" onclick={createAgent}>创建默认 Agent</button>
+		</div>
+	</div>
+
+	<!-- MCP -->
+	<div class="group">
+		<div class="group-header">MCP 服务器</div>
+		<div class="group-body">
+			<div class="form-row">
+				<input bind:value={mcName} placeholder="名称" />
+				<select bind:value={mcType}>
+					<option value="stdio">Stdio</option>
+					<option value="http">HTTP</option>
+				</select>
+			</div>
+			{#if mcType === 'stdio'}
+				<div class="form-row">
+					<input bind:value={mcCommand} placeholder="命令，如 npx" />
+				</div>
+				<div class="form-row">
+					<input bind:value={mcArgs} placeholder="参数（空格分隔），如 -y @modelcontextprotocol/server-filesystem" />
+				</div>
+			{:else}
+				<div class="form-row">
+					<input bind:value={mcUrl} placeholder="URL，如 http://localhost:3000/sse" />
+				</div>
+			{/if}
+			<button class="btn-primary" onclick={addMcp}>添加 MCP</button>
+
+			{#if mcpServers.length > 0}
+				<div class="divider"></div>
+				{#each mcpServers as mc}
+					<div class="config-row">
+						<div class="config-info">
+							<span class="config-name">{mc.name}</span>
+							<span class="config-badge">{mc.type}</span>
+						</div>
+						<div class="config-actions">
+							<button class="btn-sm" onclick={() => testMcp(mc.id)}>测试</button>
+							<button class="btn-sm danger" onclick={() => removeMcp(mc.id)}>删除</button>
+						</div>
+					</div>
+				{/each}
+			{/if}
+		</div>
+	</div>
+
+	<!-- Skill -->
+	<div class="group">
+		<div class="group-header">技能</div>
+		<div class="group-body">
+			<div class="form-row">
+				<input bind:value={skillPath} placeholder="技能目录路径，如 /path/to/my-skill" />
+			</div>
+			<button class="btn-primary" onclick={installSkill}>安装技能</button>
+
+			{#if skills.length > 0}
+				<div class="divider"></div>
+				{#each skills as skill}
+					<div class="config-row">
+						<div class="config-info">
+							<span class="config-name">{skill.name}</span>
+							<span class="config-badge">{skill.source}</span>
+							{#if skill.is_enabled}<span class="config-badge default">已启用</span>{/if}
+						</div>
+						<button class="btn-sm danger" onclick={() => uninstallSkill(skill.id)}>卸载</button>
+					</div>
+				{/each}
+			{/if}
 		</div>
 	</div>
 </div>
@@ -356,4 +489,23 @@
 	}
 	.btn-green:hover { background: #2DB84E; }
 	.btn-green:active { transform: scale(0.98); }
+
+	/* ── Small Buttons ────────────────────────── */
+	.config-actions {
+		display: flex;
+		gap: 8px;
+	}
+	.btn-sm {
+		padding: 4px 12px;
+		border-radius: 8px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-secondary);
+		color: var(--color-fg);
+		font-size: 13px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+	.btn-sm:hover { background: var(--color-bg); }
+	.btn-sm.danger { color: #FF3B30; border-color: #FF3B30; }
+	.btn-sm.danger:hover { background: rgba(255, 59, 48, 0.08); }
 </style>

@@ -1,9 +1,17 @@
 pub mod agent_service;
 pub mod chat_service;
+pub mod mcp_service;
 pub mod model_service;
 pub mod session_service;
+pub mod skill_service;
+pub mod workflow_service;
+pub mod memory_service;
 
 pub use agent_service::AgentService;
 pub use chat_service::ChatService;
+pub use mcp_service::McpService;
 pub use model_service::ModelService;
 pub use session_service::SessionService;
+pub use skill_service::SkillService;
+pub use workflow_service::WorkflowService;
+pub use memory_service::MemoryService;

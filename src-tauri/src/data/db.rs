@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crate::utils::error::AppError;
 
+#[derive(Clone)]
 pub struct Database {
     pub pool: SqlitePool,
 }

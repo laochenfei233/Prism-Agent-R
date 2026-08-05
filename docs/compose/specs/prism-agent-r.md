@@ -60,6 +60,32 @@ platform: windows | macos | linux
 
 5. **评估与监控增强**（Ch.19）：增加 Agent 轨迹记录（每步工具调用、推理过程、耗时），支持 LLM-as-Judge 评估输出质量，提供 Agent 性能仪表盘（成功率、平均延迟、Token 消耗趋势）。
 
+### Cherry Studio 设计参考
+
+本设计参考 Cherry Studio（Electron 桌面 AI 助手）的设计系统，提取其设计哲学与组件架构模式。
+
+**设计哲学对比**：
+
+| 维度 | Cherry Studio | Prism Agent R |
+|------|--------------|---------------|
+| 风格 | Neutral-First Utilitarian-Modern（中性优先，实用主义） | Apple Design（毛玻璃 + 半透明 + 圆角） |
+| 色彩空间 | oklch（感知均匀） | hex/rgba |
+| 颜色策略 | 界面本身退让，内容是最彩色的东西 | 系统色 + 语义色，毛玻璃增强层次 |
+| 暗色模式 | 真反转（`#0A0A0A` 背景） | 纯黑背景（`#000000`） |
+| 字体 | Inter（单一字体覆盖全部 UI） | SF Pro / PingFang SC（系统字体链） |
+| 阴影 | 静止时扁平，仅交互时浮出 | 毛玻璃 + 轻阴影 |
+| 动画 | Framer Motion spring（damping:30, stiffness:350） | CSS cubic-bezier 弹性 |
+| 组件库 | shadcn/ui (New York style) + Radix UI | 自建设计系统（Svelte 5） |
+
+**可借鉴的 Cherry Studio 模式**：
+
+1. **两层 Token 架构**：原始 token（`--cs-*`）→ 主题别名（`--color-*`），通过 `pnpm theme:build` 生成。Prism Agent R 可采用类似模式：原始设计令牌 → CSS 变量 → Svelte 组件消费。
+2. **oklch 色彩空间**：感知均匀，暗色模式只需调整 lightness 而非重新选色。Prism Agent R 当前用 hex，可考虑迁移。
+3. **状态色板完整定义**：error/success/warning/info 各有 base/text/bg/border/hover/active 6 变体。Prism Agent R 的语义色应补全这些变体。
+4. **圆角重映射**：Cherry 将 Tailwind 默认圆角从 6px→8px、8px→10px、12px→14px，使视觉更柔和。Prism Agent R 可参考此策略。
+5. **主题定制化**：通过 CSS 变量覆盖实现社区主题（cherrycss.com），Prism Agent R 可支持用户自定义主题。
+6. **组件分层**：50+ 原子组件（primitives）+ 25+ 复合组件（composites），原子组件无业务逻辑，复合组件组合原子组件。
+
 ### Compose-Next 工作流参考
 
 本设计参考 MiMo-Code 的 compose-next 工作流模式，将 8 阶段编排管线映射到 Prism Agent R 的开发与运行时。
@@ -1534,35 +1560,138 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 
 ## 9. Svelte 5 前端详细设计
 
-### 9.1 Apple 设计令牌（tokens/colors.ts）
+### 9.1 设计令牌系统（两层架构）
+
+**参考**：Cherry Studio 两层 token 架构（原始 token → 主题别名）+ Apple Design 色彩体系。
+
+**Layer 1：原始令牌**（`tokens/primitives/`）— 定义颜色家族、色阶、基础值：
 
 ```ts
-export const semanticColors = {
-    light: {
-        bg: "#F5F5F7", fg: "#1D1D1F", fgSecondary: "#6E6E73",
-        accent: "#0071E3", green: "#34C759", red: "#FF3B30",
-        orange: "#FF9500", purple: "#AF52DE", teal: "#30B0C7",
-        separator: "rgba(60,60,67,0.29)", glass: "rgba(255,255,255,0.72)",
-        glassBorder: "rgba(255,255,255,0.5)",
+// tokens/primitives/colors.ts — Apple 色彩家族（oklch 感知均匀空间）
+export const primitives = {
+    // 中性色（界面退让，内容优先）
+    neutral: {
+        50:  "oklch(0.985 0 0)",    // 最浅
+        100: "oklch(0.967 0 0)",
+        200: "oklch(0.920 0 0)",
+        300: "oklch(0.870 0 0)",
+        400: "oklch(0.708 0 0)",    // 次要文字
+        500: "oklch(0.556 0 0)",    // 占位符
+        600: "oklch(0.450 0 0)",
+        700: "oklch(0.370 0 0)",
+        800: "oklch(0.270 0 0)",
+        900: "oklch(0.145 0 0)",    // 暗色卡片
+        950: "oklch(0.080 0 0)",    // 暗色背景
     },
-    dark: {
-        bg: "#000000", fg: "#F5F5F7", fgSecondary: "#98989D",
-        accent: "#0A84FF", green: "#30D158", red: "#FF453A",
-        orange: "#FF9F0A", purple: "#BF5AF2", teal: "#64D2FF",
-        separator: "rgba(84,84,88,0.6)", glass: "rgba(28,28,30,0.72)",
-        glassBorder: "rgba(255,255,255,0.08)",
+    // Apple 品牌蓝
+    blue: {
+        50:  "oklch(0.960 0.015 250)",
+        100: "oklch(0.920 0.030 250)",
+        500: "oklch(0.546 0.240 255)",  // Apple blue
+        600: "oklch(0.480 0.240 255)",  // 暗色模式 accent
+        900: "oklch(0.300 0.150 250)",
     },
+    // 状态色（完整 base/text/bg/border/hover/active 变体）
+    red:    { 50: "...", 500: "oklch(0.637 0.237 25)",  /* ... */ },
+    green:  { 50: "...", 500: "oklch(0.627 0.194 149)", /* ... */ },
+    amber:  { 50: "...", 500: "oklch(0.769 0.188 70)",  /* ... */ },
 } as const;
 ```
 
+**Layer 2：语义别名**（`tokens/semantic.css`）— 绑定到具体用途：
+
+```css
+/* tokens/semantic.css — 亮色主题 */
+:root {
+    --color-background: var(--primitives-neutral-50);
+    --color-foreground: oklch(0 0 0 / 0.9);
+    --color-foreground-secondary: oklch(0 0 0 / 0.6);
+    --color-foreground-muted: oklch(0 0 0 / 0.4);
+    --color-card: #ffffff;
+    --color-popover: #ffffff;
+    --color-border: oklch(0 0 0 / 0.1);
+    --color-primary: var(--primitives-blue-500);
+    --color-destructive: var(--primitives-red-500);
+    --color-success: var(--primitives-green-500);
+    --color-warning: var(--primitives-amber-500);
+    --color-info: var(--primitives-blue-500);
+    /* Apple 特色 */
+    --color-glass: rgba(255, 255, 255, 0.72);
+    --color-glass-border: rgba(255, 255, 255, 0.5);
+    --color-separator: rgba(60, 60, 67, 0.29);
+}
+
+/* 暗色主题 — 真反转，非简单变暗 */
+.dark {
+    --color-background: oklch(0.145 0 0);      /* 非纯黑，略带层次 */
+    --color-foreground: oklch(1 0 0 / 0.9);
+    --color-card: oklch(0.209 0 0);
+    --color-popover: oklch(0.145 0 0);
+    --color-border: oklch(1 0 0 / 0.1);
+    --color-primary: var(--primitives-blue-600);
+    --color-glass: rgba(28, 28, 30, 0.72);
+    --color-glass-border: rgba(255, 255, 255, 0.08);
+    --color-separator: rgba(84, 84, 88, 0.6);
+}
+```
+
+**状态色完整变体**（参考 Cherry Studio status.css）：
+
+```css
+/* error 状态色板 */
+--color-error-base: var(--primitives-red-500);
+--color-error-text: var(--primitives-red-700);
+--color-error-bg: var(--primitives-red-50);
+--color-error-border: var(--primitives-red-200);
+--color-error-hover: var(--primitives-red-100);
+--color-error-active: var(--primitives-red-200);
+
+/* success / warning / info 同理 */
+```
+
+**圆角重映射**（参考 Cherry Studio radius.css）：
+
+| Token | 默认值 | Prism Agent R 值 | 说明 |
+|-------|--------|-----------------|------|
+| `rounded-sm` | 2px | 4px | 微圆角 |
+| `rounded-md` | 6px | 8px | 按钮/输入框 |
+| `rounded-lg` | 8px | 12px | 卡片/面板 |
+| `rounded-xl` | 12px | 16px | 弹窗/侧边栏 |
+| `rounded-3xl` | 24px | 22px | 大弹窗/对话框 |
+
 ### 9.2 排版令牌（tokens/typography.ts）
+
+**参考**：Apple Design 字体链 + Cherry Studio 单字体策略 + 两层 body/heading 尺寸体系。
 
 ```css
 :root {
-    --font-sans: -apple-system, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+    /* 字体链：Apple 系统字体优先，降级到 Inter，最后 sans-serif */
+    --font-sans: -apple-system, "SF Pro Text", "PingFang SC", "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
     --font-mono: "SF Mono", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
-    --text-xs: 11px; --text-sm: 13px; --text-base: 15px; --text-lg: 17px;
-    --text-xl: 20px; --text-2xl: 24px; --text-3xl: 28px; --text-4xl: 34px;
+
+    /* Body 尺寸（4 级，Cherry Studio 模式） */
+    --text-xs: 12px;     /* 辅助文字、标签 */
+    --text-sm: 14px;     /* 次要内容 */
+    --text-base: 16px;   /* 正文默认 */
+    --text-lg: 18px;     /* 强调正文 */
+
+    /* Heading 尺寸（6 级，Cherry Studio 模式） */
+    --text-heading-xs: 20px;
+    --text-heading-sm: 24px;
+    --text-heading-md: 32px;
+    --text-heading-lg: 40px;
+    --text-heading-xl: 48px;
+    --text-heading-2xl: 60px;
+
+    /* 字重 */
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-bold: 700;
+
+    /* 行高 */
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.75;
 }
 ```
 
@@ -1578,13 +1707,100 @@ export const semanticColors = {
 
 ### 9.4 动画令牌（tokens/motion.ts）
 
+**参考**：Apple Design spring + Cherry Studio Framer Motion 配置 + `prefers-reduced-motion` 适配。
+
 ```ts
 export const motion = {
-    spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",   // iOS 弹性
+    // Spring 曲线（Apple 风格弹性）
+    spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    // Cherry Studio 风格 spring 参数（用于面板/弹窗）
+    springConfig: { damping: 30, stiffness: 350 },
+    // 缓动曲线
     easeInOut: "cubic-bezier(0.42, 0, 0.58, 1)",
-    fast: 150, base: 250, slow: 400, sheet: 500,
+    easeOut: "cubic-bezier(0, 0, 0.58, 1)",
+    // 时长
+    fast: 150,     // 微交互（hover/focus）
+    base: 250,     // 标准过渡
+    slow: 400,     // 页面切换
+    sheet: 500,    // 抽屉/面板
 } as const;
+
+// 减弱动画适配（Cherry Studio 模式）
+// 所有动画必须尊重 prefers-reduced-motion: reduce
+// mediaQuery: "(prefers-reduced-motion: reduce)" → 禁用所有非必要动画
 ```
+
+### 9.4.1 组件架构（Primitives + Composites）
+
+**参考**：Cherry Studio 50+ 原子组件 + 25+ 复合组件的分层模式。
+
+**分层原则**：
+- **原子组件（Primitives）**：无业务逻辑，纯 UI 原语，基于 Radix UI（Svelte 版用 bits-ui）
+- **复合组件（Composites）**：组合原子组件，包含布局逻辑，仍无业务逻辑
+- **页面组件**：业务逻辑 + 复合组件 + 状态管理
+
+**Prism Agent R 组件清单**：
+
+```
+src/lib/components/
+├── primitives/                    # 原子组件（50+，bits-ui 基础）
+│   ├── Button.svelte              # 7 变体 × 7 尺寸（primary/secondary/ghost/danger/outline/emphasis/link）
+│   ├── Input.svelte               # 文本输入
+│   ├── Textarea.svelte            # 多行输入
+│   ├── Select.svelte              # 下拉选择
+│   ├── Switch.svelte              # 开关（4 尺寸 xs/sm/md/lg + loading）
+│   ├── Checkbox.svelte            # 复选框
+│   ├── Dialog.svelte              # 弹窗（4 尺寸 sm/default/lg/xl）
+│   ├── Drawer.svelte              # 抽屉（Vaul 风格）
+│   ├── Popover.svelte             # 浮层
+│   ├── Tooltip.svelte             # 提示
+│   ├── Tabs.svelte                # 标签页
+│   ├── Accordion.svelte           # 折叠面板
+│   ├── Badge.svelte               # 徽标
+│   ├── Avatar.svelte              # 头像
+│   ├── Skeleton.svelte            # 骨架屏
+│   ├── Spinner.svelte             # 加载器
+│   ├── ScrollArea.svelte          # 自定义滚动条（6px 细滚动条）
+│   ├── Separator.svelte           # 分隔线
+│   ├── Kbd.svelte                 # 键盘快捷键展示
+│   ├── ContextMenu.svelte         # 右键菜单
+│   ├── DropdownMenu.svelte        # 下拉菜单
+│   ├── Command.svelte             # 命令面板（cmdk）
+│   ├── Calendar.svelte            # 日历
+│   ├── Slider.svelte              # 滑块
+│   └── ...                        # 更多原子组件
+├── composites/                    # 复合组件（25+）
+│   ├── PageHeader.svelte          # 页面标题（通用）
+│   ├── PageSidePanel.svelte       # 浮动侧边面板（spring 动画）
+│   ├── ConfirmDialog.svelte       # 确认弹窗
+│   ├── SearchInput.svelte         # 搜索输入
+│   ├── DataTable.svelte           # 数据表格（TanStack Table）
+│   ├── MarkdownViewer.svelte      # Markdown 渲染（流式支持）
+│   ├── CodeBlock.svelte           # 代码块（shiki 语法高亮）
+│   ├── EmptyState.svelte          # 空态占位
+│   ├── SortableList.svelte        # 拖拽排序
+│   ├── TreeView.svelte            # 树形视图
+│   ├── Flex.svelte                # 布局辅助
+│   ├── Ellipsis.svelte            # 文本截断
+│   └── ...                        # 更多复合组件
+└── layout/                        # 布局组件
+    ├── AppShell.svelte            # 三栏主框架
+    ├── SideNav.svelte             # 左侧导航
+    ├── ContentArea.svelte         # 中央内容区
+    ├── RightPanel.svelte          # 右侧工具面板
+    └── StatusBar.svelte           # 底部状态栏
+```
+
+**组件设计规范**：
+
+| 规范 | 值 | 来源 |
+|------|-----|------|
+| Button 默认样式 | 中性填充（非 primary 色），hover 时加深 | Cherry Studio：CTA 用 neutral strong，非 chromatic |
+| Dialog 圆角 | `rounded-xl`（16px） | Cherry Studio：`rounded-3xl`（22px）略大，Prism 用 16px 适配 Apple 风格 |
+| 阴影策略 | 静止时扁平，hover/浮动时 `shadow-md` | Cherry Studio：flat-at-rest principle |
+| 滚动条 | 6px 细滚动条，圆角 thumb | Cherry Studio：自定义 scrollbar |
+| 焦点环 | `ring-2 ring-primary/50` | 无障碍标准 |
+| 响应式断点 | 640/1024/1280px（mobile/tablet/desktop/wide） | Cherry Studio responsive.css |
 
 ### 9.5 Codex 风格三栏布局
 

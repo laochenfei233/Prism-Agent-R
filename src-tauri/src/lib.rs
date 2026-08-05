@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod core;
 pub mod data;
+pub mod mcp;
 pub mod utils;
 
 use std::collections::HashMap;
@@ -9,9 +10,12 @@ use tauri::Manager;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
+use mcp::McpRuntime;
+
 pub struct AppState {
     pub db: Database,
     pub active_cancels: Mutex<HashMap<String, CancellationToken>>,
+    pub mcp_runtime: std::sync::Arc<McpRuntime>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,9 +29,12 @@ pub fn run() {
             let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
             let db = rt.block_on(Database::new(&app_data_dir)).expect("failed to init database");
 
+            let mcp_runtime = McpRuntime::new();
+
             app.manage(AppState {
                 db,
                 active_cancels: Mutex::new(HashMap::new()),
+                mcp_runtime,
             });
             Ok(())
         })
@@ -50,6 +57,26 @@ pub fn run() {
             commands::settings::settings_add_provider,
             commands::settings::settings_add_model,
             commands::settings::model_fetch_available,
+            commands::mcp::mcp_list,
+            commands::mcp::mcp_add,
+            commands::mcp::mcp_update,
+            commands::mcp::mcp_remove,
+            commands::mcp::mcp_test,
+            commands::mcp::mcp_tools,
+            commands::mcp::mcp_status_all,
+            commands::skill::skill_list,
+            commands::skill::skill_install,
+            commands::skill::skill_uninstall,
+            commands::skill::skill_toggle,
+            commands::skill::skill_search_market,
+            commands::workflow::workflow_list,
+            commands::workflow::workflow_run,
+            commands::workflow::workflow_stop,
+            commands::workflow::workflow_result,
+            commands::memory::memory_search,
+            commands::memory::memory_read,
+            commands::memory::memory_write,
+            commands::memory::memory_context_dump,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
