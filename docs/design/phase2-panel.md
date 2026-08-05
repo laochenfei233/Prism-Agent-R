@@ -706,3 +706,39 @@ Agent 在以下情况自动升级给用户：
 | 工作流阶段失败 | 可选：自动跳过 / 重试 / 暂停等用户决策 |
 | 检测到循环行为（重复相同操作 > 5 次） | 自动中断 + 诊断报告 |
 
+---
+
+## 5.7.4 会话标题搜索（数据存储横切设计补充）
+
+> **归属**：Phase 2（会话列表搜索增强）· 数据存储完整设计见 `phase1-core.md` §5.7（跨阶段基础）
+> **迁移**：并入 `009_message_search.sql`（Phase 1 已建 FTS 体系，Phase 2 追加会话表）
+
+```sql
+-- 会话标题 FTS（轻量级，标题短文本）— 并入迁移 009_message_search.sql
+CREATE VIRTUAL TABLE sessions_fts USING fts5(
+    title,
+    session_id UNINDEXED,
+    content='sessions',
+    content_rowid='rowid',
+    tokenize='unicode61'
+);
+
+-- 同步触发器
+CREATE TRIGGER sessions_ai AFTER INSERT ON sessions BEGIN
+    INSERT INTO sessions_fts(rowid, title, session_id)
+    VALUES (new.rowid, new.title, new.id);
+END;
+
+-- 搜索：支持标题模糊搜索 + 按时间排序
+SELECT s.*, bm25(sessions_fts) as score
+FROM sessions_fts f
+JOIN sessions s ON s.id = f.session_id
+WHERE sessions_fts MATCH ?
+ORDER BY score, s.updated_at DESC
+LIMIT ?;
+```
+
+**要点**：
+- 会话列表/侧边栏搜索走 `sessions_fts`（替代 `LIKE` 扫描），命中高亮用 `snippet()`（模式同 `phase1-core.md` §5.7.2）
+- 更新触发器（`sessions_au`）在标题自动重命名（§9.10.3 指令相关 + §1 自动重命名）时同步索引
+
