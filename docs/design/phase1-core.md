@@ -1,7 +1,7 @@
 # Prism Agent R — Phase 1（Agent 核心闭环）详细设计
 
 > **归属**：Phase 1（MVP Agent 核心闭环）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
-> **总索引**：[`prism-index.md`](../compose/specs/prism-agent-r.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
+> **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
 > **内容**：§3 后端三层架构 · §4 目录结构 · §5 数据库 · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础 · §10.4 Skill · §10.6 工作流引擎 · §10.7 记忆基础 · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能 · §14 旧版规避
 
 ---
@@ -620,18 +620,18 @@ src/
 | `rag_chunks` | 分块（含向量） | N:1 rag_documents |
 | `meetings` | 会议 | 1:N meeting_transcripts |
 | `meeting_transcripts` | 转写片段 | N:1 meetings |
-| `asr_configs` | ASR 后端配置（§10.3.8） | - |
+| `asr_configs` | ASR 后端配置（§10.3.8，phase3-extend.md） | - |
 | `workflows` | 工作流定义 | 1:N workflow_runs |
 | `workflow_runs` | 工作流运行 | N:1 workflows |
 | `stage_templates` | 可复用阶段模板（§10.6.4） | - |
-| `agent_traces` | Agent 执行轨迹（§10.13.1） | N:1 sessions |
+| `agent_traces` | Agent 执行轨迹（§10.13.1，phase3-extend.md） | N:1 sessions |
 | `translate_history` | 翻译历史 | - |
-| `glossary_terms` | 翻译术语表（§10.5.2） | - |
+| `glossary_terms` | 翻译术语表（§10.5.2，phase3-extend.md） | - |
 | `preferences` | 键值偏好设置 | - |
 | `memory_fts` | 记忆全文索引（FTS5，§10.7.2） | 虚拟表 |
-| `messages_fts` | 消息全文索引（FTS5，§5.7.2） | 虚拟表 |
-| `sessions_fts` | 会话标题索引（FTS5，§5.7.4） | 虚拟表 |
-| `translate_fts` | 翻译历史索引（FTS5，§5.7.5） | 虚拟表 |
+| `messages_fts` | 消息全文索引（FTS5，§5.7.2，迁移 009） | 虚拟表 |
+| `sessions_fts` | 会话标题索引（FTS5，§5.7.4，phase2-panel.md，迁移 012） | 虚拟表 |
+| `translate_fts` | 翻译历史索引（FTS5，§5.7.5，phase3-extend.md，迁移 013） | 虚拟表 |
 
 ### 5.2 DDL（迁移 001_init.sql）
 
@@ -843,6 +843,7 @@ CREATE TABLE workflow_runs (
     id          TEXT PRIMARY KEY,
     workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
     status      TEXT NOT NULL DEFAULT 'running', -- running|done|failed|cancelled
+    source      TEXT NOT NULL DEFAULT 'workflow',-- workflow|task（§9.9.1 自定义任务，phase2-panel.md）
     inputs      TEXT NOT NULL DEFAULT '{}',
     outputs     TEXT,                          -- JSON: {stage_id: output}
     error       TEXT,
@@ -1072,8 +1073,7 @@ pub async fn cleanup_old_data(&self, config: &CleanupConfig) -> Result<CleanupRe
 
     // 1. 清理过期消息（超过保留期的旧消息删除；置顶会话的消息受保护）
     //    注：当前策略为直接删除（仅保留最新 N 天）；「摘要归档」为可选增强
-    //    （将旧消息压缩为 session 级摘要存入 sessions.summary 后再删），
-    //    默认关闭，避免摘要丢失原始细节。
+    //    （由记忆系统 checkpoint 机制承担会话级摘要，见 §10.7.3），默认关闭。
     let msg_cutoff = now - (config.keep_messages_days * 86400_000) as i64;
     let archived = sqlx::query(
         "DELETE FROM messages WHERE created_at < ? AND id NOT IN (
@@ -1139,8 +1139,8 @@ CREATE INDEX idx_workflow_runs_status ON workflow_runs(status, created_at DESC);
 -- 翻译历史：按语言对 + 时间（最近翻译查询）
 CREATE INDEX idx_translate_lang_time ON translate_history(source_lang, target_lang, created_at DESC);
 
--- Agent traces：按 Agent + 时间（性能仪表盘，Phase 3 agent_traces 表建成后生效）
-CREATE INDEX idx_agent_traces_agent_time ON agent_traces(agent_id, started_at DESC);
+-- Agent traces 索引在迁移 008_agent_traces.sql 中随表创建（见 phase3-extend.md §10.13.1），此处不重复。
+--   008 已建：idx_agent_traces_session (session_id, started_at DESC) / idx_agent_traces_agent (agent_id, started_at DESC)
 ```
 
 #### 5.7.8 大数据量边界与降级（Phase 1 定义策略）
@@ -1386,7 +1386,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `agent:create` | `{name, description?, avatar?, system_prompt?, model_id?, plan_model_id?, small_model_id?, temperature?, max_tokens?, mcp_server_ids?, skill_ids?, disabled_tools?}` | `AgentDto` | 事务创建 + 关联 |
 | `agent:update` | `{id, ...partial}` | `AgentDto` | 更新 |
 | `agent:delete` | `{id, delete_sessions?}` | `()` | 删除 |
-| `agent:stats` | `{agent_id?, range?}` | `AgentStats` | 成功率/延迟/Token 效率/失败分布（§10.13.3） |
+| `agent:stats` | `{agent_id?, range?}` | `AgentStats` | 成功率/延迟/Token 效率/失败分布（§10.13.3，见 phase3-extend.md） |
 
 **会话域** `commands/session.rs`
 
@@ -1478,7 +1478,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `meeting:push-to-agent` | `{meeting_id, agent_id, session_id?}` | `()` |
 | `meeting:export` | `{id, format, options?}` | `{path}` | md/docx |
 
-**ASR 域** `commands/asr.rs`（会议子域，§10.3.8）
+**ASR 域** `commands/asr.rs`（会议子域，§10.3.8，见 phase3-extend.md）
 
 | 命令 | 参数 | 返回 |
 |------|------|------|
@@ -1604,14 +1604,14 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `workflow:stage` | `{run_id, stage_id, status, output?}` | 阶段完成 |
 | `workflow:done` | `{run_id, result}` | 工作流完成 |
 | `mcp:tools-changed` | `{server_id}` | 工具目录变更 |
-| `mcp:status-changed` | `{server_id, status}` | MCP 服务器状态变化（§9.10.7） |
+| `mcp:status-changed` | `{server_id, status}` | MCP 服务器状态变化（§9.10.7，见 phase2-panel.md） |
 | `model:list-changed` | `{}` | 模型配置变更 |
 | `agent:changed` | `{event, agent}` | agent CRUD 事件 |
 | `usage:updated` | `{stats}` | 用量更新（消息完成后推送，刷新面板） |
 | `lsp:status-changed` | `{server_id, status}` | LSP 服务器状态变化 |
 | `lsp:diagnostics` | `{path, diagnostics}` | 诊断更新 |
 | `workspace:changed` | `{path}` | 工作目录切换 |
-| `tool:approval-request` | `{call_id, tool_name, arguments, agent_id, risk_level}` | 工具审批请求（§10.10） |
+| `tool:approval-request` | `{call_id, tool_name, arguments, agent_id, risk_level}` | 工具审批请求（§10.10，见 phase2-panel.md） |
 | `tool:approval-response` | `{call_id, approved, reason?}` | 工具审批响应（前端 → 后端） |
 | `rag:progress` | `{document_id, status, progress?}` | RAG 摄取进度 |
 | `translate:batch-progress` | `{done, total}` | 批量翻译进度 |
@@ -1623,8 +1623,8 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 
 | 事件 | 负载 | 触发时机 |
 |------|------|----------|
-| `meeting:audio-chunk` | `{meeting_id, pcm: base64}` | 渲染进程音频块（§10.3.2） |
-| `tool:approval-response` | `{call_id, approved, reason?}` | 用户工具审批结果（§10.10） |
+| `meeting:audio-chunk` | `{meeting_id, pcm: base64}` | 渲染进程音频块（§10.3.2，见 phase3-extend.md） |
+| `tool:approval-response` | `{call_id, approved, reason?}` | 用户工具审批结果（§10.10，见 phase2-panel.md） |
 
 > 注：其余前端 → 后端交互一律走 `invoke` 命令（§8.2），仅高频流（音频块）与异步响应（审批）走事件通道（§14.6 #34）。
 
@@ -2286,6 +2286,11 @@ export const chatStore = new ChatStore();
 | `Shift+Enter` | 发送消息 |
 | `Esc` | 中断生成/关闭弹窗 |
 
+## 10. 特色功能详细设计（Phase 1 部分）
+
+> 注：§10 章节分散在三个文件——本文件为 §10.4（Skill）/§10.6（工作流引擎+模板）/§10.7（记忆）/§10.8（文件）；
+> §10.1-10.3/10.5/10.9/10.11-10.13 见 `phase3-extend.md`；§10.10 见 `phase2-panel.md`。
+
 ### 10.4 Skill 技能系统详细设计
 
 **目录布局**：
@@ -2473,11 +2478,11 @@ impl WorkflowEngine {
 
 ```rust
 /// 阶段模板 = 可复用阶段定义（预置 + 用户保存）
-/// 与 TaskStageDef（§9.9.1）/ WorkflowStage（§3.4）的关系：
+/// 与 TaskStageDef（§9.9.1，见 phase2-panel.md）/ WorkflowStage（§3.4）的关系：
 ///   - StageTemplate = 可复用的「阶段单元」（预置/用户保存，落库 stage_templates 表）
 ///   - TaskStageDef  = 画布上的「任务阶段」= StageTemplate 字段 + agent_id + depends_on + reflection
 ///   - WorkflowStage = 运行时「执行阶段」= TaskStageDef 的依赖部分（role/prompt_template/tools/depends_on）
-///   三者字段已对齐（§9.9.1 TaskStageDef 为超集），task:run 时 TaskStageDef → WorkflowStage 直接映射。
+///   三者字段已对齐（§9.9.1 TaskStageDef 为超集，见 phase2-panel.md），task:run 时 TaskStageDef → WorkflowStage 直接映射。
 #[derive(Serialize, Deserialize, Clone)]
 pub struct StageTemplate {
     pub id: String,                 // "research"
@@ -2489,14 +2494,14 @@ pub struct StageTemplate {
     pub max_iterations: u32,        // 工具循环上限
     pub model_hint: Option<String>, // 模型建议（如 "plan" = 规划模型；空 = Agent 默认）
     pub output_spec: Option<String>,// 输出格式约定（如 "markdown" / "json"），注入提示
-    pub reflection: Option<ReflectionConfig>, // 反思配置（§10.9，可空）
+    pub reflection: Option<ReflectionConfig>, // 反思配置（§10.9，见 phase3-extend.md，可空）
 }
 
 /// 预置工作流定义（= 阶段模板的有序组合 + 输入声明）
 pub struct BuiltinWorkflow {
     pub id: String,                 // "deep-research"
     pub name: String,
-    pub inputs: Vec<TaskInput>,     // 复用 §9.9.1 TaskInput 定义
+    pub inputs: Vec<TaskInput>,     // 复用 §9.9.1 TaskInput 定义（见 phase2-panel.md）
     pub stages: Vec<StageTemplate>,
 }
 ```
@@ -2631,7 +2636,7 @@ pub fn render_template(template: &str, inputs: &Value, outputs: &HashMap<String,
 }
 ```
 
-**校验规则**（`validate_definition`，§9.9.1 `task:validate` 复用）：
+**校验规则**（`validate_definition`，§9.9.1 `task:validate` 复用，见 phase2-panel.md）：
 
 - 模板中引用的 `{{stage.x.output}}` 必须存在 `depends_on` 依赖（或为前序阶段）
 - 变量引用缺失 → 构建期报错（带缺哪个变量）
@@ -2643,7 +2648,7 @@ pub fn render_template(template: &str, inputs: &Value, outputs: &HashMap<String,
 | 操作 | 说明 |
 |------|------|
 | 预置模板 | 内嵌常量，只读；首次启动写入 workflows 表 `source=builtin` |
-| 用户模板 | `task:save-template`（§9.9.1）保存为 `source=user`，可编辑/删除 |
+| 用户模板 | `task:save-template`（§9.9.1，见 phase2-panel.md）保存为 `source=user`，可编辑/删除 |
 | 阶段模板复用 | 用户可保存单个 StageTemplate 到 `stage_templates` 表，编排时拖入 |
 | 模板继承 | 用户模板可基于预置修改（复制 → 改 inputs/stages） |
 
@@ -2659,7 +2664,7 @@ CREATE TABLE stage_templates (
     max_iterations INTEGER DEFAULT 10,
     model_hint    TEXT,                          -- 模型建议（§10.6.1）
     output_spec   TEXT,                          -- 输出格式约定（§10.6.1）
-    reflection    TEXT,                          -- 反思配置 JSON（§10.9，可空）
+    reflection    TEXT,                          -- 反思配置 JSON（§10.9，见 phase3-extend.md，可空）
     source        TEXT NOT NULL DEFAULT 'user',   -- builtin | user
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL
@@ -2921,6 +2926,25 @@ pub fn quarantine_checkpoint(sid: &str) -> Result<(), AppError> { ... }
 | `memory:reconcile` | `{}` | `{indexed, pruned}` | 手动全量重建索引 |
 | `memory:context-dump` | `{}` | `Vec<MemoryDump>` | 当前注入记忆摘要（调试用） |
 
+#### 10.7.5 记忆前端（设置页 → 记忆管理）
+
+```
+┌─ 记忆管理 ───────────────────────────────┐
+│ [全局] [项目] [会话] [搜索]               │  ← 4 Tab
+│ 全局记忆 MEMORY.md：                      │
+│ ┌────────────────────────────────────┐  │
+│ │ # 全局记忆                          │  │
+│ │ 可编辑 Markdown（语法高亮）          │  │
+│ │ [保存]                             │  │
+│ └────────────────────────────────────┘  │
+│ 索引状态: 23 文件 · 上次 reconcile: 2min │
+│ [↻ 重建索引]                            │
+└──────────────────────────────────────────┘
+```
+
+- 可编辑全局/项目 MEMORY.md（主 agent 权限一致）
+- 会话 checkpoint 只读展示（writer 生成）
+- 搜索 Tab：`memory:search` 结果列表 → 点击 Read 全文
 #### 10.7.6 写入沙箱（Write Security）
 
 **来源**：MiMo-Code `tool/memory-path-guard.ts` — 不同 agent 有不同的记忆写入权限。
@@ -2997,25 +3021,6 @@ pub fn inject_active_recall(session_dir: &Path) -> String {
 
 **事件**：`memory:changed`（文件被 writer/agent 更新后广播，前端记忆面板刷新）。
 
-#### 10.7.5 记忆前端（设置页 → 记忆管理）
-
-```
-┌─ 记忆管理 ───────────────────────────────┐
-│ [全局] [项目] [会话] [搜索]               │  ← 4 Tab
-│ 全局记忆 MEMORY.md：                      │
-│ ┌────────────────────────────────────┐  │
-│ │ # 全局记忆                          │  │
-│ │ 可编辑 Markdown（语法高亮）          │  │
-│ │ [保存]                             │  │
-│ └────────────────────────────────────┘  │
-│ 索引状态: 23 文件 · 上次 reconcile: 2min │
-│ [↻ 重建索引]                            │
-└──────────────────────────────────────────┘
-```
-
-- 可编辑全局/项目 MEMORY.md（主 agent 权限一致）
-- 会话 checkpoint 只读展示（writer 生成）
-- 搜索 Tab：`memory:search` 结果列表 → 点击 Read 全文
 
 ### 10.8 文件与附件
 
@@ -3078,8 +3083,8 @@ impl serde::Serialize for AppError {
 | 路径安全 | 所有文件读写强制 `canonicalize` 后前缀校验，防目录穿越 |
 | 日志脱敏 | 日志过滤 API Key / Token 模式（`sk-` 等） |
 | 远程 MCP | OAuth 回调本地监听随机端口 + PKCE |
-| 安全护栏 | 四层防御：输入过滤（注入检测/敏感词）→ Agent 约束（系统提示/工具权限）→ 输出过滤（毒性检测）→ 人工监督（审批/升级），详见 §10.12 |
-| 人机协同 | 工具审批分级（Low/Medium/High/Critical）+ 升级机制 + ToolApprovalDialog，详见 §10.10 |
+| 安全护栏 | 四层防御：输入过滤（注入检测/敏感词）→ Agent 约束（系统提示/工具权限）→ 输出过滤（毒性检测）→ 人工监督（审批/升级），详见 §10.12（见 phase3-extend.md） |
+| 人机协同 | 工具审批分级（Low/Medium/High/Critical）+ 升级机制 + ToolApprovalDialog，详见 §10.10（见 phase2-panel.md） |
 | SSRF 防护 | web 工具过滤 private/loopback IP 段 |
 
 ---
@@ -3103,323 +3108,9 @@ impl serde::Serialize for AppError {
 
 ### 13.1 上下文压缩（Context Compaction）
 
-**来源**：MiMo-Code `session/compaction.ts` + `session/overflow.ts` + `session/prune.ts`。
+> **§13.1 完整设计见 phase3-extend.md**（Phase 3，T24）。本节在 Phase 1 仅定义性能基线，压缩机制在 Phase 3 落地。
 
-**设计目标**：当对话历史超过模型上下文窗口时，自动压缩旧消息，保留最近上下文，确保 Agent 持续运行。
-
-#### Token 计数与窗口计算
-
-```rust
-/// 简单 token 估算（对齐 MiMo-Code util/token.ts）
-pub fn estimate_tokens(text: &str) -> usize {
-    text.len() / 4  // 英文约 4 字符/token，中文约 2 字符/token，取保守值 4
-}
-
-/// 上下文窗口（对齐 MiMo-Code overflow.ts Window）
-pub struct ContextWindow {
-    pub hard: usize,          // 模型最大 prompt tokens
-    pub effective: usize,     // 应用 max_context 预算后的有效窗口
-    pub usable: usize,        // 触发压缩的阈值（effective - 预留）
-}
-
-/// 预留空间：compaction buffer + output cap
-pub fn compute_usable(effective: usize, model: &ModelConfig) -> usize {
-    let reserved = 20_000;   // compaction buffer
-    let output_cap = model.max_output_tokens.min(20_000);
-    effective - reserved - output_cap
-}
-```
-
-#### 压力等级（Pressure Levels）
-
-```rust
-/// 上下文压力等级（对齐 MiMo-Code contextPressureLevel）
-pub fn pressure_level(used: usize, limit: usize) -> u8 {
-    let ratio = used as f64 / limit as f64;
-    if ratio < 0.50 { 0 }      // 无压力
-    else if ratio < 0.70 { 1 }  // 轻度 → 软裁剪
-    else if ratio < 0.85 { 2 }  // 中度 → 硬裁剪 + 剥离非必要内容
-    else { 3 }                   // 高度（与 2 相同处理）
-}
-```
-
-#### 工具输出裁剪（Tool Output Pruning）
-
-```rust
-/// 裁剪常量（对齐 MiMo-Code prune.ts）
-const PRUNE_MINIMUM: usize = 20_000;      // 至少裁剪 20K tokens 才值得
-const PRUNE_PROTECT: usize = 40_000;      // 保护最近 40K tokens 的工具输出
-const SOFT_TRIM_THRESHOLD: usize = 4096;  // 软裁剪触发阈值（字符数）
-const SOFT_TRIM_KEEP: usize = 1536;       // 保留头尾各 1.5K 字符
-
-/// 不可裁剪的工具（对齐 MiMo-Code PRUNE_PROTECTED_TOOLS）
-const PROTECTED_TOOLS: &[&str] = &["skill"];
-
-/// 软裁剪（压力等级 1）：保留头尾，中间用占位符
-pub fn soft_trim(output: &str) -> String {
-    if output.len() <= SOFT_TRIM_THRESHOLD {
-        return output.to_string();
-    }
-    let head: String = output.chars().take(SOFT_TRIM_KEEP).collect();
-    let tail: String = output.chars().rev().take(SOFT_TRIM_KEEP)
-        .collect::<Vec<_>>().into_iter().rev().collect();
-    format!("{}[... trimmed ...]{}", head, tail)
-}
-
-/// 硬裁剪（压力等级 >=2）：标记为已裁剪，渲染时显示占位符
-pub fn hard_prune(part: &mut ToolPart) {
-    part.compacted_at = Some(Instant::now());
-}
-
-/// 渲染时：已裁剪的工具输出
-pub fn render_tool_output(part: &ToolPart) -> &str {
-    if part.compacted_at.is_some() {
-        "[Old tool result content cleared]"
-    } else {
-        &part.output
-    }
-}
-```
-
-#### 压缩流程（LLM Summarization）
-
-```rust
-/// 压缩代理（对齐 MiMo-Code compaction agent）
-/// - 无工具权限（纯 LLM 总结）
-/// - 隐藏（不在 agent 列表中显示）
-pub struct CompactionAgent {
-    pub model: Arc<dyn ModelProvider>,
-}
-
-/// 压缩提示词（对齐 MiMo-Code compaction.txt）
-const COMPACTION_SYSTEM_PROMPT: &str = r#"
-You are an anchored context summarization assistant for coding sessions.
-
-Summarize only the conversation history you are given. The newest turns may be kept
-verbatim outside your summary, so focus on the older context that still matters for
-continuing the work.
-
-If the prompt includes a <previous-summary> block, treat it as the current anchored
-summary. Update it with the new history by preserving still-true details, removing
-stale details, and merging in new facts.
-
-Always follow the exact output structure requested by the user prompt. Keep every
-section, preserve exact file paths and identifiers when known, and prefer terse
-bullets over paragraphs.
-
-Do not answer the conversation itself. Do not mention that you are summarizing,
-compacting, or merging context. Respond in the same language as the conversation.
-"#;
-
-/// 默认总结模板（对齐 MiMo-Code compaction.ts）
-const SUMMARY_TEMPLATE: &str = r#"
-## Goal
-[What goal(s) is the user trying to accomplish?]
-
-## Instructions
-- [What important instructions did the user give you that are relevant]
-- [If there is a plan or spec, include information about it]
-
-## Discoveries
-[What notable things were learned during this conversation]
-
-## Accomplished
-[What work has been completed, what is still in progress, what is left?]
-
-## Relevant files / directories
-[Structured list of relevant files read, edited, or created]
-"#;
-```
-
-#### Head/Tail 选择（保留最近对话）
-
-```rust
-/// 保留最近对话的预算（对齐 MiMo-Code preserveRecentBudget）
-const MIN_PRESERVE_RECENT: usize = 2_000;
-const MAX_PRESERVE_RECENT: usize = 8_000;
-const DEFAULT_TAIL_TURNS: usize = 2;
-
-pub fn preserve_recent_budget(usable: usize) -> usize {
-    let target = (usable as f64 * 0.25) as usize;  // 25% of usable
-    target.clamp(MIN_PRESERVE_RECENT, MAX_PRESERVE_RECENT)
-}
-
-/// 选择 head/tail 分界点
-/// head → 送入 LLM 总结；tail → 保留原文
-pub fn select_head_tail(messages: &[Message], tail_turns: usize, budget: usize) -> HeadTail {
-    let turns = identify_user_turns(messages);
-    if turns.len() <= tail_turns {
-        return HeadTail { head: messages.to_vec(), tail_start: None };
-    }
-
-    let recent = &turns[turns.len() - tail_turns..];
-    let mut total = 0;
-    let mut keep_from = None;
-
-    for turn in recent.iter().rev() {
-        let size = estimate_tokens(&turn.text);
-        if total + size > budget { break; }
-        total += size;
-        keep_from = Some(turn.start_index);
-    }
-
-    match keep_from {
-        Some(idx) => HeadTail {
-            head: messages[..idx].to_vec(),
-            tail_start: Some(idx),
-        },
-        None => HeadTail { head: messages.to_vec(), tail_start: None },
-    }
-}
-```
-
-#### 溢出检测与恢复
-
-```rust
-/// 溢出检测时机（对齐 MiMo-Code prompt.ts runLoop）
-pub enum OverflowTrigger {
-    PreLlmCheck,              // LLM 调用前：token 超过 usable
-    PostLlmError,             // LLM 调用后：provider 返回 overflow 错误
-}
-
-/// 恢复策略（对齐 MiMo-Code rebuildEnsuringCheckpoint）
-pub async fn handle_overflow(
-    &self, session: &Session, trigger: OverflowTrigger,
-) -> OverflowResult {
-    // 1. 主 Agent → 优先从 checkpoint 重建
-    if session.is_main_agent() {
-        if let Ok(true) = self.try_rebuild_from_checkpoint(session).await {
-            return OverflowResult::Rebuilt;
-        }
-        // checkpoint 不存在或写入失败 → 降级为压缩
-    }
-
-    // 2. 子 Agent → 直接压缩（子 agent 无 checkpoint）
-    self.compaction.create(session).await;
-    OverflowResult::Compacted
-}
-
-/// 微压缩（Microcompact）：重建时清理可重新生成的工具结果
-const COMPACTABLE_TOOLS: &[&str] = &[
-    "read", "bash", "grep", "glob", "webfetch", "websearch",
-    "edit", "write", "codesearch",
-];
-
-pub fn microcompact(messages: &mut [Message], boundary_time: u64) {
-    for msg in messages.iter_mut() {
-        if msg.created_at <= boundary_time { continue; }
-        for part in msg.parts.iter_mut() {
-            if let Part::Tool { tool, .. } = part {
-                if COMPACTABLE_TOOLS.contains(&tool.as_str()) && part.compacted_at.is_none() {
-                    part.compacted_at = Some(Instant::now());
-                }
-            }
-        }
-    }
-}
-```
-
-#### 压缩与 Checkpoint 的交互
-
-```
-runLoop 每次迭代：
-  1. prune.fireCheckpoints() → 按阈值（20%/40%/60%/80%）触发 checkpoint writer
-  2. 溢出检测（Pre-LLM）→ 重建或压缩
-  3. LLM 调用
-  4. 溢出检测（Post-LLM）→ 重建或压缩
-
-重建 vs 压缩决策：
-  ├─ 主 Agent → 优先 checkpoint 重建（保留更多上下文）
-  │   ├─ checkpoint 存在 → 重建成功
-  │   └─ checkpoint 不存在/写入失败 → 降级压缩
-  └─ 子 Agent → 直接压缩（无 checkpoint 机制）
-
-压缩后：
-  ├─ 插入边界标记（compaction part）
-  ├─ 边界前的消息对模型不可见
-  ├─ 边界消息携带总结文本
-  └─ 自动继续（插入 "Continue if you have next steps"）
-```
-
-#### 配置选项（统一 TokenBudget）
-
-**所有 token 预算集中定义在此处**，§10.7.3 checkpoint 节预算和 §10.7.4 重建注入预算均从此配置读取：
-
-```rust
-/// 统一 token 预算配置（Single Source of Truth）
-pub struct TokenBudget {
-    // === 压缩配置 ===
-    pub compaction_auto: bool,                // 自动压缩（默认 true）
-    pub compaction_prune: bool,               // 工具输出裁剪（默认 true）
-    pub compaction_tail_turns: usize,         // 保留最近轮数（默认 2）
-    pub compaction_preserve_recent: usize,    // 保留最近 token 数（2K~8K，默认 usable*0.25）
-    pub compaction_reserved: usize,           // 压缩预留空间（默认 20K）
-
-    // === Checkpoint 触发 ===
-    pub checkpoint_thresholds: Vec<String>,   // 触发阈值（默认 ["20%","40%","60%","80%"]）
-    pub checkpoint_reserved: usize,           // 预留空间（默认 20K）
-
-    // === 重建注入上限（renderRebuildContext 使用） ===
-    pub inject_checkpoint: usize,             // checkpoint.md 注入上限（默认 11K）
-    pub inject_memory: usize,                 // MEMORY.md 注入上限（默认 10K）
-    pub inject_global: usize,                 // 全局记忆注入上限（默认 6K）
-    pub inject_notes: usize,                  // notes.md 注入上限（默认 6K）
-    pub inject_recent_user: usize,            // 最近用户输入注入上限（默认 16K）
-    pub inject_recent_user_per_msg: usize,    // 单条用户消息上限（默认 2K）
-    pub inject_tasks_ledger: usize,           // 任务清单注入上限（默认 2K）
-    pub inject_actor_ledger: usize,           // Actor 清单注入上限（默认 500）
-    pub inject_memory_titles: usize,          // 记忆标题注入上限（默认 500）
-
-    // === Checkpoint 节预算（§10.7.3 引用此处） ===
-    pub ckpt_section_active_intent: usize,    // §1（默认 500）
-    pub ckpt_section_next_action: usize,      // §2（默认 1000）
-    pub ckpt_section_directives: usize,       // §3（默认 800）
-    pub ckpt_section_task_tree: usize,        // §4（默认 1000）
-    pub ckpt_section_current_work: usize,     // §5（默认 2000）
-    pub ckpt_section_files: usize,            // §6（默认 1500）
-    pub ckpt_section_learnings: usize,        // §7（默认 2000）
-    pub ckpt_section_errors: usize,           // §8（默认 1500）
-    pub ckpt_section_live_resources: usize,   // §9（默认 1000）
-    pub ckpt_section_design_decisions: usize, // §10（默认 3000）
-    pub ckpt_section_open_notes: usize,       // §11（默认 800）
-}
-
-impl Default for TokenBudget {
-    fn default() -> Self {
-        Self {
-            compaction_auto: true,
-            compaction_prune: true,
-            compaction_tail_turns: 2,
-            compaction_preserve_recent: 0, // 计算时用 usable * 0.25
-            compaction_reserved: 20_000,
-            checkpoint_thresholds: vec!["20%".into(), "40%".into(), "60%".into(), "80%".into()],
-            checkpoint_reserved: 20_000,
-            inject_checkpoint: 11_000,
-            inject_memory: 10_000,
-            inject_global: 6_000,
-            inject_notes: 6_000,
-            inject_recent_user: 16_000,
-            inject_recent_user_per_msg: 2_000,
-            inject_tasks_ledger: 2_000,
-            inject_actor_ledger: 500,
-            inject_memory_titles: 500,
-            ckpt_section_active_intent: 500,
-            ckpt_section_next_action: 1_000,
-            ckpt_section_directives: 800,
-            ckpt_section_task_tree: 1_000,
-            ckpt_section_current_work: 2_000,
-            ckpt_section_files: 1_500,
-            ckpt_section_learnings: 2_000,
-            ckpt_section_errors: 1_500,
-            ckpt_section_live_resources: 1_000,
-            ckpt_section_design_decisions: 3_000,
-            ckpt_section_open_notes: 800,
-        }
-    }
-}
-```
-
----
+> 涉及：ContextWindow / 压力等级 / 工具输出裁剪 / Head-Tail 选择 / 溢出恢复 / 微压缩 / TokenBudget 统一配置。
 
 ## 14. 旧版 prism-agent 经验与规避
 
@@ -3442,7 +3133,7 @@ impl Default for TokenBudget {
 | # | 旧版缺陷 | 后果 | 本版规避方案 |
 |---|----------|------|--------------|
 | 5 | **upsert 不传 ID 生成重复消息**：`saveMessages()` 未传 `id: anchorMessageId`，placeholder 永驻 pending | 界面卡"正在准备回复" | Rust 消息写入强制显式 ID（`INSERT OR REPLACE` with id），无默认生成路径 |
-| 6 | **AudioStreamManager 时序丢块**：renderer 先发 chunk，主进程 stream 后建 | 录音开头 1-2s 音频丢失 | §10.3.2 已规避：先建 stream + `pending` 缓冲 flush |
+| 6 | **AudioStreamManager 时序丢块**：renderer 先发 chunk，主进程 stream 后建 | 录音开头 1-2s 音频丢失 | §10.3.2（见 phase3-extend.md）已规避：先建 stream + `pending` 缓冲 flush |
 | 7 | **异步迭代器空转**：无消费者时 `next()` 忙等 | CPU 占用 | Rust mpsc channel 天然阻塞，无忙等（Rust 语言优势，无需处理） |
 | 8 | **流式响应断连无恢复** | WebView 刷新后流丢失 | §7 已设计：事件带 message_id + `chat:stream:aborted`，前端可重连恢复 |
 | 23 | **流开始标记缺失**：`onChunk` 是类型过滤子集，漏掉 start 标记 | 前端不知道流开始了，状态机错乱 | 事件序列显式包含 `chat:stream:start`（§7.2 已设计），前端以 start/done/aborted 三事件为准 |
@@ -3488,10 +3179,10 @@ impl Default for TokenBudget {
 |--------|---------|-------|-------|------|
 | WebView | WebView2 (Edge) | WKWebView | WebKitGTK | Tauri 2.x 自动选择，无需代码分支 |
 | 应用数据目录 | `%APPDATA%\prism-agent\` | `~/Library/Application Support/prism-agent/` | `~/.local/share/prism-agent/` | `dirs` crate + `app_data_dir()`，禁止硬编码 |
-| 本地 ASR 二进制（sherpa-onnx） | `sherpa-onnx.exe` | `sherpa-onnx` | `sherpa-onnx` | 按平台打包对应二进制（§10.3.1）；未找到时降级提示 |
+| 本地 ASR 二进制（sherpa-onnx） | `sherpa-onnx.exe` | `sherpa-onnx` | `sherpa-onnx` | 按平台打包对应二进制（§10.3.1，见 phase3-extend.md）；未找到时降级提示 |
 | LSP 可执行文件查找 | `where` 命令 | `which` | `which` | `std::process` 按 `cfg!(windows)` 分支选 `where`/`which`（§9.10.5） |
 | 路径分隔符 | `\` | `/` | `/` | 一律 `std::path::PathBuf`，禁止字符串拼接路径 |
-| 命令行工具调用 | `cmd /c` | `sh -c` | `sh -c` | 统一封装 `run_command(cmd, args)` 抽象（§10.3/§10.5 复用） |
+| 命令行工具调用 | `cmd /c` | `sh -c` | `sh -c` | 统一封装 `run_command(cmd, args)` 抽象（§10.3/§10.5 复用，见 phase3-extend.md） |
 | 打包格式 | NSIS / MSI | .dmg | .deb / .rpm / AppImage | `tauri build` 三平台产物；CI 三平台矩阵（T1/T18） |
 | 托盘/窗口行为 | 无差异 | 标题栏材质差异 | 无差异 | 前端不做平台分支；系统 chrome 由 Tauri 管理 |
 | 字体链 | Segoe UI + 雅黑 | SF Pro / PingFang | Noto / 系统 | §9.2 字体链已按三平台降级 |
@@ -3518,7 +3209,7 @@ impl Default for TokenBudget {
 |---|----------|------|--------------|
 | 43 | **目录穿越入口**：addSource 裸 join 拼接路径 | 任意文件读写 | 所有文件操作 `canonicalize` + 前缀校验（§12 已含）；工具层统一 `validate_path` wrapper |
 | 44 | **SSRF 防护缺失**：web 工具可访问内网地址 | 内网探测 | `remote_url_safety`：过滤 private/loopback IP 段（§12 安全设计补充） |
-| 45 | **删目录前未停 watcher**：fs watcher 事件复活已删目录 | 目录删不掉 | 删除前先 dispose watcher（§9.10.7 fs:watch 生命周期） |
+| 45 | **删目录前未停 watcher**：fs watcher 事件复活已删目录 | 目录删不掉 | 删除前先 dispose watcher（§9.10.7 fs:watch 生命周期，见 phase2-panel.md） |
 | 46 | **Windows 相对路径反斜杠**：断言/比较用字符串字面 | 测试失败、路径不匹配 | 一律 `std::path::Path` 操作；测试断言用 `path.join()` 构造预期（§14.5 已提） |
 | 47 | **覆盖文件前未查 git 历史**：误删已提交的回归测试 | 静默丢代码 | 覆写/删除前 `git log -- <path>` 核对；Rust 项目同样适用（删除源文件前确认） |
 | 48 | **缓存致旧代码生效**：rolldown-vite 不清缓存 | 改代码无效 | Tauri dev：改 Rust 后等 cargo 增量编译；前端 Vite 遇怪问题先清 `node_modules/.vite` |

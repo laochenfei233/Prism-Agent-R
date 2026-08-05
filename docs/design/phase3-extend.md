@@ -1,11 +1,17 @@
 # Prism Agent R — Phase 3（扩展功能）详细设计
 
 > **归属**：Phase 3（扩展功能）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
-> **总索引**：[`prism-index.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md)
+> **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md)
 > **内容**：§10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩
-> **依赖基础**：后端三层架构/流式/IPC（§3/§7/§8）、记忆系统基础（§10.7）见 `phase1-core.md`
+> **依赖基础（见 `phase1-core.md`）**：后端三层架构/流式/IPC（§3/§7/§8）、数据库（§5 含 §5.7）、记忆系统（§10.7，含 checkpoint 节预算 §10.7.3/注入预算 §10.7.4）、工作流引擎（§10.6.1 StageTemplate）
+> **依赖基础（见 `phase2-panel.md`）**：人机协同/工具审批（§10.10）、任务定义（§9.9.1 TaskDefinition）
 
 ---
+
+## 10. 特色功能详细设计（Phase 3 部分）
+
+> 注：§10 章节分散在三个文件——本文件为 §10.1-10.3/10.5/10.9/10.11-10.13；
+> §10.4/10.6-10.8 见 `phase1-core.md`；§10.10 见 `phase2-panel.md`。
 
 ### 10.1 LLM Wiki 知识库系统
 
@@ -1131,7 +1137,7 @@ impl GoalMonitor {
   │
   ├─ L2: Agent 处理
   │   ├─ 系统提示约束（角色定义 + 行为边界）
-  │   ├─ 工具权限控制（§10.10 RiskLevel）← §10.10 ToolExecutor
+  │   ├─ 工具权限控制（§10.10 RiskLevel，见 phase2-panel.md）← §10.10 ToolExecutor
   │   └─ 上下文窗口保护
   │
   ├─ L3: 输出过滤（LLM 预筛） ← §10.12 ToxicityFilter
@@ -1139,7 +1145,7 @@ impl GoalMonitor {
   │   ├─ 事实一致性检查（RAG 增强时）
   │   └─ 格式合规验证（结构化输出校验）
   │
-  └─ L4: 人工监督（§10.10 HITL）
+  └─ L4: 人工监督（§10.10 HITL，见 phase2-panel.md）
       ├─ 高风险操作审批
       ├─ 输出审核（可选）
       └─ 升级机制
@@ -1147,7 +1153,7 @@ impl GoalMonitor {
 
 **InjectionDetector vs RiskLevel 分工**：
 
-| 维度 | InjectionDetector（§10.12 L1） | RiskLevel（§10.10 L2） |
+| 维度 | InjectionDetector（§10.12 L1） | RiskLevel（§10.10 L2，见 phase2-panel.md） |
 |------|------------------------------|----------------------|
 | 作用点 | 用户输入进入 Agent **之前** | Agent 调用工具 **之前** |
 | 检测对象 | 文本内容（提示注入/敏感词） | 工具调用行为（write/delete/外部 API） |
@@ -1266,6 +1272,8 @@ pub struct TraceStep {
 ```
 
 **存储**：`agent_traces` 表（迁移 008_agent_traces.sql），保留最近 1000 条轨迹，支持按 session/agent/outcome 查询。
+
+**保留与清理**：`agent_traces` 的 1000 条上限由写入侧控制——`trace_service` 在每次写入后执行 `DELETE FROM agent_traces WHERE id NOT IN (SELECT id FROM agent_traces ORDER BY started_at DESC LIMIT 1000)`（同进程串行执行，避免并发竞态）；不依赖 §5.7.6 的周期清理任务（消息/工作流保留策略），如需进一步压缩可把 1000 条阈值并入 `CleanupConfig` 做可配置项。
 
 ```sql
 -- 迁移 008_agent_traces.sql
@@ -1655,7 +1663,7 @@ runLoop 每次迭代：
 
 #### 配置选项（统一 TokenBudget）
 
-**所有 token 预算集中定义在此处**，§10.7.3 checkpoint 节预算和 §10.7.4 重建注入预算均从此配置读取：
+**所有 token 预算集中定义在此处**，§10.7.3 checkpoint 节预算和 §10.7.4 重建注入预算（见 phase1-core.md）均从此配置读取：
 
 ```rust
 /// 统一 token 预算配置（Single Source of Truth）
@@ -1682,7 +1690,7 @@ pub struct TokenBudget {
     pub inject_actor_ledger: usize,           // Actor 清单注入上限（默认 500）
     pub inject_memory_titles: usize,          // 记忆标题注入上限（默认 500）
 
-    // === Checkpoint 节预算（§10.7.3 引用此处） ===
+    // === Checkpoint 节预算（§10.7.3，见 phase1-core.md，引用此处） ===
     pub ckpt_section_active_intent: usize,    // §1（默认 500）
     pub ckpt_section_next_action: usize,      // §2（默认 1000）
     pub ckpt_section_directives: usize,       // §3（默认 800）
@@ -1740,10 +1748,10 @@ impl Default for TokenBudget {
 ## 5.7.5 翻译历史搜索（数据存储横切设计补充）
 
 > **归属**：Phase 3（翻译历史搜索）· 数据存储完整设计见 `phase1-core.md` §5.7（跨阶段基础）
-> **迁移**：并入 `009_message_search.sql`（Phase 1 已建 FTS 体系，Phase 3 追加翻译表）
+> **迁移**：`013_translate_fts.sql`（独立迁移；不并入 009——遵循 §14.3 #28「迁移版本号必须 bump，禁止在已应用迁移上追加」）
 
-``sql
--- 翻译历史 FTS — 并入迁移 009_message_search.sql
+```sql
+-- 翻译历史 FTS — 迁移 013_translate_fts.sql
 CREATE VIRTUAL TABLE translate_fts USING fts5(
     source_text,
     translated,
@@ -1753,7 +1761,7 @@ CREATE VIRTUAL TABLE translate_fts USING fts5(
     content_rowid='rowid',
     tokenize='unicode61'
 );
-``
+```
 
 **要点**：
 - 翻译历史页搜索走 `translate_fts`，支持按原文/译文检索，命中高亮用 `snippet()`

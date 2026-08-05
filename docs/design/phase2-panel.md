@@ -1,11 +1,16 @@
 # Prism Agent R — Phase 2（面板功能）详细设计
 
 > **归属**：Phase 2（面板功能）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
-> **总索引**：[`prism-index.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
+> **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
 > **内容**：§9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.10 人机协同（工具审批）
-> **依赖基础**：设计令牌/组件库（§9.1-9.4）、对话前端（§9.5-9.8）、IPC 命令（§8）见 `phase1-core.md`
+> **依赖基础（见 `phase1-core.md`）**：设计令牌/组件库（§9.1-9.4）、对话前端（§9.5-9.8）、数据库（§5 含 §5.7 分页/索引）、IPC 命令（§8）、工作流引擎（§10.6）、记忆基础（§10.7）
+> **依赖基础（见 `phase3-extend.md`）**：目标监控（§10.11）、反思配置（§10.9）
 
 ---
+
+## 9. Svelte 5 前端详细设计（Phase 2 部分）
+
+> 注：§9 章节头与 §9.1-9.8（设计系统/对话前端）见 `phase1-core.md`；本文件为 §9.9-9.10（面板与侧边栏）。
 
 ### 9.9 主页面板（Home Dashboard）
 
@@ -89,7 +94,7 @@ pub struct DashboardOverview {
 - 排序：最近使用优先；支持拖拽重排（order_key）
 - 空态：无 Agent 时显示引导 + 创建按钮 + 预设模板（研究员/写作/翻译等）
 
-**用量统计实现**：从 `messages.usage` 聚合（见 §5），按 `created_at` 分组；费用估算用 `preferences` 中的单价表（provider/model → 每 1K token 价格）。`usage:updated` 事件在每条消息完成后推送，面板增量刷新。
+**用量统计实现**：从 `messages.usage` 聚合（见 phase1-core.md §5），按 `created_at` 分组；费用估算用 `preferences` 中的单价表（provider/model → 每 1K token 价格）。`usage:updated` 事件在每条消息完成后推送，面板增量刷新。
 
 ### 9.9.1 多 Agent 任务设计区（核心新增）
 
@@ -106,7 +111,7 @@ pub struct DashboardOverview {
 **① 模板模式（TaskTemplateCard 网格）**：
 
 - 每个模板卡：名称 + 描述 + 阶段数 + 预估成本/耗时标签
-- 预置模板与 §10.6 预置工作流一致：深度研究 / 代码审查 / 头脑风暴 / 翻译校对
+- 预置模板与 §10.6 预置工作流（见 phase1-core.md）一致：深度研究 / 代码审查 / 头脑风暴 / 翻译校对
 - 点击模板 → 打开"参数填充对话框"（TaskSaveDialog 复用）：
   - 输入字段来自模板声明的 `inputs`（如深度研究 → `topic`、`depth`）
   - 可选择覆盖各阶段使用的 Agent（默认用阶段角色对应的默认 Agent）
@@ -171,7 +176,7 @@ pub struct DashboardOverview {
 └────────────────────────────────┘
 ```
 
-**依赖输出引用**：提示模板支持 `{{stage.id.output}}` 占位符，运行前由 `render_template` 解析（见 §10.6）。检查器提供"插入变量"按钮 + 语法高亮 + 悬停预览实际值。
+**依赖输出引用**：提示模板支持 `{{stage.id.output}}` 占位符，运行前由 `render_template` 解析（见 phase1-core.md §10.6）。检查器提供"插入变量"按钮 + 语法高亮 + 悬停预览实际值。
 
 **③ 运行模式（TaskRunnerPanel + TaskRunTimeline）**：
 
@@ -182,7 +187,9 @@ pub struct DashboardOverview {
   - 阶段详情展开（TaskStageResult）：最终文本 + 该阶段全部工具调用卡片（名称/参数/耗时/结果）
   - 控制：⏸ 暂停（当前阶段完成后停）、■ 停止（取消 token）、▶ 继续
 - [保存结果] → 阶段输出写入会话（生成对话页消息），用户可继续对话式追问
-- 运行中任务在 `task_runs` 中轮询 + `workflow:stage` 事件实时推进（无需刷新）
+- 运行中任务在 `workflow_runs` 中轮询 + `workflow:stage` 事件实时推进（无需刷新）
+
+> **运行状态存储说明**：`task:run` 将 TaskDefinition 转换为 Workflow 交给 `WorkflowEngine.run()`（§10.6，phase1-core.md），运行状态统一落在 **`workflow_runs` 表**（§5.5，phase1-core.md 迁移 004）——不新建 `task_runs` 表，避免与工作流运行状态双轨。前端 `DashboardOverview.task_runs`（§9.9，本文件 69 行）即查询 `workflow_runs` 的最近记录（`source='task'` 区分来源）。
 
 **任务定义数据结构**（可保存为模板，落库 `workflows` 表，`definition` JSON）：
 
@@ -194,7 +201,7 @@ pub struct TaskDefinition {
     pub description: String,
     pub inputs: Vec<TaskInput>,   // 运行前用户填写的参数声明
     pub stages: Vec<TaskStageDef>,
-    pub goals: Vec<TaskGoal>,     // 目标定义（§10.11，可空 = 不启用目标监控）
+    pub goals: Vec<TaskGoal>,     // 目标定义（§10.11，见 phase3-extend.md，可空 = 不启用目标监控）
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -207,7 +214,7 @@ pub struct TaskStageDef {
     pub tools: Vec<String>,       // 工具白名单
     pub max_iterations: u32,
     pub depends_on: Vec<String>,  // 依赖阶段 id
-    pub reflection: Option<ReflectionConfig>, // 反思配置（§10.9，可空）
+    pub reflection: Option<ReflectionConfig>, // 反思配置（§10.9，见 phase3-extend.md，可空）
     pub model_hint: Option<String>,           // 模型建议（如 "plan"，可空）
     pub output_spec: Option<String>,          // 输出格式约定（可空）
 }
@@ -318,7 +325,7 @@ pub struct TaskInput {
 - 进度条阈值着色：`<80%` 默认 / `80~95%` 橙 / `>95%` 红 + "建议开启新会话"提示条
 - 点击"查看用量趋势" → 展开内嵌 7 日迷你图（复用 UsageChart 组件，只读）
 - "重置会话计数" → 二次确认（ConfirmDialog），不删除消息仅清计数展示（纯前端状态）
-- 长会话自动截断提示：后端 PromptBuilder 已做滑动窗口（§13.1），此处仅展示窗口内有效 tokens
+- 长会话自动截断提示：后端 PromptBuilder 已做滑动窗口（§13.1，见 phase3-extend.md），此处仅展示窗口内有效 tokens
 
 ### 9.10.2 Tab 2 — 工作目录 (SidebarWorkdir)
 
@@ -403,7 +410,7 @@ pub struct TaskInput {
 | 1 | `{workdir}/CLAUDE.md` | 全量注入系统提示 |
 | 2 | `{workdir}/AGENTS.md` | 全量注入（存在时与 CLAUDE.md 并存） |
 | 3 | `{workdir}/.cursor/rules/*.mdc` | 摘要注入（每文件前 100 行 + 文件名） |
-| 4 | `{workdir}/.prism/memory.md` | 全量注入（项目记忆，§10.7） |
+| 4 | `{workdir}/.prism/memory.md` | 全量注入（项目记忆，§10.7，见 phase1-core.md） |
 | 5 | `{workdir}/README.md` | 不注入，仅展示（避免噪声；可手动"注入此文件"） |
 
 **交互规则**：
@@ -614,7 +621,7 @@ pub struct SessionUsage {
 | `lsp:status-changed` / `lsp:diagnostics` | LSP | 服务器/诊断变化 |
 | `fs:watcher`（新增） | 指令/文件 | 工作目录文件变更（`notify` crate 监听） |
 
-**新增命令**（8.2 补充）：
+**新增命令**（§8.2 命令清单见 phase1-core.md，此处为补充）：
 
 | 命令 | 参数 | 返回 |
 |------|------|------|
@@ -622,9 +629,13 @@ pub struct SessionUsage {
 | `lsp:detect` | `{workdir}` | `Vec<LspCandidate>` | 推断候选 LSP（无进程启动） |
 | `fs:watch` | `{workdir, enable}` | `()` | 开启/关闭工作目录变更监听 |
 
-**布局关系**：主页面的 `AgentLauncher` 点击后进入 `/chat/{sessionId}`，对话页默认展开 Agent 侧边栏；`⌘\` 折叠。主页面板与侧边栏共用 `usage`/`mcp` 数据源，一次请求双端复用。侧边栏六 Tab 中"用量/指令"与 PromptBuilder（§10.7）共享注入状态，"MCP/LSP"与 RigAgent 工具执行共享运行状态。
+**布局关系**：主页面的 `AgentLauncher` 点击后进入 `/chat/{sessionId}`，对话页默认展开 Agent 侧边栏；`⌘\` 折叠。主页面板与侧边栏共用 `usage`/`mcp` 数据源，一次请求双端复用。侧边栏六 Tab 中"用量/指令"与 PromptBuilder（§10.7，见 phase1-core.md）共享注入状态，"MCP/LSP"与 RigAgent 工具执行共享运行状态。
 
 ---
+
+## 10. 特色功能详细设计（Phase 2 部分）
+
+> 注：§10 章节分散在三个文件——§10.1-10.3/10.5/10.9/10.11-10.13 见 `phase3-extend.md`；§10.4/10.6-10.8 见 `phase1-core.md`；本文件为 §10.10。
 
 ### 10.10 人机协同（Human-in-the-Loop）
 
@@ -711,10 +722,10 @@ Agent 在以下情况自动升级给用户：
 ## 5.7.4 会话标题搜索（数据存储横切设计补充）
 
 > **归属**：Phase 2（会话列表搜索增强）· 数据存储完整设计见 `phase1-core.md` §5.7（跨阶段基础）
-> **迁移**：并入 `009_message_search.sql`（Phase 1 已建 FTS 体系，Phase 2 追加会话表）
+> **迁移**：`012_session_fts.sql`（独立迁移；不并入 009——遵循 §14.3 #28「迁移版本号必须 bump，禁止在已应用迁移上追加」）
 
 ```sql
--- 会话标题 FTS（轻量级，标题短文本）— 并入迁移 009_message_search.sql
+-- 会话标题 FTS（轻量级，标题短文本）— 迁移 012_session_fts.sql
 CREATE VIRTUAL TABLE sessions_fts USING fts5(
     title,
     session_id UNINDEXED,
@@ -723,8 +734,15 @@ CREATE VIRTUAL TABLE sessions_fts USING fts5(
     tokenize='unicode61'
 );
 
--- 同步触发器
+-- 同步触发器（标题变更时同步索引；删除用 'delete' 行模式，同 messages_fts）
 CREATE TRIGGER sessions_ai AFTER INSERT ON sessions BEGIN
+    INSERT INTO sessions_fts(rowid, title, session_id)
+    VALUES (new.rowid, new.title, new.id);
+END;
+
+CREATE TRIGGER sessions_au AFTER UPDATE OF title ON sessions BEGIN
+    INSERT INTO sessions_fts(sessions_fts, rowid, title, session_id)
+    VALUES ('delete', old.rowid, old.title, old.id);
     INSERT INTO sessions_fts(rowid, title, session_id)
     VALUES (new.rowid, new.title, new.id);
 END;
@@ -740,5 +758,5 @@ LIMIT ?;
 
 **要点**：
 - 会话列表/侧边栏搜索走 `sessions_fts`（替代 `LIKE` 扫描），命中高亮用 `snippet()`（模式同 `phase1-core.md` §5.7.2）
-- 更新触发器（`sessions_au`）在标题自动重命名（§9.10.3 指令相关 + §1 自动重命名）时同步索引
+- 更新触发器（`sessions_au`）在标题自动重命名（§9.10.3 指令相关 + §1 自动重命名，见 prism-agent-r.md）时同步索引
 
