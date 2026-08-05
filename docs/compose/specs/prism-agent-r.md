@@ -6022,92 +6022,150 @@ impl Default for TokenBudget {
 
 ## 各功能模块 MVP 内容清单
 
-> **用途**：按文档章节（§3~§14）逐模块列出「各阶段需要落地的最小内容」。实施时以本清单为验收基准，一个模块一个模块核对，避免遗漏。
-> **图例**：🟦 Phase 1（MVP 核心闭环）· 🟧 Phase 2（面板）· 🟩 Phase 3（扩展）· ⬜ 后续迭代
+> **用途**：按**功能系统**逐模块列出「各阶段需要落地的最小内容」。每个功能系统给出定位、三阶段内容与验收标准，实施时以本清单为验收基准，一个模块一个模块核对。
+> **图例**：🟦 Phase 1（Agent 核心闭环）· 🟧 Phase 2（面板）· 🟩 Phase 3（扩展）· ⬜ 后续迭代
+> **实施顺序**：Agent 核心 → Skill/MCP/工作流/记忆 挂接 → 对话前端闭环（Phase 1）；面板/侧边栏（Phase 2）；扩展功能（Phase 3）。每阶段内按「后端核心 → IPC → 前端」推进。
 
-### §3 Rust 后端分层架构
+### 1. Agent 核心系统（§3.2~3.3 + §8 agent/session/chat + §9.6）
 
-| 层级 | 阶段 | MVP 内容 |
-|------|------|---------|
-| ADK 组件层 | 🟦 | ModelProvider/ToolExecutor/MemoryStore 三个 Trait + AgentError + PromptBuilder（基础注入） |
-| Rig 核心层 | 🟦 | RigAgent agentic loop + StreamPipeline + 2 Provider（OpenAI/Ollama）+ 内置工具（file/knowledge） |
-| AutoAgents 编排 | 🟦 | Actor Trait + Coordinator + TaskScheduler + WorkflowEngine + render_template + 1 预置工作流 |
-| AutoAgents 编排 | 🟧 | 其余预置工作流（代码审查/头脑风暴/翻译校对）+ 并行阶段执行 |
-| 反思模式（§10.9） | 🟩 | ReflectionConfig + run_reflection_loop + 评审者 Agent |
+**定位**：单 Agent 的创建、配置、执行闭环——用户创建 Agent → 选择模型 → 对话 → 流式生成 → 工具调用。
 
-### §5 数据库
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | ADK 三个 Trait（ModelProvider/ToolExecutor/MemoryStore）+ PromptBuilder；RigAgent agentic loop + StreamPipeline + OpenAI/Ollama 双 Provider；agent/session/chat/model 域 IPC；对话前端（三栏布局 + Composer + 流式渲染 + 会话管理） | 用户能创建 Agent、发起对话、看到流式输出、切换会话 |
+| 🟧 | agent:stats 命令 + Agent 编辑页完善（模型/提示词/工具/技能配置） | Agent 配置全量可编辑 |
+| 🟩 | 反思模式接入（ReflectionConfig）+ 评估轨迹（AgentTrace）+ 目标监控（TaskGoal） | 高精度场景可启用反思循环 |
 
-| 内容 | 阶段 | MVP 内容 |
-|------|------|---------|
-| 核心迁移 | 🟦 | 001_init（providers/models/agents/sessions/messages/skills/mcp_servers）+ 004_workflow（workflows/runs/preferences） |
-| 功能迁移 | 🟧 | 002_rag、003_meeting、005_glossary、007_workflow_templates（阶段模板） |
-| 记忆迁移 | 🟧 | 006_memory（memory_fts FTS5 虚拟表 + 回填策略） |
-| 搜索迁移 | 🟩 | 009_message_search（messages_fts/sessions_fts/translate_fts + 同步触发器） |
-| 评估迁移 | 🟩 | 008_agent_traces（AgentTrace 表） |
-| 性能迁移 | 🟩 | 010_indexes + 011_asr（asr_configs）+ PRAGMA 优化 + 数据保留策略（§5.7） |
+### 2. Skill 技能系统（§10.4）
 
-### §6 MCP 协议
+**定位**：技能的安装、管理、注入——让 Agent 通过 SKILL.md 获得专项能力。
 
-| 内容 | 阶段 | MVP 内容 |
-|------|------|---------|
-| 传输层 | 🟦 | stdio + http 两传输（McpTransport Trait） |
-| 运行时 | 🟦 | McpRuntime + McpCatalog + 工具目录缓存 + 工具权限校验 |
-| 远程传输 | 🟧 | SSE 传输 + OAuth 回调支持（远程 MCP） |
-| 事件同步 | 🟧 | `notifications/tools/list_changed` 监听 + mcp:status-changed 事件 |
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | skill:list/install/uninstall/toggle + SKILL.md 解析（frontmatter）+ PromptBuilder 注入 + skill:list-local | 安装一个技能并在对话中生效 |
+| 🟧 | 市场三源搜索（skills.sh/claude-plugins/clawhub）+ 去重排序 + 缓存 + 重名冲突处理 | 市场搜索可用，结果可排序筛选 |
+| 🟩 | 版本更新检测 + 依赖预检（git/zip/网络）+ 安装后 health-check | 技能更新与依赖检查完整 |
 
-### §7 流式响应
+### 3. MCP 协议系统（§6）
 
-| 内容 | 阶段 | MVP 内容 |
-|------|------|---------|
-| 事件模型 | 🟦 | chat:stream:start/delta/tool_call/tool_result/done/error/aborted 全量 |
-| StreamPipeline | 🟦 | 流式转发 + 取消（CancellationToken）+ 前端消费封装 |
-| 上下文压缩（§13.1） | 🟩 | ContextWindow + 压力等级 + 工具裁剪 + Head/Tail 选择 + 溢出恢复 + TokenBudget |
+**定位**：MCP 服务器连接与工具调用——Agent 通过 MCP 获得外部工具能力。
 
-### §8 Tauri IPC
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | McpTransport（stdio + http 两传输）+ McpRuntime + McpCatalog + 工具目录缓存 + mcp:list/add/remove/test/tools/call-tool | 挂一个本地 MCP 服务器，工具可调用 |
+| 🟧 | SSE 传输 + OAuth 回调（远程 MCP）+ `tools/list_changed` 监听 + mcp:status-changed 事件 + 侧边栏 MCP Tab | 远程 MCP 可用，状态实时 |
+| 🟩 | ServerLogBuffer 查看 + 工具参数大小限制 + Agent 绑定/禁用工具粒度控制 | 权限控制完整 |
 
-| 内容 | 阶段 | MVP 内容 |
-|------|------|---------|
-| 核心域 | 🟦 | agent/session/chat/model 域命令 + 通用返回包装（@tauri-apps/api/core） |
-| 挂接域 | 🟦 | mcp/skill/workflow/task/memory 域 MVP 子集命令 |
-| 面板域 | 🟧 | dashboard/workspace/lsp/context 域命令 + agent:stats |
-| 扩展域 | 🟩 | meeting/asr/wiki-ai/translate+glossary/ocr 域全量命令 |
+### 4. 记忆系统（§10.7）
 
-### §9 Svelte 5 前端
+**定位**：分层记忆（global/projects/sessions）+ 会话持久化——跨会话保持上下文。
 
-| 内容 | 阶段 | MVP 内容 |
-|------|------|---------|
-| 设计系统 | 🟦 | 设计令牌（两层架构）+ 基础组件 15+（Button/Input/Switch/Dialog 等） |
-| 对话前端 | 🟦 | 三栏布局 + MessageList/Composer + 流式渲染 + 会话管理 |
-| 主页面板 | 🟧 | HomePage + AgentLauncher + Usage 统计 + 任务设计区（TaskDesigner） |
-| Agent 侧边栏 | 🟧 | 六 Tab（用量/工作目录/指令/MCP/LSP/文件）+ context:agent 聚合 |
-| 组件架构完善 | 🟧 | primitives/composites 分层补齐 + ToolApprovalDialog |
-| 无障碍适配 | 🟩 | 对比度/触摸目标/reduced-motion 三媒体查询 + 八项设计原则落地 |
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | 分层目录（global/projects/sessions）+ MemoryStoreImpl + 会话构建时注入 + memory:search/read/write 基础命令 | 跨会话记忆生效 |
+| 🟧 | FTS5 索引（006_memory）+ BM25 搜索 + reconcile + checkpoint-writer + 写入沙箱 + 主动召回注入 | 记忆可搜索，checkpoint 自动策展 |
+| 🟩 | 校验重试机制（CheckpointViolation）+ 溢出文件 + 前端记忆管理面板 | 记忆管理 UI 完整 |
 
-### §10 特色功能
+### 5. 多 Agent 工作流（§3.4 + §10.6 + §9.9.1）
 
-| 功能 | 阶段 | MVP 内容 |
-|------|------|---------|
-| Wiki + RAG | 🟩 | WikiService + write_ai 计划执行 + 分块/嵌入/混合检索 + 摄取后台任务 |
-| 会议系统 | 🟩 | AsrBackend 可插拔架构 + 录音流 + 清洗/摘要/问答/导出 |
-| Skill 技能系统 | 🟦 | 安装/卸载/启停 + PromptBuilder 注入；🟧 市场三源搜索 |
-| 翻译 + OCR | 🟩 | TranslateService + Glossary + OcrService 多后端 |
-| 多 Agent 工作流 | 🟦 | WorkflowEngine + 1 预置工作流；🟧 阶段模板系统 + 用户自定义 |
-| 记忆系统 | 🟦 | 分层记忆（global/projects/sessions）+ 会话注入；🟧 FTS 搜索 + checkpoint-writer |
-| 人机协同 | 🟧 | 工具审批分级 + ToolApprovalDialog + 升级机制 |
-| 目标监控 | 🟩 | TaskGoal/GoalCriterion + GoalMonitor |
-| 安全护栏 | 🟩 | GuardrailPipeline + InjectionDetector + ToxicityFilter |
-| 评估监控 | 🟩 | AgentTrace 轨迹 + AgentJudge + 性能仪表盘 |
+**定位**：多 Agent 编排与任务执行——预置工作流 + 用户自定义任务设计。
 
-### §11~§14 横切能力
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | Actor Trait + Coordinator + TaskScheduler + WorkflowEngine + render_template + 1 预置工作流（深度研究）+ workflow:run/list/stop/result | 跑通"深度研究"工作流 |
+| 🟧 | 其余预置工作流（代码审查/头脑风暴/翻译校对）+ 阶段模板系统（stage_templates）+ 任务设计区（TaskDesigner 画布）+ task:save-template/run/validate/rerun | 画布可编排自定义任务 |
+| 🟩 | 目标监控（GoalMonitor）+ 并行阶段执行 + 阶段反思接入 | 任务运行可视化 + 目标可评估 |
 
-| 章节 | 阶段 | MVP 内容 |
-|------|------|---------|
-| §11 错误/日志 | 🟦 | AppError 统一类型 + tracing 初始化 + 关键操作日志 |
-| §12 安全 | 🟦 | API Key 加密（AES-GCM）+ capabilities 权限；🟩 护栏/SSRF 防护 |
-| §13 性能 | 🟦 | 冷启动 <1s + 内存 <120MB 基线；🟩 上下文压缩（§13.1） |
-| §14 旧版规避 | 🟦 | §14.1~14.4 关键规避（模型 ID/upsert 幂等/时序丢块/目录穿越）落地于对应实现；🟧🟩 全部 51 条对照 |
+### 6. 对话/聊天系统（§7 + §9.5~9.8）
 
-**实施顺序建议**：每阶段内按「后端核心 → IPC → 前端」顺序推进，模块边界清晰，可独立验收。
+**定位**：对话界面与流式体验——核心交互层。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | 三栏布局（SideNav/ContentArea/RightPanel）+ MessageList/Composer/ModelSelector + chat:stream:* 事件全量 + 取消（abort）+ 会话切换/搜索/固定 | 完整对话体验，流式可中断 |
+| 🟧 | 会话自动重命名（AI 生成标题）+ 编辑重发 + ToolCallCard 过程展示 + 快捷指令（⌘K） | 对话增强功能可用 |
+| 🟩 | 上下文压缩（§13.1：压力等级/工具裁剪/Head-Tail/溢出恢复）+ 消息全文搜索（009_message_search） | 长会话流畅，历史可搜索 |
+
+### 7. 主页面板（§9.9）
+
+**定位**：应用首页 — Agent 总控制台 + 任务设计区入口。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | —（Phase 1 不依赖面板） | — |
+| 🟧 | HomePage + AgentLauncher 卡片网格 + UsageStats/Chart + Skill/Mcp Overview + dashboard:overview + 最近会话 + 任务历史 | 首页聚合数据可用，点击 Agent 直接对话 |
+| 🟩 | 用量趋势图表 + 单价表费用估算 + 任务模板卡片 + 运行中任务实时状态 | 面板完整 |
+
+### 8. Agent 侧边栏（§9.10）
+
+**定位**：对话页右侧运行时上下文面板（六 Tab）。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | —（Phase 1 不依赖侧边栏） | — |
+| 🟧 | AgentSidebar 六 Tab（用量/工作目录/指令/MCP/LSP/文件）+ context:agent 聚合命令 + workspace/lsp 域命令 + fs:watch | 侧边栏展示完整运行时上下文 |
+| 🟩 | LSP 诊断实时推送 + 文件树懒加载 + 指令文件注入（session:inject-file） | 侧边栏深度可用 |
+
+### 9. Wiki/RAG 知识库（§10.1~10.2）
+
+**定位**：LLM Wiki + RAG 检索——知识持久化与语义搜索。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | —（Phase 1 不涉及） | — |
+| 🟧 | —（Phase 2 不涉及） | — |
+| 🟩 | WikiService + write_ai 计划执行（结构化操作/校验回滚）+ 分块（段落/句子/窗口）+ 嵌入（API/本地）+ 混合检索（向量+BM25）+ 摄取后台任务 + 前端知识库页 | 导入文档可检索，AI 可写库 |
+
+### 10. 翻译/OCR（§10.5）
+
+**定位**：文本翻译 + 图片识别。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | —（Phase 1 不涉及） | — |
+| 🟧 | —（Phase 2 不涉及） | — |
+| 🟩 | TranslateService（多 Provider/批量/文件/缓存）+ Glossary 术语表 + OcrService 多后端 + 前端翻译页 | 翻译/OCR 全流程可用 |
+
+### 11. 会议系统（§10.3）
+
+**定位**：录音 → ASR 转写 → 清洗/摘要/问答/导出。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | —（Phase 1 不涉及） | — |
+| 🟧 | —（Phase 2 不涉及） | — |
+| 🟩 | AsrBackend 可插拔架构（8 后端）+ 录音流（AudioStreamManager 时序规避）+ 增量落库 + 离线二次转写 + 清洗/摘要/问答/推送 Agent + 导出 + 前端 | 完整会议闭环 |
+
+### 12. 设计系统（§9.1~9.4）
+
+**定位**：设计令牌 + 组件库 + 动画——视觉基础。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | 设计令牌（两层架构：oklch 原始 + CSS 语义别名）+ 基础组件 15+（Button/Input/Switch/Dialog）+ glass 工具类 | 主题切换可用，组件样式统一 |
+| 🟧 | primitives/composites 分层补齐（ScrollArea/Separator/Kbd/ContextMenu 等）+ PageHeader/ConfirmDialog 等复合组件 | 组件库覆盖业务需要 |
+| 🟩 | 无障碍适配（对比度/触摸目标/reduced-motion 三媒体查询）+ 八项设计原则落地 + 圆角/阴影体系校准 | 符合 iOS 18 无障碍标准 |
+
+### 13. 数据库层（§5）
+
+**定位**：SQLite 持久化 + 迁移体系 + 性能。
+
+| 阶段 | MVP 内容 | 验收标准 |
+|------|---------|---------|
+| 🟦 | 001_init + 004_workflow 迁移 + sqlx 连接池 + PRAGMA 优化 + 核心 CRUD | 迁移全跑通，CRUD 可用 |
+| 🟧 | 002_rag / 003_meeting / 005_glossary / 006_memory / 007_workflow_templates | 功能迁移就绪 |
+| 🟩 | 008_agent_traces / 009_message_search / 010_indexes / 011_asr + 数据保留策略 + 游标分页 + 查询监控 | 大数据量流畅 |
+
+### 14. 横切能力（§11~§14）
+
+**定位**：错误/日志、安全、性能、旧版规避——贯穿各阶段。
+
+| 能力 | 🟦 Phase 1 | 🟧 Phase 2 | 🟩 Phase 3 |
+|------|-----------|-----------|-----------|
+| 错误/日志（§11） | AppError 统一类型 + tracing 初始化 + 关键操作日志 | 命令层耗时埋点 | 慢查询监控 |
+| 安全（§12） | API Key 加密（AES-GCM）+ capabilities 权限 | 人机协同审批（T19） | 护栏（InjectionDetector/ToxicityFilter）+ SSRF 防护 |
+| 性能（§13） | 冷启动 <1s + 内存 <120MB 基线 | 用量统计聚合 | 上下文压缩（§13.1） |
+| 旧版规避（§14） | §14.1~14.4 关键规避落地（模型 ID/upsert 幂等/时序丢块/目录穿越） | §14.5 平台差异逐项核对 | §14.6~14.7 全部 51 条对照回归 |
 
 ---
 
