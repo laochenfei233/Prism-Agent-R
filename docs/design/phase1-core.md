@@ -3,6 +3,7 @@
 > **归属**：Phase 1（MVP Agent 核心闭环）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
 > **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
 > **Updated**：2026-08-05
+> **读者假设**：面向熟悉 Rust（tokio/sqlx/serde）、Svelte 5（runes）、Tauri 2.x（IPC/WebView）的开发者；不解释语言/框架基础语法。
 > **内容**：§3 后端三层架构 · §4 目录结构 · §5 数据库 · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础 · §10.4 Skill · §10.6 工作流引擎 · §10.7 记忆基础 · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能 · §14 旧版规避
 
 ---

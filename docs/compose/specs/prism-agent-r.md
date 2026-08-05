@@ -14,6 +14,8 @@ platform: windows | macos | linux
 > 前端使用 WebView（Tauri 2.x 内置），后端 Rust 编译原生二进制（无 Node.js 运行时依赖）。
 > 涉及平台差异的板块（路径处理、LSP 检测、本地 ASR 二进制、CI 构建矩阵、打包分发）已在各阶段文档中明确标注。
 
+> **读者假设**：本系列文档面向熟悉 Rust（tokio/sqlx/serde）、Svelte 5（runes）、Tauri 2.x（IPC/WebView）的开发者；不解释语言/框架基础语法。
+
 ## 📚 文档导航
 
 本设计文档按 **开发阶段** 拆分为 3 份详细设计 + 本总索引。按需阅读对应文件：

@@ -59,6 +59,25 @@
 | **数据库 / 迁移相关** | 迁移总表（见总索引）+ phase1 §5（完整 Schema）+ 各阶段 FTS 补充 |
 | **排查旧版教训** | phase1 §14（51 条规避，跨阶段对照） |
 
+### 🎯 常见任务速查
+
+| 任务 | 读哪个文件（章节） |
+|------|-------------------|
+| 做消息全文搜索 | phase1 §5.7.2（messages_fts）+ phase2 §5.7.4（会话标题） |
+| 新增 MCP 传输 | phase1 §6（McpTransport Trait/stdio/http + SSE） |
+| 加一个 IPC 命令 | phase1 §8.2（命令总表）+ 对应域服务（§5/§10） |
+| 改 Agent 对话流 | phase1 §7（流式）+ §8（chat 域）+ §9.5-9.8（前端） |
+| 做多 Agent 工作流 | phase1 §10.6（引擎）+ phase2 §9.9.1（任务设计区） |
+| 做记忆/checkpoint | phase1 §10.7（完整）+ phase3 §13.1（压缩） |
+| 做技能/市场 | phase1 §10.4（主体）+ phase2 §10.4.1-10.4.4（市场搜索） |
+| 做会议/ASR | phase3 §10.3（8 后端）+ phase1 §5.4（003 迁移） |
+| 做翻译/OCR | phase3 §10.5 + phase1 §5.5（translate_history） |
+| 做 Wiki/RAG | phase3 §10.1-10.2 + phase1 §5.3（002 迁移） |
+| 做工具审批（HITL） | phase2 §10.10 + phase1 §8.3（tool:approval 事件） |
+| 加安全护栏 | phase3 §10.12 + phase1 §12（安全设计） |
+| 做上下文压缩 | phase3 §13.1（TokenBudget 统一配置） |
+| 查历史错误教训 | phase1 §14（51 条规避） |
+
 ---
 
 ## ⚠️ 关键设计约束（跨文件通用）

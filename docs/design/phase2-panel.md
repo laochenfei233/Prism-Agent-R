@@ -3,6 +3,7 @@
 > **归属**：Phase 2（面板功能）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
 > **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
 > **Updated**：2026-08-05
+> **读者假设**：面向熟悉 Rust（tokio/sqlx/serde）、Svelte 5（runes）、Tauri 2.x（IPC/WebView）的开发者；不解释语言/框架基础语法。
 > **内容**：§9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.10 人机协同（工具审批）
 > **依赖基础（见 `phase1-core.md`）**：设计令牌/组件库（§9.1-9.4）、对话前端（§9.5-9.8）、数据库（§5 含 §5.7 分页/索引）、IPC 命令（§8）、工作流引擎（§10.6）、记忆基础（§10.7）
 > **依赖基础（见 `phase3-extend.md`）**：目标监控（§10.11）、反思配置（§10.9）
