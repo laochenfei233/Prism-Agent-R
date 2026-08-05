@@ -1155,7 +1155,7 @@ CREATE INDEX idx_translate_lang_time ON translate_history(source_lang, target_la
 | 消息 < 1 万 | 全量加载无压力 |
 | 消息 1~10 万 | 游标分页 + 虚拟滚动（每次 50 条） |
 | 消息 > 10 万 | 启用数据保留策略（自动归档旧消息） |
-| 单会话消息 > 5000 | PromptBuilder 启用滑动窗口（§13.1），仅注入最近 200 条 |
+| 单会话消息 > 5000 | PromptBuilder 启用滑动窗口（§13.1，见 phase3-extend.md），仅注入最近 200 条 |
 | RAG chunks > 10 万 | 向量检索改用 HNSW 索引（`sqlite-vss` 扩展） |
 | FTS 碎片率 > 30% | 自动 `rebuild` 命令整理索引 |
 
@@ -1522,7 +1522,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `wiki:read-page` | `{wiki_id, path}` | `{content}` |
 | `wiki:write-page` | `{wiki_id, path, content}` | `()` |
 | `wiki:list-pages` | `{wiki_id}` | `Vec<WikiPage>` |
-| `wiki:write-ai` | `{wiki_id, info, preview?}` | `{plan?}` | LLM 自动入库（preview=true 仅返回计划，§10.1.1） |
+| `wiki:write-ai` | `{wiki_id, info, preview?}` | `{plan?}` | LLM 自动入库（preview=true 仅返回计划，§10.1.1，见 phase3-extend.md） |
 | `wiki:ingest-ai` | `{wiki_id, file_path}` | `{summary}` | 导入文件 + 自动入库 |
 | `wiki:apply-plan` | `{wiki_id, plan}` | `{result}` | 用户确认计划后执行 |
 | `wiki:restore-trash` | `{wiki_id, path}` | `()` | 从 .trash 恢复已删页面 |
@@ -1645,7 +1645,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `lsp:diagnostics` | `{path}` | `Vec<Diagnostic>` | 当前文件诊断（错误/警告） |
 | `lsp:start` | `{server_id, workdir}` | `()` | 启动语言服务器 |
 | `lsp:stop` | `{server_id}` | `()` | 停止语言服务器 |
-| `lsp:detect` | `{workdir}` | `Vec<LspCandidate>` | 推断候选 LSP（Phase 2，§9.10.7，无进程启动） |
+| `lsp:detect` | `{workdir}` | `Vec<LspCandidate>` | 推断候选 LSP（Phase 2，§9.10.7 见 phase2-panel.md，无进程启动） |
 
 **Agent 上下文域** `commands/context.rs`（侧边栏聚合）
 
@@ -3084,7 +3084,7 @@ pub fn quarantine_checkpoint(sid: &str) -> Result<(), AppError> { ... }
 
 #### 10.7.4 注入与召回（Active Recall）🟧 Phase 2
 
-**上下文重建注入**（对齐 MiMo-Code 的注入分段，token 预算可配置，与 §13.1 TokenBudget 对齐）：
+**上下文重建注入**（对齐 MiMo-Code 的注入分段，token 预算可配置，与 §13.1 TokenBudget 对齐，见 phase3-extend.md）：
 
 | 段 | 内容 | 预算（默认） |
 |----|------|--------------|
@@ -3373,7 +3373,7 @@ impl serde::Serialize for AppError {
 | 24 | **审批续跑缺失**：现有 IPC 只 patch 不续跑，审批后模型不再继续 | 工具审批后对话停住 | 工具审批流程状态机显式：tool_call → 等待审批 → 批准后回填 tool 消息 → 继续生成（§7.3 agentic loop 已含） |
 | 25 | **流状态缓存写错侧**：stream 状态缓存必须由主进程 setShared，渲染端写无效 | 刷新后流状态丢失/空白 | 流状态一律后端管理（ChatService.active_streams），前端只读 |
 | 26 | **编辑重发卡"正在回复"**：stop 流程未先清 state | 界面永久 loading | stop/abort 处理顺序：先清 active_streams 状态，再 emit aborted，最后前端清 UI 状态 |
-| 27 | **fs.watch recursive 构造抛错（Linux）**：Windows 支持但 Linux 部分版本抛异常 | 文件监听崩溃 | 目录监听失败时降级为轮询（mtime 间隔 2s），不阻断功能（§9.10.7 fs:watch） |
+| 27 | **fs.watch recursive 构造抛错（Linux）**：Windows 支持但 Linux 部分版本抛异常 | 文件监听崩溃 | 目录监听失败时降级为轮询（mtime 间隔 2s），不阻断功能（§9.10.7 fs:watch，见 phase2-panel.md） |
 
 ### 14.3 存储与持久化类
 
@@ -3449,7 +3449,7 @@ impl serde::Serialize for AppError {
 | # | 旧版缺陷 | 后果 | 本版规避方案 |
 |---|----------|------|--------------|
 | 33 | **新增 IPC 通道漏同步**：通道名/preload/handler/服务/前端 5 处必须一致 | "is not a function" | Rust 侧 `#[tauri::command]` 单点定义 + 前端 `invoke()` 泛型封装；命令名以 `域:动作` 常量集中（§8.2 清单），禁止散落字符串 |
-| 34 | **高频流数据用错通道**：音频块走 invoke（promise 开销/背压） | 音频丢帧、卡顿 | 高频流（音频块/流式增量）走 `listen/emit` 事件（§7.2、§10.3.2），invoke 仅用于请求-响应 |
+| 34 | **高频流数据用错通道**：音频块走 invoke（promise 开销/背压） | 音频丢帧、卡顿 | 高频流（音频块/流式增量）走 `listen/emit` 事件（§7.2、§10.3.2 见 phase3-extend.md），invoke 仅用于请求-响应 |
 | 35 | **事件订阅无清理**：Electron ipcRenderer 无 `off`，泄漏监听 | 内存泄漏、重复触发 | Tauri `listen()` 返回 unlisten 函数，组件卸载时清理（§7.5 前端封装已含） |
 | 36 | **配置合并用 `partial \|\| default`**：partial 为 truthy 时丢弃默认字段 | 配置静默丢失 | 配置合并一律 `{...default, ...partial}`（Rust 侧用 serde 默认值 + 显式 merge） |
 | 37 | **虚拟 ID 误查实体表**：agent-session 是虚拟 topicId，误查 topic 表 → NOT_FOUND | 错误指向不明 | 分层查询先辨类型（session 虚拟 id vs 实体 id），错误信息带上下文 |

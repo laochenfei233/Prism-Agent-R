@@ -257,7 +257,7 @@ pub async fn hybrid_search(&self, wiki_id: &str, query: &str, top_k: usize) -> R
 
 #### 10.2.1 项目级 RAG 自动索引（后续迭代，[S5] 🔸 低）
 
-**定位**：工作目录变更自动增量索引（复用 fs:watch，§9.10.7）。
+**定位**：工作目录变更自动增量索引（复用 fs:watch，§9.10.7，见 phase2-panel.md）。
 
 **实现方案**：
 - **触发**：`fs:watch` 已在 phase2 实现目录监听（§9.10.7）——新增/变更/删除文件 → 增量索引
@@ -271,7 +271,7 @@ pub async fn hybrid_search(&self, wiki_id: &str, query: &str, top_k: usize) -> R
   ```
 - **去抖**：连续变更合并为一次批处理（debounce 5s）；大目录首索引走后台任务（进度 `rag:progress`）
 - **隔离**：项目索引独立命名空间（`wiki_id = '__project__'` 或独立表 `project_index`），不污染用户 Wiki
-- **查询**：Agent 会话注入「项目索引就绪」标记 → PromptBuilder 可按需检索（与 §10.7 记忆互补）
+- **查询**：Agent 会话注入「项目索引就绪」标记 → PromptBuilder 可按需检索（与 §10.7 记忆互补，见 phase1-core.md）
 - **开关**：设置页可关（默认开，仅对 `workspace:set` 绑定过的目录生效）；索引状态显示在侧边栏文件 Tab
 
 **可能错误 + 处理方法**：

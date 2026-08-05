@@ -240,7 +240,7 @@ pub struct TaskInput {
 | `task:validate` | `{definition}` | `{ok, errors}` | 画布保存前校验（环检测/变量引用/工具存在性） |
 | `task:rerun` | `{run_id, inputs?}` | `{run_id}` | 用相同定义重跑（历史列表复用） |
 
-**后端执行**：`task:run` 将 `TaskDefinition` 转换为 `Workflow`（`WorkflowStage` 映射），交给 `WorkflowEngine.run()`（§10.6），事件流与预置工作流完全一致。**模板与自定义任务共用同一执行引擎，零额外路径。**
+**后端执行**：`task:run` 将 `TaskDefinition` 转换为 `Workflow`（`WorkflowStage` 映射），交给 `WorkflowEngine.run()`（§10.6，见 phase1-core.md），事件流与预置工作流完全一致。**模板与自定义任务共用同一执行引擎，零额外路径。**
 
 ### 9.10 Agent 侧边栏（Agent Context Sidebar）
 
@@ -549,7 +549,7 @@ pub struct LspServerInfo {
 }
 ```
 
-**协议实现**：LSP 客户端通过 `lsp-types` + 轻量 JSON-RPC 通道连接子进程（stdio），订阅 `textDocument/publishDiagnostics`；与 MCP 传输层复用 JSON-RPC 基础设施。服务器是否安装检测：`which` 查找可执行文件（**Windows 用 `where`，见 §14.5**），未安装 → 状态"未安装" + 显示安装命令提示（安装命令按平台区分，如 `cargo install rust-analyzer` / `npm i -g typescript-language-server` 通用，`pyright` 用 `pip install pyright`）。
+**协议实现**：LSP 客户端通过 `lsp-types` + 轻量 JSON-RPC 通道连接子进程（stdio），订阅 `textDocument/publishDiagnostics`；与 MCP 传输层复用 JSON-RPC 基础设施。服务器是否安装检测：`which` 查找可执行文件（**Windows 用 `where`，见 phase1-core.md §14.5**），未安装 → 状态"未安装" + 显示安装命令提示（安装命令按平台区分，如 `cargo install rust-analyzer` / `npm i -g typescript-language-server` 通用，`pyright` 用 `pip install pyright`）。
 
 **交互规则**：
 
@@ -751,7 +751,7 @@ pub async fn install(&self, source: &str) -> Result<InstalledSkill, AppError> {
     // 1. 解析 install_source 前缀（skills.sh/github/zip/local）
     // 2. 依赖预检：github 需 git 命令可用；zip 需解压库；skills.sh 需网络
     //    → 失败返回可读错误（如 "未检测到 git，请先安装"）
-    // 3. 执行安装（§10.4 主流程）
+    // 3. 执行安装（§10.4 主流程，见 phase1-core.md）
     // 4. 安装后自动 health-check：SKILL.md 可解析 + 引用脚本存在
     // 5. 返回 InstalledSkill（含 folder_name/版本/启用状态）
 }
