@@ -255,6 +255,25 @@ pub async fn hybrid_search(&self, wiki_id: &str, query: &str, top_k: usize) -> R
 进度走 rag:progress 事件；失败标记 error
 ```
 
+#### 10.2.1 项目级 RAG 自动索引（后续迭代，[S5] 🔸 低）
+
+**定位**：工作目录变更自动增量索引（复用 fs:watch，§9.10.7）。
+
+**实现方案**：
+- **触发**：`fs:watch` 已在 phase2 实现目录监听（§9.10.7）——新增/变更/删除文件 → 增量索引
+- **索引对象**：工作目录下的代码/文档文件（白名单扩展名：md/txt/rs/ts/svelte/json/yaml/toml 等），排除 .git/node_modules/target（复用 §9.10.6 忽略规则）
+- **增量策略**：
+  ```
+  fs:watch 事件 → 文件指纹比对（path+mtime+size）
+    ├─ 新增/变更 → file:parse → chunk → embed → rag_chunks upsert
+    ├─ 删除 → 删除对应 rag_documents + rag_chunks
+    └─ 批处理（debounce 5s，避免连续保存风暴）
+  ```
+- **去抖**：连续变更合并为一次批处理（debounce 5s）；大目录首索引走后台任务（进度 `rag:progress`）
+- **隔离**：项目索引独立命名空间（`wiki_id = '__project__'` 或独立表 `project_index`），不污染用户 Wiki
+- **查询**：Agent 会话注入「项目索引就绪」标记 → PromptBuilder 可按需检索（与 §10.7 记忆互补）
+- **开关**：设置页可关（默认开，仅对 `workspace:set` 绑定过的目录生效）；索引状态显示在侧边栏文件 Tab
+
 ### 10.3 会议纪要系统详细设计
 
 **参考实现**：prism-agent 原项目（`MeetingService.ts` / `AsrServiceFactory.ts` / `AudioStreamManager.ts` / `ExportService.ts` / `MeetingToAgentService.ts`）与 **huiji（言记）**（`asr_service.dart` 1202 行 / `sherpa_adapter.dart` / `model_download_service.dart` / `audio_recorder_service.dart`）。本设计吸收两者的架构，并**扩展为多 ASR 后端可插拔架构**——不再局限于 MiMo 与 FunASR。
@@ -757,6 +776,24 @@ CREATE TABLE asr_configs (
     updated_at  INTEGER NOT NULL
 );
 ```
+
+#### 10.3.9 TTS 播报（后续迭代，[S5] 🔸 低，[S3] 暂缓）
+
+**定位**：会议纪要/通知语音播报。[S3] 明确「语音合成（TTS）本次不做」，此为后续候选。
+
+**实现方案**：
+- **TTS 后端选择**：
+  | 后端 | 类型 | 优点 | 依赖 |
+  |------|------|------|------|
+  | 系统 TTS | 本地（Web Speech API / 系统合成） | 零依赖、离线 | WebView 能力 |
+  | 云端 TTS | 在线 API（DashScope/MiMo） | 音质好、多音色 | 网络 + Key |
+  | 本地引擎 | espeak/edge-tts | 离线、可控 | 二进制打包 |
+
+- **播报内容**：会议「待办事项」播报（摘要生成后可选）、通知（任务完成/预警）、长文分段朗读
+- **前端**：`Speaker.svelte` 组件（播放/暂停/停止/语速）；Web Speech API 优先，降级云端
+- **与会议集成**：`meeting:summary` 完成后 → 「🔊 播报待办」按钮 → TTS 读「行动项」小节
+- **命令**：`tts:speak {text, lang?, rate?}` / `tts:stop` / `tts:voices`（列出可用音色）
+- **注意**：播报不打断 Agent 工作流（独立通道）；长文本分段 + 队列（复用 §10.3.3 音频通道的并发控制思路）
 
 ### 10.5 翻译 + OCR 详细设计
 

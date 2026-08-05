@@ -1174,6 +1174,62 @@ pub async fn query_with_timing<T>(
 }
 ```
 
+### 5.8 云端同步（后续迭代，[S5] ⭐ 高）
+
+**定位**：配置/Agent/工作流/记忆跨设备同步，WebDAV/S3 后端。已在 [S3] 列为后续迭代。
+
+**同步内容分层**：
+
+| 层级 | 内容 | 同步策略 |
+|------|------|---------|
+| 配置 | preferences / providers（Key 不同步） | 全量覆盖（冲突取新） |
+| Agent 定义 | agents + agent_skills + agent_mcp_servers | 全量覆盖 + 冲突合并（按 updated_at） |
+| 工作流模板 | workflows（source=user）+ stage_templates | 全量覆盖 |
+| 记忆 | global/ + projects/ 的 MEMORY.md | 文件级同步（fingerprint 比对） |
+| 会话/消息 | **不同步**（本地私有，体量大） | — |
+| 数据库文件 | **不同步**（SQLite 不适合并发合并） | — |
+
+**实现方案**：
+
+```rust
+// data/sync/sync_service.rs
+pub struct SyncService {
+    backend: Box<dyn SyncBackend>,       // WebDAV | S3
+    state: Mutex<SyncState>,             // 上次同步指纹
+}
+
+#[async_trait]
+pub trait SyncBackend: Send + Sync {
+    async fn push(&self, path: &str, data: &[u8]) -> Result<(), SyncError>;
+    async fn pull(&self, path: &str) -> Result<Option<Vec<u8>>, SyncError>;
+    async fn list(&self, prefix: &str) -> Result<Vec<String>, SyncError>;
+}
+
+/// 同步单元 = 导出的 JSON 快照（含 schema 版本号）
+pub struct SyncSnapshot {
+    pub schema_version: u32,             // 迁移 001-013 任一版本
+    pub entries: Vec<SyncEntry>,         // {path, fingerprint, content}
+}
+```
+
+**同步流程**：
+1. 用户配置后端（WebDAV URL/凭据 或 S3 bucket），凭据用 §12 AES-GCM 加密存 preferences
+2. 手动触发或定时（默认 30min）`sync:push` / `sync:pull`
+3. **冲突策略**：同 path 且双方都有变更 → 保留 updated_at 新的；双方相同 → 跳过
+4. 拉取前校验 schema_version 兼容（高版本数据拒绝降级导入）
+5. 敏感操作（首次连接/全量覆盖）走 §10.10 审批模式
+
+**命令**：
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `sync:config` | `{backend, url?, bucket?, ...}` | `SyncStatus` |
+| `sync:push` | `{scope?}` | `{pushed, skipped}` |
+| `sync:pull` | `{scope?}` | `{pulled, conflicts}` |
+| `sync:status` | `{}` | `SyncStatus` |
+
+**安全**：传输 TLS；数据先 AES-GCM 加密再上传（Key 派生自用户主密钥，不随云端存储）；API Key 永不上传。
+
 ---
 
 ## 6. MCP 协议集成详细设计
@@ -1788,6 +1844,39 @@ export const primitives = {
 | `--radius-xl` | 14px | 模态框、操作表（iOS 18 标准） |
 | `--radius-full` | 9999px | 圆形头像/按钮 |
 
+#### 9.1.1 主题商店（后续迭代，[S5] ⭐ 中）
+
+**定位**：用户主题上传/下载，CSS 变量覆盖实现（参考 Cherry Studio 社区主题）。
+
+**主题 = CSS 变量覆盖集**：
+
+```css
+/* theme.json —— 用户主题包结构 */
+{
+  "name": "Maple Neon",
+  "version": "1.0.0",
+  "author": "user",
+  "colors": {
+    "background": "#0F1115",
+    "primary": "#FF6B6B",
+    "accent": "#4ECDC4",
+    /* 覆盖 semantic.css 的 --color-* 任意项 */
+  },
+  "radius": { "md": "8px" },       // 可选覆盖圆角
+  "font": { "sans": "..." }        // 可选覆盖字体
+}
+```
+
+**实现方案**：
+- **存储**：`{app_data}/themes/{name}/theme.json` + 预览图；启用状态存 preferences
+- **应用机制**：主题 JSON → 生成 `:root { --color-*: ... }` 覆盖块 → 注入 `<style>`（优先级高于默认 tokens，低于 `.dark` 媒体查询）
+- **校验**：加载时校验字段类型；非法值回退默认
+- **市场**：主题打包 zip 上传（复用技能安装机制 §10.4 的 zip 解析）；本地导入 = 从 zip 解压到 themes/
+- **命令**：`theme:list` / `theme:apply {name}` / `theme:import {path}` / `theme:export {name}`
+- **限制**：主题仅覆盖已定义的 CSS 变量，不改变组件结构（避免碎片化）
+
+**前端 UI**：设置页 → 外观 → 主题列表（预览缩略图）+ [导入] [导出] + 社区浏览入口。
+
 ### 9.2 排版令牌（tokens/typography.ts）
 
 **参考**：iOS 18 Dynamic Type 完整字号系统 + Apple Design 排版规则（tracking 随字号变化、leading 与字号反比）。
@@ -2150,6 +2239,25 @@ src/lib/components/
 - SideNav 可折叠为图标模式（44px）
 - 会话列表支持搜索/固定/重命名/删除
 
+#### 9.5.1 会话归档/冻结（后续迭代，[S5] ⭐ 中）
+
+**定位**：不删除但冻结的会话，减少列表噪音（复用 pinned 机制扩展）。
+
+**设计**：
+
+| 状态 | 行为 | 存储 |
+|------|------|------|
+| 活跃（默认） | 正常显示/编辑/继续对话 | sessions 表 |
+| 归档 | 从主列表隐藏，进「归档」分区；只读查看，可解冻 | sessions 加 `archived_at INTEGER` 列 |
+
+**实现方案**：
+- **迁移**：`014_session_archive.sql`：`ALTER TABLE sessions ADD COLUMN archived_at INTEGER;`（遵循编号递增）
+- **命令**：`session:archive {id}` / `session:unarchive {id}` / `session:list {archived?}`（列表加过滤参数）
+- **前端**：会话列表顶部 Tab「全部 / 归档」；右键菜单加「归档/解冻」；归档会话打开只读（Composer 禁用）
+- **归档判定**：不自动归档（用户手动），后续可加「超过 N 天未活跃自动归档」选项（复用 §5.7.6 空会话清理逻辑）
+- **与 pinned 关系**：pinned（置顶）与 archived（隐藏）互斥——置顶会话不可归档，归档后取消置顶
+- **清理**：归档超过保留期（如 180 天）的可由用户「彻底删除」，不影响 §5.7.6 的活跃数据清理
+
 ### 9.6 状态管理（Svelte 5 Runes）
 
 ```ts
@@ -2301,6 +2409,49 @@ export const chatStore = new ChatStore();
 | `Shift+Enter` | 发送消息 |
 | `Esc` | 中断生成/关闭弹窗 |
 
+#### 9.8.1 快捷指令 / 命令面板扩展（后续迭代，[S5] ⭐ 中）
+
+**定位**：⌘K 命令面板支持自定义命令序列（复用 §10.6 工作流引擎，T15 完成后可做）。
+
+**命令类型**：
+
+| 类型 | 示例 | 执行方式 |
+|------|------|---------|
+| 内置动作 | 新建会话/切换页面/打开设置 | 前端 handler |
+| 快速对话 | 「翻译这段」/「总结当前会话」 | 单 Agent 调用（RigAgent） |
+| 多步序列 | 「研究 X 并生成报告」 | 复用 WorkflowEngine（§10.6） |
+| 外部 | 打开文件/打开 URL | Tauri 命令 |
+
+**实现方案**：
+- **命令注册**：`CommandPalette` 组件（cmdk 模式，§9.4.3 已有 Command.svelte）维护 `Command[]` 列表，命令定义含 `{id, title, keywords, handler}`
+- **自定义命令**：用户编辑 `{app_data}/commands.json`（JSON：名称/触发词/动作序列）→ 启动时加载 → 动作序列映射到「对话预设 prompt」或「工作流模板」
+- **数据流**：⌘K → 输入 → 模糊匹配（keywords）→ 选中 → handler（invoke 或前端动作）
+- **与 Composer 关联**：快速对话命令自动填入 Composer 并发送（复用 §9.6 chatStore.send）
+
+**命令存储**：
+
+```json
+// {app_data}/commands.json
+{ "commands": [
+  { "id": "summarize", "title": "总结当前会话", "keywords": ["sum", "总结"],
+    "action": { "type": "chat", "prompt": "请总结本次会话的要点，输出 Markdown。" } },
+  { "id": "deep-research", "title": "深度研究", "keywords": ["research", "研究"],
+    "action": { "type": "workflow", "workflow_id": "deep-research" } }
+] }
+```
+
+#### 9.8.2 提示词模板库（后续迭代，[S5] ⭐ 中）
+
+**定位**：常用提示词片段管理，插入 Composer。
+
+**实现方案**：
+- **存储**：`prompt_templates` 表（迁移 015）或 `{app_data}/prompt-templates/` JSON 文件（简单场景用文件，避免迁移膨胀）
+- **结构**：`{id, name, category, content, variables: [name]}`——变量用 `{{var}}` 占位符，插入时弹变量填充
+- **前端**：Composer 工具栏「📋 模板」按钮 → 模板面板（搜索/分类）→ 选中 → 插入到光标处（含变量填充）
+- **命令**：`prompt:list` / `prompt:save {name, content}` / `prompt:delete {id}` / `prompt:import {path}`
+- **默认模板**：内置少量（翻译/总结/代码审查/周报），用户可增删改
+- **与技能系统关系**：模板是轻量片段（无脚本/资产），技能是完整 SKILL.md 包——两者互补，模板注入 Composer、技能注入 system prompt
+
 ## 10. 特色功能详细设计（Phase 1 部分）
 
 > 注：§10 章节分散在三个文件——本文件为 §10.4（Skill）/§10.6（工作流引擎+模板）/§10.7（记忆）/§10.8（文件）；
@@ -2362,6 +2513,26 @@ impl PromptBuilder {
 
 Phase 1 仅实现技能安装/卸载/启停/注入（本节约 10.4 主体）；市场三源搜索、去重排序、版本检测在 Phase 2 落地。
 
+#### 10.4.5 Agent 市场（后续迭代，[S5] 🔸 低）
+
+**定位**：分享/下载 Agent 配置模板（复用技能市场机制 §10.4 与 phase2 三源搜索）。
+
+**Agent 模板包**（zip）结构：
+
+```
+{agent-name}.zip
+├── agent.json            # 配置：name/description/system_prompt/model/temperature/max_tokens
+├── skills.txt            # 依赖技能名列表（安装时提示）
+├── workflows/            # 可选：预置工作流模板（复用 §10.6.4）
+└── README.md
+```
+
+**实现方案**：
+- **导出**：`agent:export {id}` → 序列化 agents 行 + 关联 skills/workflows → zip 打包（复用技能 zip 解析）
+- **导入**：`agent:import {path}` → 解压 → 校验 agent.json schema → 写入 agents 表（新 id）→ 提示依赖技能缺失
+- **市场**：复用 phase2 §10.4.1 的三源搜索框架（Agent 市场作为第 4 源或独立源）；Agent 模板包的安装走 `agent:install-from-market`
+- **安全**：导入的 Agent 视为不可信——system_prompt 仅作文本（不执行脚本）；绑定技能/工具需用户确认（§10.10 审批）
+- **与 Agent 创建关系**：导入 = 预填 AgentEditor 表单 + 一键创建（不覆盖现有 Agent）
 
 ### 10.6 多 Agent 工作流详细设计
 
@@ -2593,6 +2764,30 @@ CREATE TABLE stage_templates (
     source        TEXT NOT NULL DEFAULT 'user',   -- builtin | user
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL
+);
+```
+
+##### 10.6.4.1 工作流版本控制（后续迭代，[S5] 🔸 低）
+
+**定位**：用户模板历史版本对比/回滚（builtin 模板只读不改）。
+
+**实现方案**：
+- **版本存储**：新表 `workflow_versions`（迁移 016）——`{id, workflow_id, version, definition JSON, note, created_at}`；`workflows.definition` 为「当前版本」指针，`workflow_versions` 存全量历史
+- **触发版本**：`task:save-template` 时，若 definition 与上次不同 → 写新版本（version+1）；相同则跳过
+- **命令**：`workflow:versions {workflow_id}` → 列表 / `workflow:diff {workflow_id, v1, v2}` → JSON diff（按 stages 逐项对比）/ `workflow:rollback {workflow_id, version}` → 恢复
+- **保留策略**：默认保留最近 20 个版本（超限删最旧，复用 §5.7.6 清理模式）；可配置
+- **前端**：模板详情 → 版本历史 Tab → 版本列表（时间/备注）→ 对比视图（stage 增删改高亮）→ [回滚]
+
+```sql
+-- 迁移 016_workflow_versions.sql
+CREATE TABLE workflow_versions (
+    id          TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+    version     INTEGER NOT NULL,
+    definition  TEXT NOT NULL,                   -- JSON 快照
+    note        TEXT,
+    created_at  INTEGER NOT NULL,
+    UNIQUE (workflow_id, version)
 );
 ```
 
@@ -2953,6 +3148,38 @@ pub fn inject_active_recall(session_dir: &Path) -> String {
 - `file:parse` 支持 txt/md/pdf/doc/docx/html/json/csv/xml → 文本（`pdf-extract`、`docx-rs`、`scraper`、`html2md`）
 - 对话附件：解析后作为 user 消息 attachments 元数据，注入 prompt 或走 RAG
 
+#### 10.8.1 消息/session 导出与导入（后续迭代，[S5] ⭐ 高）
+
+**定位**：会话导出 Markdown/JSON，可导入恢复；利于备份与分享。
+
+**导出格式**：
+
+```
+┌─ Markdown（人读）                  ┌─ JSON（机读/恢复）
+│ # 会话标题                          │ { "schema_version": 1,
+│ Agent: xxx · 模型: yyy · 日期      │   "agent": {...}, "messages": [
+│ ─────────────────────             │     { "role": "user", "content": "...",
+│ **User** (12:00):                  │       "tool_calls": [...], "usage": {...} },
+│ ...                                │     ...
+└─────────────────────────────────── └   ] }
+```
+
+**实现方案**：
+- **导出范围**：单 session（`session:export {id, format}`）或批量（`session:export-all {agent_id?, format}`）
+- **Markdown 渲染**：复用前端 MarkdownViewer 逻辑（§9.4.3 composites）——后端生成纯文本，前端「导出」时含渲染内容
+- **JSON 格式**：含 schema_version + agent 快照 + 全部 messages（含 tool_calls/usage/attachments）；附件二进制单独打包（zip）或引用路径
+- **导入**：`session:import {path}` → 解析 → 校验 schema_version → 创建新 session（agent 不存在则提示选择/创建）→ 写入 messages
+- **安全**：导入内容视为不可信——Markdown 渲染走 sanitize（§12 XSS 防护）；路径字段校验防穿越
+- **限制**：导入的 tool_calls/usage 仅作展示（不重放执行）；模型不匹配时提示
+
+**命令**：
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `session:export` | `{id, format}` | `{path}` | md/json |
+| `session:export-all` | `{agent_id?, format}` | `Vec<{id, path}>` |
+| `session:import` | `{path}` | `SessionDto` |
+
 ## 11. 错误处理与日志
 
 ### 11.1 统一错误类型
@@ -3112,6 +3339,18 @@ impl serde::Serialize for AppError {
 | 托盘/窗口行为 | 无差异 | 标题栏材质差异 | 无差异 | 前端不做平台分支；系统 chrome 由 Tauri 管理 |
 | 字体链 | Segoe UI + 雅黑 | SF Pro / PingFang | Noto / 系统 | §9.2 字体链已按三平台降级 |
 | 文件系统权限 | 无 | TCC 权限提示（麦克风/文件） | 依赖发行版 | 首次使用麦克风/目录时提示；macOS 需在 Info.plist 声明用途 |
+
+#### 14.5.1 自更新（后续迭代，[S5] 🔸 低）
+
+**定位**：Tauri updater 自动更新应用本体。
+
+**实现方案**：
+- **Tauri updater**：`tauri-plugin-updater`（2.x 内置）——后端更新服务器提供 JSON 清单（版本/签名/下载 URL），前端 `check()` → `download()` → `install()` + 重启
+- **发布产物**：`tauri build` 时生成更新包（Windows NSIS、macOS dmg、Linux AppImage/deb）+ `.sig` 签名（ed25519 私钥在 CI 环境变量）
+- **签名**：更新包必须签名；客户端公钥内嵌，验签失败拒绝安装（防供应链攻击，呼应 §12 安全）
+- **检查策略**：启动时 + 手动「检查更新」；静默下载、安装前提示重启
+- **回滚**：Tauri updater 支持回滚到上一版本（`app.setVersion` 前的备份）；异常启动（连续崩溃）自动回滚提示
+- **注意**：CI 三平台各自原生 runner 生成更新包（§14.5 打包格式表），发布动作显式控制（§14.7 #49 教训）
 
 ### 14.6 IPC / 命令层 / 前端渲染类（必须规避）
 
