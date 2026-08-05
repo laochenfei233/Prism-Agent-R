@@ -20,9 +20,9 @@ platform: windows | macos | linux
 
 | 文件 | 阶段 | 内容 | 约行数 |
 |------|------|------|--------|
-| [`phase1-core.md`](../design/phase1-core.md) | **Phase 1 — Agent 核心闭环** | §3 后端三层架构 · §4 目录结构 · §5 数据库（含 §5.7 数据存储跨阶段基础：PRAGMA/消息FTS/分页/保留/索引） · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础（设计系统+对话） · §10.4 Skill（含市场搜索详设） · §10.6 工作流引擎+模板系统 · §10.7 记忆系统（完整设计） · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能基线（§13.1 见 phase3） · §14 旧版规避 | ~3220 |
-| [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~760 |
-| [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~1760 |
+| [`phase1-core.md`](../design/phase1-core.md) | **Phase 1 — Agent 核心闭环** | §3 后端三层架构 · §4 目录结构 · §5 数据库（含 §5.7 数据存储跨阶段基础：PRAGMA/消息FTS/分页/保留/索引） · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础（设计系统+对话） · §10.4 Skill（含市场搜索详设） · §10.6 工作流引擎+模板系统 · §10.7 记忆系统（完整设计） · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能基线（§13.1 见 phase3） · §14 旧版规避 | ~3150 |
+| [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~865 |
+| [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~1770 |
 | 本文件 | 总览 | 设计模式参考 · 问题定义 · 架构总览 · 技术选型 · MVP 规划 · 各功能 MVP 清单 · Tasks · Phase 1 完成报告 | ~610 |
 
 **阅读建议**：
@@ -30,6 +30,24 @@ platform: windows | macos | linux
 - **做 Phase 2/3 任务**：读对应阶段文件；若涉及后端基础（数据库/流式/IPC 命名），回查 `phase1-core.md`。
 - **数据存储是横切关注点**：§5.7 完整设计在 `phase1-core.md`（建库即做 PRAGMA/索引/分页/保留策略）；Phase 2/3 各阶段的 FTS 搜索补充在对应文件（§5.7.4 会话→迁移 012 / §5.7.5 翻译→迁移 013）。新增表/索引必须同步更新 §5.7.7 关键索引，且**迁移编号必须递增**（§14.3 #28：禁止在已应用迁移上追加）。
 - **跨文件引用**：各文件保留原章节编号（§N），引用时按「阶段文件 → §N」定位；§9/§10 章节头分散在多个文件（§9.1-9.8 在 phase1、§9.9-9.10 在 phase2；§10.1-10.3/10.5/10.9-10.13 在 phase3、§10.4/10.6-10.8 在 phase1）。
+
+**迁移编号总表**（唯一权威，新增迁移必须在此登记并递增编号）：
+
+| 迁移 | 内容 | 表 | 定义位置 | 阶段 |
+|------|------|-----|---------|------|
+| 001_init | 核心表 | providers/models/agents/sessions/messages/skills/mcp_servers + 关联表 | phase1 §5.2 | 🟦 |
+| 002_rag | RAG 表 | wikis/rag_documents/rag_chunks | phase1 §5.3 | 🟩 |
+| 003_meeting | 会议表 | meetings/meeting_transcripts | phase1 §5.4 | 🟩 |
+| 004_workflow | 工作流/翻译/偏好 | workflows/workflow_runs/translate_history/preferences | phase1 §5.5 | 🟦 |
+| 005_glossary | 术语表 | glossary_terms | phase3 §10.5.2 | 🟩 |
+| 006_memory | 记忆 FTS | memory_fts | phase1 §10.7.2 | 🟧 |
+| 007_workflow_templates | 阶段模板 | stage_templates | phase1 §10.6.4 | 🟧 |
+| 008_agent_traces | 评估轨迹 | agent_traces | phase3 §10.13.1 | 🟩 |
+| 009_message_search | 消息 FTS | messages_fts | phase1 §5.7.2 | 🟦 |
+| 010_indexes | 性能索引 | idx_messages_id 等 | phase1 §5.7.7 | 🟦 |
+| 011_asr | ASR 配置 | asr_configs + meetings 扩展 | phase3 §10.3.8 | 🟩 |
+| 012_session_fts | 会话标题 FTS | sessions_fts | phase2 §5.7.4 | 🟧 |
+| 013_translate_fts | 翻译历史 FTS | translate_fts | phase3 §5.7.5 | 🟩 |
 
 > ⚠️ **本文档由原单文件 `docs/compose/specs/prism-agent-r.md` 按阶段拆分而来**，章节编号与设计内容保持不变。
 
@@ -327,6 +345,131 @@ Prism Agent R 对应：
 - **语音合成（TTS）**：本次不做
 - **本地大模型推理**：Ollama 仅作为远程 provider 接入，不在应用内嵌推理引擎
 
+## [S4] 各模块错误处理矩阵
+
+> **用途**：每个功能模块的常见错误 → 检测方式 → 处理策略 → 用户反馈。实现时按本矩阵落地错误处理，避免遗漏。详细错误类型定义见 phase1-core.md §11；本矩阵为跨模块的运维视角汇总。
+
+### 1. Agent 核心 / LLM 调用（phase1 §3/§7）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| Provider 超时 | 请求超时（可配置，默认 30s） | 重试 1 次（指数退避）→ 仍失败则中止 | 提示「请求超时，已重试，请检查网络」 |
+| API Key 无效（401） | 响应状态码 | 不重试，标记 provider 不可用 | 引导到设置页更新 Key |
+| 配额不足（429） | 响应状态码 + 重试头 | 退避重试（30s）→ 仍失败则暂停该 provider | 「配额已用尽，请稍后或切换模型」 |
+| 模型不存在（400/404） | 响应错误码 | 标记模型失效，`model:list` 刷新 | 「模型不可用，请重新选择」 |
+| 上下文溢出 | provider 返回 overflow 错误 | §13.1 上下文压缩（Head/Tail 选择） | 自动压缩，无需用户干预 |
+| 流中断（网络断开） | 流式连接断开 | `chat:stream:error` + 保留已收内容 | 可点击「继续生成」恢复 |
+| 工具调用循环卡死 | 超过 max_iterations | 强制终止 + 记录轨迹 | 「达到最大迭代次数，已停止」 |
+
+### 2. 数据库 / 存储（phase1 §5）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| 数据库损坏（SQLITE_CORRUPT） | 查询异常 | 备份 `prism.db` → 重建空库 → 恢复日志 | 「数据库损坏，已重建并备份旧文件」 |
+| 磁盘空间不足 | 写入失败（ENOSPC） | 触发数据保留策略（§5.7.6）清理旧数据 | 「磁盘空间不足，已自动清理」 |
+| 迁移失败 | sqlx migrate 异常 | 单迁移 try/catch 隔离，失败不阻断启动（§14.3#30） | 日志告警，继续启动 |
+| 写锁冲突（busy） | busy_timeout 超时 | 5s 重试 → 仍失败则报错 | 「数据库繁忙，请重试」 |
+| 消息表膨胀 | 行数监控 | 游标分页 + 数据保留策略（§5.7.8） | 无感（自动） |
+
+### 3. MCP 协议（phase1 §6）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| MCP 进程崩溃 | 子进程退出监听 | 状态置 Error + 日志缓冲 | 侧边栏红色状态 + 「重试/查看日志」 |
+| 工具调用超时 | timeout_ms（默认 30s） | 取消 + 记录 | 「工具调用超时」 |
+| 工具不存在 | tools/list 目录比对 | 报错 + 提示可用工具 | 「工具 X 不存在，可用：...」 |
+| 远程 MCP 认证失败 | OAuth/header 错误 | 状态置 Error | 引导重新授权 |
+| 工具参数错误 | 参数 schema 校验 | 拒绝 + 返回错误给 LLM | Agent 收到错误后可自纠 |
+
+### 4. 会议 / ASR（phase3 §10.3）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| 麦克风无权限 | getUserMedia 拒绝 | 引导系统权限设置 | 「请在系统设置中允许麦克风」 |
+| ASR 后端不可用 | health_check 前置 | 启动前提示 + 禁止开始 | 「所选 ASR 后端不可用，请更换」 |
+| 网络断流（云端 ASR） | WS 断开 | 自动重连（指数退避 3 次） | 「连接中断，正在重连…」 |
+| 本地模型缺失 | 模型文件检查 | 提示下载（AsrModelManager） | 「本地模型未安装，点击下载」 |
+| 转写超长 | 500KB 上限 | 截断最旧段 + 提示 | 「转写已达上限，已截断」 |
+
+### 5. 翻译 / OCR（phase3 §10.5）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| 翻译 API 失败 | 网络/HTTP 错误 | 重试 1 次 → 失败则返回缓存或原文 | 「翻译失败，已返回原文」 |
+| 语言不支持 | 语言码校验 | 明确报错 | 「不支持从 X 翻译到 Y」 |
+| OCR 识别失败 | 图片解析失败 | 降级到下一 provider（MiMo→Tesseract） | 「识别失败，已尝试备用引擎」 |
+| 术语表冲突 | 同源同目标重复 | 去重 + 提示 | 「术语已存在」 |
+
+### 6. Wiki / RAG（phase3 §10.1-10.2）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| 文档解析失败 | file:parse 异常 | 标记 error + 跳过该文件 | 「文档 X 解析失败，已跳过」 |
+| 嵌入失败 | 嵌入 API 错误 | 批量重试 → 部分失败标记 | 「部分文档嵌入失败」 |
+| 写入越界（路径穿越） | canonicalize 校验 | 拒绝该 op + 回滚（§10.1.1） | 「非法路径，操作已回滚」 |
+| write_ai 计划解析失败 | serde 解析异常 | 重试 1 次 → 返回可读错误 | 「AI 写入失败，请重试」 |
+
+### 7. 记忆系统（phase1 §10.7）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| 记忆写入失败 | 文件/DB 异常 | 重试 → 失败则跳过该次记录 | 日志告警（不打断对话） |
+| FTS 索引损坏 | 搜索异常 | 自动 rebuild + reconcile | 「记忆索引已重建」 |
+| checkpoint 校验失败 | CheckpointViolation | quarantine + 通知 writer 重试 | 无感（后台重试） |
+| 写入权限越界 | 写入沙箱校验 | 拒绝 + 日志 | 「该 agent 无权写入此记忆」 |
+
+### 8. 前端 / IPC（phase1 §8/§9）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| IPC 命令不存在 | invoke 抛错 | 前端捕获 + toast | 「命令不可用」 |
+| WebView 崩溃/重载 | 窗口事件 | 重新初始化 IPC + 恢复会话 | 「界面已恢复」 |
+| 事件订阅泄漏 | 组件卸载未清理 | listen 返回 unlisten，卸载时调用（§14.6#35） | 无感（预防性） |
+| 渲染大数据卡顿 | 性能监控 | 虚拟滚动 + content-visibility（§13） | 无感（自动） |
+
+### 9. 工作流 / 多 Agent（phase1 §10.6 + phase2 §9.9.1）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| 阶段执行失败 | 阶段返回 Err | 可配置：跳过 / 重试 / 暂停等用户决策（§10.10.2） | 时间线标红 + 选项 |
+| 模板变量引用缺失 | render_template 校验 | 构建期报错（带缺失变量名） | 「模板引用了不存在的变量 X」 |
+| 阶段图有环 | 拓扑排序失败 | 拒绝运行（task:validate） | 「检测到循环依赖」 |
+| Agent 角色不匹配 | Coordinator 查找失败 | 报错 + 建议可用角色 | 「角色 X 无对应 Agent」 |
+| 任务运行超时 | 阶段超时（默认 300s） | 中止 + 标记超时 | 「阶段 X 超时，已停止」 |
+
+### 10. 升级 / 工具审批（phase2 §10.10）
+
+| 错误场景 | 检测方式 | 处理策略 | 用户反馈 |
+|----------|---------|---------|---------|
+| 审批请求无响应 | 等待超时 | 默认拒绝 + 通知 Agent | 「审批超时，已拒绝」 |
+| 连续工具失败 | 3 次失败计数 | 暂停 + 升级给用户 | 「连续失败，建议人工介入」 |
+| 循环行为检测 | 相同操作 >5 次 | 自动中断 + 诊断报告 | 「检测到循环，已中断」 |
+
+> **跨模块原则**：所有错误统一走 `AppError`（phase1 §11.1）；重试用指数退避；前端 toast 提示与日志并存；可恢复错误（网络/超时）自动重试，不可恢复错误（权限/校验）明确反馈。
+
+## [S5] 功能建议（后续迭代候选）
+
+> **用途**：当前设计未包含但值得考虑的功能，按价值排序。非承诺，供规划参考。
+
+| 优先级 | 功能 | 说明 | 关联 |
+|--------|------|------|------|
+| ⭐ 高 | **云端同步**（WebDAV/S3） | 配置/Agent/工作流/记忆跨设备同步，加密传输；已在 [S3] 列为后续迭代 | 数据层 |
+| ⭐ 高 | **消息/session 导出与导入** | 会话导出 Markdown/JSON，可导入恢复；利于备份与分享 | §9.8/§10.8 |
+| ⭐ 高 | **用量预警** | 接近 token/费用阈值时主动通知（复用 §5.7.6 保留策略的信号） | §9.10.1 |
+| ⭐ 中 | **快捷指令/命令面板扩展** | ⌘K 面板支持自定义命令序列（复用 §10.6 工作流引擎） | §9.8 |
+| ⭐ 中 | **多窗口/独立对话窗口** | 从会话拖出独立窗口，支持同时查看多个 Agent | Tauri multiwindow |
+| ⭐ 中 | **主题商店** | 用户主题上传/下载（CSS 变量覆盖，参考 Cherry Studio） | §9.1 |
+| ⭐ 中 | **提示词模板库** | 常用提示词片段管理，插入 Composer | §9.8 |
+| ⭐ 中 | **会话归档/冻结** | 不删除但冻结的会话，减少列表噪音（复用 pinned） | §9.5 |
+| 🔸 低 | **托盘驻留 + 全局快捷键** | 后台常驻，快速唤起 | Tauri tray |
+| 🔸 低 | **Agent 市场** | 分享/下载 Agent 配置模板（复用技能市场机制） | §10.4 |
+| 🔸 低 | **自更新** | Tauri updater 自动更新 | 打包 |
+| 🔸 低 | **工作流版本控制** | 模板历史版本对比/回滚 | §10.6.4 |
+| 🔸 低 | **TTS 播报** | 会议纪要/通知语音播报（[S3] 暂缓） | 会议 |
+| 🔸 低 | **项目级 RAG 自动索引** | 工作目录变更自动增量索引（复用 fs:watch） | §10.2 |
+
+> **决策原则**：新功能优先复用现有引擎（工作流/技能/记忆/MCP），不新增孤岛；敏感操作（同步、导出、Agent 市场）需人工确认（§10.10 审批模式）。
+
 ## MVP 范围与阶段规划
 
 **目标**：先交付可用的 Agent 核心闭环——创建 Agent → 对话 → 流式生成 → 工具/MCP 调用 → 多 Agent 任务 → 记忆，配合最简对话界面。面板（主页面板/侧边栏）与扩展功能（Wiki/RAG、翻译/OCR、会议）在 MVP 之后迭代。
@@ -440,9 +583,9 @@ Prism Agent R 对应：
 
 | 阶段 | MVP 内容 | 验收标准 |
 |------|---------|---------|
-| 🟦 | 三栏布局（SideNav/ContentArea/RightPanel）+ MessageList/Composer/ModelSelector + chat:stream:* 事件全量 + 取消（abort）+ 会话切换/搜索/固定 | 完整对话体验，流式可中断 |
-| 🟧 | 会话自动重命名（AI 生成标题）+ 编辑重发 + ToolCallCard 过程展示 + 快捷指令（⌘K） | 对话增强功能可用 |
-| 🟩 | 上下文压缩（§13.1：压力等级/工具裁剪/Head-Tail/溢出恢复）+ 消息全文搜索（009_message_search） | 长会话流畅，历史可搜索 |
+| 🟦 | 三栏布局（SideNav/ContentArea/RightPanel）+ MessageList/Composer/ModelSelector + chat:stream:* 事件全量 + 取消（abort）+ 会话切换/搜索/固定 + **消息全文搜索（009_message_search，§5.7.2）** | 完整对话体验，流式可中断，历史可搜索 |
+| 🟧 | 会话自动重命名（AI 生成标题）+ 编辑重发 + ToolCallCard 过程展示 + 快捷指令（⌘K）+ 会话标题搜索（012_session_fts，§5.7.4） | 对话增强功能可用 |
+| 🟩 | 上下文压缩（§13.1：压力等级/工具裁剪/Head-Tail/溢出恢复）+ 翻译历史搜索（013_translate_fts，§5.7.5） | 长会话流畅 |
 
 ### 7. 主页面板（§9.9）
 
@@ -531,39 +674,39 @@ Prism Agent R 对应：
 
 **Phase 1 — MVP（Agent 核心闭环）**
 
-- [ ] T1: 项目初始化 — Tauri 2.x + Svelte 5 + SvelteKit 脚手架、Cargo 工作区、Vite 配置、**CI 三平台构建矩阵（Windows/macOS/Linux）** (covers: S2-1, S2-2)
-- [ ] T2: 设计系统（MVP 子集） — 设计令牌（colors/typography/spacing/motion）、glass 工具类、基础组件库 15+ (covers: S2-9.1~9.4; depends: T1)
-- [ ] T3: 数据库层 — sqlx 连接池 + 11 个迁移 + 全部模型 (covers: S2-5; depends: T1)
-- [ ] T4: ADK 组件层 — ModelProvider/ToolExecutor/MemoryStore Trait + PromptBuilder + AgentError (covers: S2-3.2; depends: T3)
-- [ ] T5: Rig 核心层 — RigAgent agentic loop + 流式管道 + 内置工具 + Provider 适配器（MVP 先 OpenAI/Ollama，其余 Phase 3 补） (covers: S2-3.3, S2-7; depends: T4)
-- [ ] T6: 服务层（MVP 子集） — Agent/Session/Chat/Model 服务；dashboard/usage/workspace/lsp 命令随 Phase 2 落地 (covers: S2-8; depends: T3, T5)
-- [ ] T8: MCP 层（MVP 子集） — McpTransport stdio/http 两传输 + McpRuntime + 工具目录缓存 + commands (covers: S2-6; depends: T5)
-- [ ] T9: 技能系统（MVP 子集） — 安装/卸载/启停 + PromptBuilder 注入；市场三源搜索随 Phase 2 (covers: S2-10.4; depends: T4, T8)
-- [ ] T15: AutoAgents 编排（MVP 子集） — Actor/Coordinator/WorkflowEngine + "深度研究"预置工作流 + render_template；其余模板随 Phase 2 (covers: S2-3.4, S2-10.6; depends: T5)
-- [ ] T16: 记忆系统（MVP 子集） — 分层记忆（global/projects/sessions）+ 会话注入；FTS 搜索/checkpoint-writer 随 Phase 2 (covers: S2-10.7; depends: T3, T5)
-- [ ] T11: 对话前端（MVP 核心，不依赖侧边栏） — 三栏布局 AppShell + MessageList/Composer/流式渲染 + 会话管理 (covers: S2-9.5~9.8; depends: T2, T6)
+- [ ] T1: 项目初始化 — Tauri 2.x + Svelte 5 + SvelteKit 脚手架、Cargo 工作区、Vite 配置、**CI 三平台构建矩阵（Windows/macOS/Linux）** (covers: 索引 §1/§2)
+- [ ] T2: 设计系统（MVP 子集） — 设计令牌（colors/typography/spacing/motion）、glass 工具类、基础组件库 15+ (covers: phase1 §9.1-9.4; depends: T1)
+- [ ] T3: 数据库层 — sqlx 连接池 + 11 个迁移 + 全部模型 (covers: phase1 §5; depends: T1)
+- [ ] T4: ADK 组件层 — ModelProvider/ToolExecutor/MemoryStore Trait + PromptBuilder + AgentError (covers: phase1 §3.2; depends: T3)
+- [ ] T5: Rig 核心层 — RigAgent agentic loop + 流式管道 + 内置工具 + Provider 适配器（MVP 先 OpenAI/Ollama，其余 Phase 3 补） (covers: phase1 §3.3/§7; depends: T4)
+- [ ] T6: 服务层（MVP 子集） — Agent/Session/Chat/Model 服务；dashboard/usage/workspace/lsp 命令随 Phase 2 落地 (covers: phase1 §8; depends: T3, T5)
+- [ ] T8: MCP 层（MVP 子集） — McpTransport stdio/http 两传输 + McpRuntime + 工具目录缓存 + commands (covers: phase1 §6; depends: T5)
+- [ ] T9: 技能系统（MVP 子集） — 安装/卸载/启停 + PromptBuilder 注入；市场三源搜索随 Phase 2 (covers: phase1 §10.4; depends: T4, T8)
+- [ ] T15: AutoAgents 编排（MVP 子集） — Actor/Coordinator/WorkflowEngine + "深度研究"预置工作流 + render_template；其余模板随 Phase 2 (covers: phase1 §3.4/§10.6; depends: T5)
+- [ ] T16: 记忆系统（MVP 子集） — 分层记忆（global/projects/sessions）+ 会话注入；FTS 搜索/checkpoint-writer 随 Phase 2 (covers: phase1 §10.7; depends: T3, T5)
+- [ ] T11: 对话前端（MVP 核心，不依赖侧边栏） — 三栏布局 AppShell + MessageList/Composer/流式渲染 + 会话管理 (covers: phase1 §9.5-9.8; depends: T2, T6)
 
 **Phase 2 — 面板功能**
 
-- [ ] T10: **Agent 侧边栏** — AgentSidebar 六 Tab 详设（用量进度条/工作目录切换/指令文件注入/LSP 检测与诊断/文件树懒加载） + context:agent 聚合命令 + session:inject-file/lsp:detect/fs:watch 命令 (covers: S2-9.10, S2-9.10.1~9.10.7; depends: T2, T6, T7, T15)
-- [ ] T7: **主页面板** — HomePage + AgentLauncher + UsageStats/Chart + Skill/Mcp Overview + 多 Agent 任务设计区（TaskDesigner 画布/运行器/历史） + task 命令 (covers: S2-9.9, S2-9.9.1; depends: T2, T6, T9, T15)
-- [ ] T11 增强: 对话前端嵌入 Agent 侧边栏（T10 完成后合并） (covers: S2-9.10; depends: T10)
-- [ ] T9 补充: 市场三源搜索（协议细节/去重排序/缓存） (covers: S2-10.4.1~10.4.4; depends: T9)
-- [ ] T6 补充: dashboard/usage/workspace/lsp 命令 + 单价表与用量聚合 (covers: S2-9.9 数据源; depends: T6, T10)
-- [ ] T19: **人机协同（HITL）** — 工具审批流程（ToolApprovalRequest/Response + ToolApprovalDialog） + RiskLevel 分级 + 升级机制 + 会话级始终批准 (covers: S2-10.10, S2-10.10.1~10.10.2; depends: T5, T6, T10, T11)
+- [ ] T10: **Agent 侧边栏** — AgentSidebar 六 Tab 详设（用量进度条/工作目录切换/指令文件注入/LSP 检测与诊断/文件树懒加载） + context:agent 聚合命令 + session:inject-file/lsp:detect/fs:watch 命令 (covers: phase2 §9.10; depends: T2, T6, T7, T15)
+- [ ] T7: **主页面板** — HomePage + AgentLauncher + UsageStats/Chart + Skill/Mcp Overview + 多 Agent 任务设计区（TaskDesigner 画布/运行器/历史） + task 命令 (covers: phase2 §9.9; depends: T2, T6, T9, T15)
+- [ ] T11 增强: 对话前端嵌入 Agent 侧边栏（T10 完成后合并） (covers: phase2 §9.10; depends: T10)
+- [ ] T9 补充: 市场三源搜索（协议细节/去重排序/缓存） (covers: phase1 §10.4.1~10.4.4; depends: T9)
+- [ ] T6 补充: dashboard/usage/workspace/lsp 命令 + 单价表与用量聚合 (covers: phase2 §9.9 数据源; depends: T6, T10)
+- [ ] T19: **人机协同（HITL）** — 工具审批流程（ToolApprovalRequest/Response + ToolApprovalDialog） + RiskLevel 分级 + 升级机制 + 会话级始终批准 (covers: phase2 §10.10; depends: T5, T6, T10, T11)
 
 **Phase 3 — 扩展功能**
 
-- [ ] T12: Wiki + RAG — WikiService + write_ai 计划执行（结构化操作/校验回滚/工具接入）+ 分块/嵌入/混合检索 + 摄取后台任务 + 前端知识库页 (covers: S2-10.1, S2-10.1.1, S2-10.2; depends: T3, T5)
-- [ ] T13: 翻译 + OCR — TranslateService（多 Provider/批量/文件翻译/术语表/缓存）+ OcrService 多后端 + 前端翻译页 (covers: S2-10.5, S2-10.5.1~10.5.4; depends: T5)
-- [ ] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + 前端 (covers: S2-10.3, S2-10.3.1~10.3.8; depends: T5, T6)
-- [ ] T17: 安全与设置 — Key 加密存储 + capabilities 权限 + 设置页 (covers: S2-12; depends: T6)
-- [ ] T20: **反思模式（Reflection）** — ReflectionConfig + run_reflection_loop + 评审者 Agent 配置 + StageTemplate 反思字段 + 前端反思循环展示 (covers: S2-10.9; depends: T5, T15)
-- [ ] T21: **安全护栏（Guardrails）** — GuardrailPipeline + InjectionDetector + ToxicityFilter + 输入/输出过滤器接口 + 前端护栏配置 (covers: S2-10.12; depends: T5, T6)
-- [ ] T22: **目标设定与监控** — TaskGoal/GoalCriterion 数据结构 + GoalMonitor 运行时评估 + 前端目标进度条 (covers: S2-10.11; depends: T15, T7)
-- [ ] T23: **评估与监控** — AgentTrace 轨迹记录 + agent_traces 表 + AgentJudge LLM-as-Judge + 性能仪表盘（agent:stats）+ 前端评估 Tab (covers: S2-10.13; depends: T6, T10)
-- [ ] T24: **上下文压缩** — CompactionAgent + ContextWindow + 压力等级 + 工具输出裁剪（soft trim/hard prune）+ Head/Tail 选择 + 溢出检测与恢复 + 微压缩 + TokenBudget 统一配置 (covers: S2-13.1; depends: T5, T16)
-- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+rpm+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: S2-11, S2-13, S2-13.1, S2-14; depends: T6, T8, T12, T15)
+- [ ] T12: Wiki + RAG — WikiService + write_ai 计划执行（结构化操作/校验回滚/工具接入）+ 分块/嵌入/混合检索 + 摄取后台任务 + 前端知识库页 (covers: phase3 §10.1-10.2; depends: T3, T5)
+- [ ] T13: 翻译 + OCR — TranslateService（多 Provider/批量/文件翻译/术语表/缓存）+ OcrService 多后端 + 前端翻译页 (covers: phase3 §10.5; depends: T5)
+- [ ] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + 前端 (covers: phase3 §10.3; depends: T5, T6)
+- [ ] T17: 安全与设置 — Key 加密存储 + capabilities 权限 + 设置页 (covers: phase1 §12; depends: T6)
+- [ ] T20: **反思模式（Reflection）** — ReflectionConfig + run_reflection_loop + 评审者 Agent 配置 + StageTemplate 反思字段 + 前端反思循环展示 (covers: phase3 §10.9; depends: T5, T15)
+- [ ] T21: **安全护栏（Guardrails）** — GuardrailPipeline + InjectionDetector + ToxicityFilter + 输入/输出过滤器接口 + 前端护栏配置 (covers: phase3 §10.12; depends: T5, T6)
+- [ ] T22: **目标设定与监控** — TaskGoal/GoalCriterion 数据结构 + GoalMonitor 运行时评估 + 前端目标进度条 (covers: phase3 §10.11; depends: T15, T7)
+- [ ] T23: **评估与监控** — AgentTrace 轨迹记录 + agent_traces 表 + AgentJudge LLM-as-Judge + 性能仪表盘（agent:stats）+ 前端评估 Tab (covers: phase3 §10.13; depends: T6, T10)
+- [ ] T24: **上下文压缩** — CompactionAgent + ContextWindow + 压力等级 + 工具输出裁剪（soft trim/hard prune）+ Head/Tail 选择 + 溢出检测与恢复 + 微压缩 + TokenBudget 统一配置 (covers: phase3 §13.1; depends: T5, T16)
+- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+rpm+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: phase1 §11/§13/§14, phase3 §13.1; depends: T6, T8, T12, T15)
 
 ---
 

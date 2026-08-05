@@ -2,6 +2,7 @@
 
 > **归属**：Phase 3（扩展功能）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
 > **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md)
+> **Updated**：2026-08-05
 > **内容**：§10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩
 > **依赖基础（见 `phase1-core.md`）**：后端三层架构/流式/IPC（§3/§7/§8）、数据库（§5 含 §5.7）、记忆系统（§10.7，含 checkpoint 节预算 §10.7.3/注入预算 §10.7.4）、工作流引擎（§10.6.1 StageTemplate）
 > **依赖基础（见 `phase2-panel.md`）**：人机协同/工具审批（§10.10）、任务定义（§9.9.1 TaskDefinition）

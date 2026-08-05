@@ -2,6 +2,7 @@
 
 > **归属**：Phase 2（面板功能）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
 > **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
+> **Updated**：2026-08-05
 > **内容**：§9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.10 人机协同（工具审批）
 > **依赖基础（见 `phase1-core.md`）**：设计令牌/组件库（§9.1-9.4）、对话前端（§9.5-9.8）、数据库（§5 含 §5.7 分页/索引）、IPC 命令（§8）、工作流引擎（§10.6）、记忆基础（§10.7）
 > **依赖基础（见 `phase3-extend.md`）**：目标监控（§10.11）、反思配置（§10.9）
@@ -636,7 +637,109 @@ pub struct SessionUsage {
 ## 10. 特色功能详细设计（Phase 2 部分）
 
 > 注：§10 章节分散在三个文件——§10.1-10.3/10.5/10.9/10.11-10.13 见 `phase3-extend.md`；§10.4/10.6-10.8 见 `phase1-core.md`；本文件为 §10.10。
+## 10. 特色功能详细设计（Phase 2 部分）
 
+> 注：§10 章节分散在三个文件——§10.1-10.3/10.5/10.9/10.11-10.13 见 `phase3-extend.md`；§10.4/10.6-10.8 见 `phase1-core.md`；本文件为 §10.10。
+> 注：§10 章节分散在三个文件——§10.1-10.3/10.5/10.9/10.11-10.13 见 `phase3-extend.md`；§10.4 主体/§10.6-10.8 见 `phase1-core.md`；本文件为 §10.4.1-10.4.4（市场搜索，自 phase1 移入）与 §10.10。
+
+### 10.4.1 三源市场搜索（Phase 2，自 phase1 §10.4 移入）
+
+> **Skill 技能系统主体（安装/注入/加载）见 phase1-core.md §10.4**；本节为市场搜索详设（T9 补充）。
+
+**市场搜索**（三源聚合，futures join_all 并发，逐源容错）：
+
+```rust
+pub async fn search_market(&self, query: &str) -> Vec<SkillSearchHit> {
+    let (a, b, c) = tokio::join!(
+        search_skills_sh(query), search_claude_plugins(query), search_clawhub(query)
+    );
+    [a, b, c].concat()   // 每源内部 try 容错
+}
+```
+
+#### 10.4.1 三源 API 协议细节
+
+| 源 | API | 参数 | 返回字段 | 备注 |
+|----|-----|------|----------|------|
+| **skills.sh** | `GET https://skills.sh/api/search` | `q` | `{name, description, author, tags, download_url}` | 官方注册中心；下载走 zip |
+| **claude-plugins.dev** | `GET https://claude-plugins.dev/api/skills` | `q` | `{name, description, github: owner/repo[/path], tags}` | 按 GitHub 仓库定位 |
+| **clawhub.ai** | `GET https://clawhub.ai/api/v1/search` | `query` | `{name, description, source, stats}` | 含 star/下载数统计 |
+
+**统一命中结构**（三源归一化）：
+
+```rust
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SkillSearchHit {
+    pub id: String,                  // 源内部 id / 唯一标识
+    pub name: String,
+    pub description: String,
+    pub source: SkillSource,         // SkillsSh | ClaudePlugins | Clawhub | Local
+    pub install_source: String,      // 安装指令："skills.sh:xxx" / "github:owner/repo[/path]" / "zip" / "local:path"
+    pub tags: Vec<String>,
+    pub author: Option<String>,
+    pub stars: Option<u64>,          // clawhub 提供，用于排序
+    pub url: Option<String>,
+    pub installed: bool,             // 是否已安装（按 name/folder_name 匹配）
+}
+```
+
+#### 10.4.2 搜索流程与去重合并
+
+```
+用户输入 query（防抖 300ms）
+→ 并发请求三源（每源 5s 超时，超时/失败静默跳过该源，不阻塞）
+→ 结果归一化为 SkillSearchHit
+→ 合并去重（按 name 归一化：小写 + 去空格 + 去"agent"/"skill"后缀）
+→ 排序（内置权值）：stars>0 优先 · 已安装排后 · 描述含精确词优先
+→ 缓存：每 query 缓存 60s（内存 LRU），翻页/筛选本地处理
+```
+
+**排序规则**（`score = 0.5·normalized_stars + 0.3·desc_relevance + 0.2·source_trust`）：
+
+| 维度 | 计算 |
+|------|------|
+| `normalized_stars` | `min(stars, 5000) / 5000`（对数缩放更佳：`log10(1+stars)/log10(5001)`） |
+| `desc_relevance` | 描述中包含完整 query → 1.0；包含任一 token → 0.5；否则 0 |
+| `source_trust` | skills.sh=1.0 / clawhub=0.9 / claude-plugins=0.8 |
+
+#### 10.4.3 前端搜索 UI（SkillMarket）
+
+```
+┌─ 技能市场 ────────────────────────────────────────┐
+│ 🔍 [搜索技能...                          ] (⌘F)   │
+│ 源过滤: [全部] [skills.sh] [Claude插件] [ClawHub]  │  ← 单选 chips
+│ ┌────────────────────┐ ┌────────────────────┐     │
+│ │ 🧩 技能名          │ │ 命中来源徽标        │     │
+│ │    描述 2 行省略   │ │ ⭐ 1.2k  · 🏷 3     │     │
+│ │    [安装]  [详情]   │ │   [已安装 ✓]        │     │
+│ └────────────────────┘ └────────────────────┘     │
+│ 加载中骨架 / 空态("未找到，试试换个关键词")          │
+│ 已加载 42 个 · 源: 3/3 可用（1 源超时已跳过）       │  ← 源健康提示
+└──────────────────────────────────────────────────┘
+```
+
+- **筛选**：源 chips + 本地过滤（tags/作者）
+- **详情**：SkillDetail 弹窗——README 预览 + 安装前置条件（依赖/权限）+ 截图（如有）
+- **安装确认**：显示来源 + 目标目录 + 磁盘占用预估 → 确认 → `skill:install` → 进度 Toast
+- **已安装标记**：名称匹配 `skills` 表 folder_name → 徽标"已安装"→ 按钮变"重新安装"
+- **本地技能**：顶部独立分区显示 `skill:list-local` 结果（项目 `.claude/skills`）
+
+#### 10.4.4 安装状态与依赖检查
+
+```rust
+pub async fn install(&self, source: &str) -> Result<InstalledSkill, AppError> {
+    // 1. 解析 install_source 前缀（skills.sh/github/zip/local）
+    // 2. 依赖预检：github 需 git 命令可用；zip 需解压库；skills.sh 需网络
+    //    → 失败返回可读错误（如 "未检测到 git，请先安装"）
+    // 3. 执行安装（§10.4 主流程）
+    // 4. 安装后自动 health-check：SKILL.md 可解析 + 引用脚本存在
+    // 5. 返回 InstalledSkill（含 folder_name/版本/启用状态）
+}
+```
+
+**重名冲突策略**：目标目录已存在 → 对比 content_hash——相同则提示"已安装最新版"；不同则询问"覆盖（备份 .bak）/ 跳过 / 装为副本"。
+
+**版本更新**：`skill:install` 同源重复执行 = 更新（hash 变更 → 覆盖 + 保留旧版 .bak + 标记 `updated_at`）；市场详情页显示"有新版本"徽标（源端 latest hash ≠ 本地 hash）。
 ### 10.10 人机协同（Human-in-the-Loop）
 
 **来源**：Agentic Design Patterns Ch.13 — 人类监督、干预与升级。

@@ -2,6 +2,7 @@
 
 > **归属**：Phase 1（MVP Agent 核心闭环）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
 > **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md) · **Phase 3**：[`phase3-extend.md`](./phase3-extend.md)
+> **Updated**：2026-08-05
 > **内容**：§3 后端三层架构 · §4 目录结构 · §5 数据库 · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础 · §10.4 Skill · §10.6 工作流引擎 · §10.7 记忆基础 · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能 · §14 旧版规避
 
 ---
@@ -892,6 +893,8 @@ impl Database {
         sqlx::query("PRAGMA cache_size=-8000").execute(pool).await?;     // 8MB 页缓存
         sqlx::query("PRAGMA temp_store=MEMORY").execute(pool).await?;    // 临时表在内存
         sqlx::query("PRAGMA mmap_size=268435456").execute(pool).await?;  // 256MB mmap
+        sqlx::query("PRAGMA page_size=4096").execute(pool).await?;       // 匹配 OS 页大小（须在建库前设置）
+        sqlx::query("PRAGMA busy_timeout=5000").execute(pool).await?;    // 写锁等待 5s（防忙等）
         Ok(())
     }
 }
@@ -1397,6 +1400,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `session:delete` | `{id}` | `()` |
 | `session:rename` | `{id, title}` | `SessionDto` |
 | `session:history` | `{id, before?, limit?}` | `Vec<MessageDto>` |
+| `session:inject-file` | `{session_id, path}` | `()` | 指令文件注入会话（§9.10.7，phase2） |
 
 **对话域** `commands/chat.rs`
 
@@ -1524,6 +1528,15 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `workflow:stop` | `{run_id}` | `()` |
 | `workflow:result` | `{run_id}` | `WorkflowResultDto` |
 
+**任务域** `commands/task.rs`（Phase 2 任务设计区，§9.9.1，phase2-panel.md）
+
+| 命令 | 参数 | 返回 | 说明 |
+|------|------|------|------|
+| `task:save-template` | `{definition}` | `WorkflowDto` | 保存自定义任务为模板（写入 workflows 表） |
+| `task:run` | `{definition, inputs}` | `{run_id}` | 运行自定义任务（TaskDefinition→Workflow 映射） |
+| `task:validate` | `{definition}` | `{ok, errors}` | 画布保存前校验（环检测/变量引用/工具存在性） |
+| `task:rerun` | `{run_id, inputs?}` | `{run_id}` | 用相同定义重跑 |
+
 **设置域** `commands/settings.rs`
 
 | 命令 | 参数 | 返回 |
@@ -1553,6 +1566,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `workspace:tree` | `{path?, depth?, max_entries?}` | `DirTree` | 目录树（单层/递归，忽略 .git/node_modules 等） |
 | `workspace:read-file` | `{path}` | `{content, mime}` | 读取文件（文本截断保护） |
 | `workspace:open-file` | `{path}` | `()` | 用默认程序打开 |
+| `fs:watch` | `{workdir, enable}` | `()` | 开启/关闭工作目录变更监听（Phase 2，§9.10.7） |
 
 **LSP 域** `commands/lsp.rs`
 
@@ -1562,6 +1576,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 | `lsp:diagnostics` | `{path}` | `Vec<Diagnostic>` | 当前文件诊断（错误/警告） |
 | `lsp:start` | `{server_id, workdir}` | `()` | 启动语言服务器 |
 | `lsp:stop` | `{server_id}` | `()` | 停止语言服务器 |
+| `lsp:detect` | `{workdir}` | `Vec<LspCandidate>` | 推断候选 LSP（Phase 2，§9.10.7，无进程启动） |
 
 **Agent 上下文域** `commands/context.rs`（侧边栏聚合）
 
@@ -2343,100 +2358,10 @@ impl PromptBuilder {
 }
 ```
 
-**市场搜索**（三源聚合，futures join_all 并发，逐源容错）：
+**市场搜索**（三源聚合）→ **完整设计见 phase2-panel.md §10.4.1-10.4.4**（Phase 2，T9 补充）。
 
-```rust
-pub async fn search_market(&self, query: &str) -> Vec<SkillSearchHit> {
-    let (a, b, c) = tokio::join!(
-        search_skills_sh(query), search_claude_plugins(query), search_clawhub(query)
-    );
-    [a, b, c].concat()   // 每源内部 try 容错
-}
-```
+Phase 1 仅实现技能安装/卸载/启停/注入（本节约 10.4 主体）；市场三源搜索、去重排序、版本检测在 Phase 2 落地。
 
-#### 10.4.1 三源 API 协议细节
-
-| 源 | API | 参数 | 返回字段 | 备注 |
-|----|-----|------|----------|------|
-| **skills.sh** | `GET https://skills.sh/api/search` | `q` | `{name, description, author, tags, download_url}` | 官方注册中心；下载走 zip |
-| **claude-plugins.dev** | `GET https://claude-plugins.dev/api/skills` | `q` | `{name, description, github: owner/repo[/path], tags}` | 按 GitHub 仓库定位 |
-| **clawhub.ai** | `GET https://clawhub.ai/api/v1/search` | `query` | `{name, description, source, stats}` | 含 star/下载数统计 |
-
-**统一命中结构**（三源归一化）：
-
-```rust
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SkillSearchHit {
-    pub id: String,                  // 源内部 id / 唯一标识
-    pub name: String,
-    pub description: String,
-    pub source: SkillSource,         // SkillsSh | ClaudePlugins | Clawhub | Local
-    pub install_source: String,      // 安装指令："skills.sh:xxx" / "github:owner/repo[/path]" / "zip" / "local:path"
-    pub tags: Vec<String>,
-    pub author: Option<String>,
-    pub stars: Option<u64>,          // clawhub 提供，用于排序
-    pub url: Option<String>,
-    pub installed: bool,             // 是否已安装（按 name/folder_name 匹配）
-}
-```
-
-#### 10.4.2 搜索流程与去重合并
-
-```
-用户输入 query（防抖 300ms）
-→ 并发请求三源（每源 5s 超时，超时/失败静默跳过该源，不阻塞）
-→ 结果归一化为 SkillSearchHit
-→ 合并去重（按 name 归一化：小写 + 去空格 + 去"agent"/"skill"后缀）
-→ 排序（内置权值）：stars>0 优先 · 已安装排后 · 描述含精确词优先
-→ 缓存：每 query 缓存 60s（内存 LRU），翻页/筛选本地处理
-```
-
-**排序规则**（`score = 0.5·normalized_stars + 0.3·desc_relevance + 0.2·source_trust`）：
-
-| 维度 | 计算 |
-|------|------|
-| `normalized_stars` | `min(stars, 5000) / 5000`（对数缩放更佳：`log10(1+stars)/log10(5001)`） |
-| `desc_relevance` | 描述中包含完整 query → 1.0；包含任一 token → 0.5；否则 0 |
-| `source_trust` | skills.sh=1.0 / clawhub=0.9 / claude-plugins=0.8 |
-
-#### 10.4.3 前端搜索 UI（SkillMarket）
-
-```
-┌─ 技能市场 ────────────────────────────────────────┐
-│ 🔍 [搜索技能...                          ] (⌘F)   │
-│ 源过滤: [全部] [skills.sh] [Claude插件] [ClawHub]  │  ← 单选 chips
-│ ┌────────────────────┐ ┌────────────────────┐     │
-│ │ 🧩 技能名          │ │ 命中来源徽标        │     │
-│ │    描述 2 行省略   │ │ ⭐ 1.2k  · 🏷 3     │     │
-│ │    [安装]  [详情]   │ │   [已安装 ✓]        │     │
-│ └────────────────────┘ └────────────────────┘     │
-│ 加载中骨架 / 空态("未找到，试试换个关键词")          │
-│ 已加载 42 个 · 源: 3/3 可用（1 源超时已跳过）       │  ← 源健康提示
-└──────────────────────────────────────────────────┘
-```
-
-- **筛选**：源 chips + 本地过滤（tags/作者）
-- **详情**：SkillDetail 弹窗——README 预览 + 安装前置条件（依赖/权限）+ 截图（如有）
-- **安装确认**：显示来源 + 目标目录 + 磁盘占用预估 → 确认 → `skill:install` → 进度 Toast
-- **已安装标记**：名称匹配 `skills` 表 folder_name → 徽标"已安装"→ 按钮变"重新安装"
-- **本地技能**：顶部独立分区显示 `skill:list-local` 结果（项目 `.claude/skills`）
-
-#### 10.4.4 安装状态与依赖检查
-
-```rust
-pub async fn install(&self, source: &str) -> Result<InstalledSkill, AppError> {
-    // 1. 解析 install_source 前缀（skills.sh/github/zip/local）
-    // 2. 依赖预检：github 需 git 命令可用；zip 需解压库；skills.sh 需网络
-    //    → 失败返回可读错误（如 "未检测到 git，请先安装"）
-    // 3. 执行安装（§10.4 主流程）
-    // 4. 安装后自动 health-check：SKILL.md 可解析 + 引用脚本存在
-    // 5. 返回 InstalledSkill（含 folder_name/版本/启用状态）
-}
-```
-
-**重名冲突策略**：目标目录已存在 → 对比 content_hash——相同则提示"已安装最新版"；不同则询问"覆盖（备份 .bak）/ 跳过 / 装为副本"。
-
-**版本更新**：`skill:install` 同源重复执行 = 更新（hash 变更 → 覆盖 + 保留旧版 .bak + 标记 `updated_at`）；市场详情页显示"有新版本"徽标（源端 latest hash ≠ 本地 hash）。
 
 ### 10.6 多 Agent 工作流详细设计
 
@@ -2472,7 +2397,7 @@ impl WorkflowEngine {
 
 **任务调度**：tokio 任务池（默认 4 worker）+ `Semaphore` 限制并发 LLM 调用数。
 
-#### 10.6.1 阶段模板系统（详细设计）
+#### 10.6.1 阶段模板系统（详细设计）🟧 Phase 2
 
 **模板格式**（JSON 存储在 `workflows` 表 definition 字段；预置模板编译期内嵌为 Rust 常量，首次启动写入）：
 
@@ -2643,7 +2568,7 @@ pub fn render_template(template: &str, inputs: &Value, outputs: &HashMap<String,
 - 阶段图环检测（拓扑排序失败 → 拒绝）
 - 每阶段输出注入下一阶段前做 `truncate:8000` 上限保护
 
-#### 10.6.4 模板管理与用户自定义
+#### 10.6.4 模板管理与用户自定义 🟧 Phase 2
 
 | 操作 | 说明 |
 |------|------|
@@ -2739,7 +2664,7 @@ fn resolve_project_id(repo_path: &str) -> String {
 | `sessions` | task-progress | 子任务进度 | 子 agent 汇报 | 任务引用时 |
 | `cc` | - | Claude Code 记忆（可选索引） | 外部 | 可关闭 |
 
-#### 10.7.2 存储实现（SQLite FTS5 索引 + Markdown 文件）
+#### 10.7.2 存储实现（SQLite FTS5 索引 + Markdown 文件）🟧 Phase 2
 
 ```sql
 -- 迁移 006_memory.sql — 记忆 FTS5 虚拟表（可执行 DDL）
@@ -2800,7 +2725,7 @@ impl MemoryStoreImpl {
 - **scope/type 过滤**：默认全 scope；支持 `scope=projects`、`type=checkpoint` 等精确过滤
 - **命中即权威**：返回的路径可直接 Read 全文（snippet 只展示前 ~200 字符）
 
-#### 10.7.3 checkpoint-writer 策展机制（核心，移植 MiMo-Code）
+#### 10.7.3 checkpoint-writer 策展机制（核心，移植 MiMo-Code）🟧 Phase 2
 
 **角色**：checkpoint-writer 是一个独立子 agent（Rust 内通过 AutoAgents Actor 实现），是会话 checkpoints 的**唯一策展人**。
 
@@ -2892,7 +2817,7 @@ pub fn quarantine_checkpoint(sid: &str) -> Result<(), AppError> { ... }
 
 **notes.md 草稿本**：主 agent 的合法 scratchpad（引用/未决问题/跨项目观察），writer 在 checkpoint 时整理归纳进对应节。
 
-#### 10.7.4 注入与召回（Active Recall）
+#### 10.7.4 注入与召回（Active Recall）🟧 Phase 2
 
 **上下文重建注入**（对齐 MiMo-Code 的注入分段，token 预算可配置，与 §13.1 TokenBudget 对齐）：
 
@@ -2926,7 +2851,7 @@ pub fn quarantine_checkpoint(sid: &str) -> Result<(), AppError> { ... }
 | `memory:reconcile` | `{}` | `{indexed, pruned}` | 手动全量重建索引 |
 | `memory:context-dump` | `{}` | `Vec<MemoryDump>` | 当前注入记忆摘要（调试用） |
 
-#### 10.7.5 记忆前端（设置页 → 记忆管理）
+#### 10.7.5 记忆前端（设置页 → 记忆管理）🟩 Phase 3
 
 ```
 ┌─ 记忆管理 ───────────────────────────────┐
@@ -2945,7 +2870,7 @@ pub fn quarantine_checkpoint(sid: &str) -> Result<(), AppError> { ... }
 - 可编辑全局/项目 MEMORY.md（主 agent 权限一致）
 - 会话 checkpoint 只读展示（writer 生成）
 - 搜索 Tab：`memory:search` 结果列表 → 点击 Read 全文
-#### 10.7.6 写入沙箱（Write Security）
+#### 10.7.6 写入沙箱（Write Security）🟧 Phase 2
 
 **来源**：MiMo-Code `tool/memory-path-guard.ts` — 不同 agent 有不同的记忆写入权限。
 
@@ -2996,7 +2921,7 @@ pub fn assert_memory_write_allowed(
 }
 ```
 
-#### 10.7.7 主动召回注入（Active Recall）
+#### 10.7.7 主动召回注入（Active Recall）🟧 Phase 2
 
 **来源**：MiMo-Code 在每条用户消息后注入记忆召回提示。
 
