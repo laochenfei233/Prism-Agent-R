@@ -1,7 +1,7 @@
 ---
 feature: prism-agent-r
 status: designed
-updated: 2026-08-04
+updated: 2026-08-05
 branch: main
 commits: # filled at delivery
 platform: windows | macos | linux
@@ -15,6 +15,104 @@ platform: windows | macos | linux
 > 涉及平台差异的板块（路径处理、LSP 检测、本地 ASR 二进制、CI 构建矩阵、打包分发）已在本文档中明确标注，见 §14.5 与各相关章节。
 
 ## Report
+
+## [S0] 设计模式参考
+
+### Agentic Design Patterns
+
+本设计参考 *Agentic Design Patterns*（Antonio Gulli 著，Springer 2025）中的 21 种智能体设计模式，将模式映射到 Prism Agent R 的架构中，确保设计覆盖完整。
+
+**核心模式映射**：
+
+| 设计模式 | 书中章节 | Prism Agent R 覆盖 | 状态 |
+|----------|----------|-------------------|------|
+| 提示词链 (Prompt Chaining) | Ch.1 | Workflow 阶段模板 `render_template`，前一阶段输出注入下一阶段 | ✅ 已覆盖 |
+| 路由 (Routing) | Ch.2 | Coordinator 按角色匹配 AgentActor，任务派发到合适角色 | ✅ 已覆盖 |
+| 并行化 (Parallelization) | Ch.3 | tokio 并发 + TaskScheduler 任务池，多 Agent 可并行执行 | ✅ 已覆盖 |
+| 反思 (Reflection) | Ch.4 | **部分覆盖**：工作流有 writer→reviewer 阶段，但缺少 Agent 级自我反思循环 | ⚠️ 需增强 |
+| 工具使用 (Tool Use) | Ch.5 | ToolExecutor trait + MCP 工具注册表 + RigAgent 内置/MCP 分发 | ✅ 已覆盖 |
+| 规划 (Planning) | Ch.6 | Workflow 定义 = 动态计划；预置工作流 = 固定计划；LLM 可通过工具自行规划 | ✅ 已覆盖 |
+| 多智能体协作 (Multi-Agent) | Ch.7 | AutoAgents Actor 模型 + Coordinator 层次化/顺序/辩论协作 | ✅ 已覆盖 |
+| 记忆管理 (Memory) | Ch.8 | 分层记忆 + checkpoint-writer + FTS5 搜索 + Active Recall 协议 | ✅ 已覆盖 |
+| 学习与适应 (Learning) | Ch.9 | **未覆盖**：Agent 无显式学习机制 | ❌ Out of Scope |
+| MCP 协议 | Ch.10 | 完整 MCP 客户端（stdio/SSE/HTTP）+ 工具目录缓存 + 权限控制 | ✅ 已覆盖 |
+| 目标设定与监控 (Goal/Monitoring) | Ch.11 | **部分覆盖**：工作流有状态（running/done/failed），但缺少 Agent 级目标定义与进度监控 | ⚠️ 需增强 |
+| 异常处理与恢复 (Exception/Recovery) | Ch.12 | AppError 统一错误 + MCP 重试（指数退避）+ LSP 崩溃重启 | ✅ 已覆盖 |
+| 人机协同 (Human-in-the-Loop) | Ch.13 | **部分覆盖**：工具审批分级（read 自动/write 需审批），但缺少显式审批 UI 和升级机制 | ⚠️ 需增强 |
+| 知识检索 (RAG) | Ch.14 | Wiki + RAG 引擎（分块/嵌入/混合检索） | ✅ 已覆盖 |
+| 智能体间通信 (A2A) | Ch.15 | **部分覆盖**：Actor 消息传递通信，但缺少跨进程/跨会话的 A2A 协议 | ⚠️ 需增强 |
+| 资源感知优化 | Ch.16 | **部分覆盖**：Token 预算管理、上下文窗口监控，但缺少动态资源调度 | ⚠️ 需增强 |
+| 推理技术 (Reasoning) | Ch.17 | **部分覆盖**：LLM 自带推理，但缺少显式 CoT/ToT/GoT 推理框架 | ⚠️ 需增强 |
+| 安全护栏 (Guardrails) | Ch.18 | **部分覆盖**：API Key 加密 + 路径校验 + 工具权限，但缺少输入/输出内容过滤 | ⚠️ 需增强 |
+| 评估与监控 (Evaluation) | Ch.19 | **部分覆盖**：model:test 连通性检查，但缺少 Agent 输出质量评估和轨迹分析 | ⚠️ 需增强 |
+| 优先级管理 (Prioritization) | Ch.20 | **未覆盖** | ❌ Out of Scope |
+| 探索与发现 (Exploration) | Ch.21 | **未覆盖** | ❌ Out of Scope |
+
+**关键增强点（基于书中模式）**：
+
+1. **反思模式增强**（Ch.4）：在 RigAgent 循环中增加可选的「生成-评审」子循环——Agent 生成输出后，可用另一个 LLM 调用（不同 system prompt）评审输出质量，不满足标准时自动重试。用于代码审查、翻译校对等高精度场景。
+
+2. **目标设定与监控增强**（Ch.11）：为 Workflow/TaskDefinition 增加显式 `goals` 字段（可衡量的成功标准），运行时持续检查目标达成状态，偏离时触发重新规划或升级。
+
+3. **人机协同增强**（Ch.13）：实现工具审批 UI（ToolApprovalDialog）——当 Agent 调用需审批的工具（write/edit/delete）时，暂停执行，前端弹出审批对话框展示工具名称、参数、影响范围，用户批准/拒绝后继续。
+
+4. **安全护栏增强**（Ch.18）：在 PromptBuilder 注入前增加输入内容过滤层（敏感词/注入检测），在 Agent 输出后增加输出过滤层（毒性/偏见检测），使用轻量模型（如 Gemini Flash）作为快速预筛。
+
+5. **评估与监控增强**（Ch.19）：增加 Agent 轨迹记录（每步工具调用、推理过程、耗时），支持 LLM-as-Judge 评估输出质量，提供 Agent 性能仪表盘（成功率、平均延迟、Token 消耗趋势）。
+
+### Compose-Next 工作流参考
+
+本设计参考 MiMo-Code 的 compose-next 工作流模式，将 8 阶段编排管线映射到 Prism Agent R 的开发与运行时。
+
+**Compose-Next 8 阶段管线**：
+
+| 阶段 | 职责 | Prism Agent R 对应 |
+|------|------|-------------------|
+| Orient（定位） | 检查仓库/指令/最近变更，决定工作形状 | Agent 启动时扫描工作目录指令文件（CLAUDE.md/AGENTS.md） |
+| Grill（决策） | 用 `question` 工具逐轴解析用户决策 | 工作流参数填充对话框 + Agent 配置确认 |
+| Spec（规格） | 维护 `docs/compose/spec/<feature>.md`，带 `[Sn]` 锚点和 tasks | 本设计文档本身就是 spec 产物 |
+| Workspace（工作区） | 创建 linked worktree，不在 main 上实现 | Tauri 项目结构：`src-tauri/`（Rust）+ `src/`（Svelte） |
+| Implement（实现） | 按依赖序执行 tasks，并行任务分发给 subagent | WorkflowEngine 按 `depends_on` 拓扑排序执行阶段 |
+| Verify（验证） | 运行测试/typecheck/build，记录结果 | `model:test` + MCP 连通性检查 + 前端构建验证 |
+| Review（评审） | 分派 fresh subagent 审查完整变更 | 工作流 `critic` 阶段（头脑风暴/代码审查） |
+| Finalize（终结） | 更新 spec 文档（status/delivered/报告） | 工作流 `done` 状态 + 结果持久化 |
+
+**MiMo-Code 编排模式映射**（compose-next 的工作流模式如何指导 Prism Agent R 的多 Agent 任务编排）：
+
+| 编排模式 | MiMo-Code 实现 | Prism Agent R 应用 |
+|----------|---------------|-------------------|
+| 8 阶段管线 | Orient→Grill→Spec→Workspace→Implement→Verify→Review→Finalize | WorkflowEngine 的阶段模板系统（§10.6），每个阶段 = 一个 StageTemplate |
+| 任务依赖拓扑排序 | 按 `depends_on` 顺序执行 | `topological_sort(&wf.stages)` 已实现 |
+| 并行任务分发 | 独立 task 分发给 subagent，各带 worktree | tokio 并发 + Semaphore 限流（§3.4） |
+| Verify/Review 分离 | 先跑验证命令，再分派 fresh reviewer | 工作流 `verify` 阶段 + `review` 阶段（critic 角色） |
+| 决策解析（Grill） | `question` 工具逐轴解析用户选择 | 工作流 `inputs` 参数填充对话框（§9.9.1） |
+| 规格文档持久化 | `docs/compose/spec/<feature>.md`，status: designed→in-progress→delivered | WorkflowRun 状态机 + 结果持久化到 workflow_runs 表 |
+| 终结不自动完成 | 报告分支/SHA，由用户决定 merge/PR/push | 工作流 `done` 状态 + 前端结果展示，用户手动触发下一步 |
+
+**MiMo-Code 权限模型映射**：
+
+```
+三层权限合并（MiMo-Code runtimePermission）：
+  1. agent.permission        → Agent 基础权限
+  2. user/session config     → 用户/会话配置覆盖
+  3. agent.hardPermission    → 不可放松的安全不变量（最后胜出）
+
+Prism Agent R 对应：
+  1. Agent.disabled_tools    → Agent 级工具禁用列表
+  2. RiskLevel 分级          → 工具审批分级（§10.10）
+  3. 安全护栏                → 输入/输出过滤（§10.12，不可绕过）
+```
+
+**MiMo-Code Task 追踪映射**：
+
+| MiMo-Code 概念 | Prism Agent R 实现 |
+|----------------|-------------------|
+| 层级 ID（T1, T1.1, T1.2） | TaskDefinition.stages[].id（如 "stage1", "stage2"） |
+| 状态生命周期（open → in_progress → blocked → done/abandoned） | WorkflowRun.stage_status（pending/running/done/failed/cancelled） |
+| `task` 工具（create/start/block/done/abandon） | `workflow:run`/`task:run` + `workflow:stage` 事件 |
+| 任务归档（默认 7 天） | workflow_runs 表保留策略（可配置） |
+
+---
 
 ## [S1] Problem
 
@@ -360,6 +458,17 @@ pub struct WorkflowStage {
 stage1: researcher  → 搜索资料（web_search / knowledge_lookup）→ 输出研究报告
 stage2: analyst     → 基于报告 + 横纵对比 → 输出分析结论
 stage3: writer      → 生成最终文档（markdown）→ 输出成品
+```
+
+**内置工作流示例 — Compose-Next 开发管线**（参考 MiMo-Code compose workflow）：
+
+```
+stage1: orient     → 扫描仓库/指令/最近变更，决定工作形状 → 输出上下文摘要
+stage2: design     → 应用 compose:plan 或 compose:brainstorm → 输出设计文档（spec）
+stage3: implement  → 按依赖序执行 tasks，并行任务分发 → 输出代码变更
+stage4: verify     → 运行测试/typecheck/build → 输出验证报告
+stage5: review     → 分派 critic agent 审查 → 输出评审意见
+stage6: report     → 生成最终报告（journey log + 验证证据）→ 输出交付文档
 ```
 
 执行流程：Coordinator 按 `depends_on` 拓扑排序 → 逐阶段派发 → 每个阶段结果写入 `WorkflowResult.stage_outputs` → 下一阶段模板可引用 `{{stage1.output}}`。
@@ -3466,21 +3575,58 @@ CREATE TABLE stage_templates (
 
 ### 10.7 记忆系统
 
-**设计参考**：MiMo-Code 记忆架构（`src/memory/paths.ts` 4 scope + 9 type、checkpoint-writer 子 agent 唯一策展、SQLite FTS5 索引 + BM25 搜索、主动召回协议）。本设计移植为 Rust + Tauri 实现。
+**设计参考**：MiMo-Code 记忆架构（`src/memory/paths.ts` 4 scope + 9 type、checkpoint-writer 子 agent 唯一策展、SQLite FTS5 索引 + BM25 搜索、主动召回协议、写入沙箱、校验重试）。本设计移植为 Rust + Tauri 实现。
 
 #### 10.7.1 分层与存储路径
 
 ```
 {app_data}/memory/
 ├── global/MEMORY.md                 # 全局记忆：跨项目用户偏好/规则
-└── projects/{pid}/MEMORY.md         # 项目记忆：pid = 仓库绝对路径 sha256 前 12 位
-    └── {workdir}/.prism/
-        ├── memory.md                # 项目记忆（工作目录内，可随仓库提交）
-        └── notes.md                 # 项目草稿本
-sessions/{session_id}/
-├── checkpoint.md                    # 会话检查点（11 节结构，writer 专属）
-├── notes.md                         # 会话草稿本
-└── tasks/{task_id}/progress.md      # 任务进度（子 agent 汇报）
+├── projects/{pid}/MEMORY.md         # 项目记忆：pid = 仓库绝对路径 sha256 前 12 位
+│   └── MEMORY-{topic}.md           # 溢出文件（某节超预算时）
+└── sessions/{sid}/
+    ├── checkpoint.md                # 会话检查点（11 节结构，writer 专属）
+    ├── checkpoint-{topic}.md        # 溢出文件
+    ├── notes.md                     # 会话草稿本（合法 scratchpad）
+    └── tasks/{task_id}/
+        └── progress.md              # 任务进度（子 agent 汇报）
+```
+
+**Scope 定义**（对齐 MiMo-Code `memory/paths.ts`）：
+
+| Scope | 路径模式 | 内容 | 写入者 | 注入时机 |
+|-------|---------|------|--------|----------|
+| `global` | `global/MEMORY.md` | 跨项目偏好/规则 | 主 agent 可编辑 | 会话构建时 |
+| `projects` | `projects/{pid}/MEMORY.md` | 项目规则/架构决策/发现 | 主 agent 可编辑 | 会话构建时（pid 匹配） |
+| `sessions` | `sessions/{sid}/checkpoint.md` | 会话状态（11 节） | **checkpoint-writer 专属** | 上下文重建时 |
+| `sessions` | `sessions/{sid}/notes.md` | 会话草稿 | 主 agent | 上下文重建时 |
+| `sessions` | `sessions/{sid}/tasks/{tid}/progress.md` | 子任务进度 | 子 agent 汇报 | 任务引用时 |
+
+**Type 自动检测**（从文件路径模式推断）：
+
+```rust
+fn detect_type(path: &str) -> MemoryType {
+    if path.ends_with("/checkpoint.md") || path.starts_with("checkpoint-") {
+        MemoryType::Checkpoint
+    } else if path.contains("/tasks/") && path.ends_with("/progress.md") {
+        MemoryType::Progress
+    } else if path.ends_with("/notes.md") {
+        MemoryType::Notes
+    } else if path.ends_with("/MEMORY.md") || path.starts_with("memory-") {
+        MemoryType::Memory
+    } else {
+        MemoryType::Free
+    }
+}
+```
+
+**Project ID 生成**（对齐 MiMo-Code `resolveProjectId`）：
+
+```rust
+fn resolve_project_id(repo_path: &str) -> String {
+    let hash = sha256(repo_path.as_bytes());
+    hex::encode(&hash[..6])  // 前 12 位十六进制
+}
 ```
 
 **记忆层级**（对齐 MiMo-Code 的 scope + type 模型）：
@@ -3527,7 +3673,7 @@ impl MemoryStoreImpl {
         Ok(())
     }
 
-    /// BM25 搜索（对齐 MiMo-Code memory tool：OR 连接 token，相对分数下限 0.15）
+    /// BM25 搜索（对齐 MiMo-Code memory tool 语义）
     pub async fn search(&self, query: &str, opts: SearchOpts) -> Result<Vec<MemoryHit>, AppError> {
         let tokens: Vec<String> = tokenize(query);        // 去除标点，取 alnum 片段
         let mut sql = String::from("SELECT body, scope, path, bm25(memory_fts) AS score FROM memory_fts WHERE memory_fts MATCH ?");
@@ -3539,10 +3685,12 @@ impl MemoryStoreImpl {
 }
 ```
 
-**搜索细节**（对齐 MiMo-Code `memory` 工具语义）：
+**搜索细节**（对齐 MiMo-Code `memory/service.ts` + `memory/fts-query.ts`）：
 
-- **token 化**：`query` 按非字母数字切分 → 每个 token 一个词项（`A OR B`），不要求全部命中
-- **相对分数下限**：`score >= max_score * 0.15` 才返回（滤掉低相关噪音）
+- **token 化**：`query` 按 `[\p{L}\p{N}_]+`（Unicode，CJK 安全）切分 → 每个 token 用短语引号包裹 → **OR 连接**（最大化召回）
+- **过度获取**：fetch `limit * 3`（上限 50）行，再过滤
+- **相对分数下限**：`score >= max_score * 0.15` 才保留（滤掉低相关噪音）
+- **BM25 方向**：BM25 返回 lower = better，取反为 higher = better
 - **scope/type 过滤**：默认全 scope；支持 `scope=projects`、`type=checkpoint` 等精确过滤
 - **命中即权威**：返回的路径可直接 Read 全文（snippet 只展示前 ~200 字符）
 
@@ -3567,21 +3715,73 @@ writer 执行：
   - writer 每次运行有 token 预算（如 8K），超限拆分
 ```
 
-**checkpoint.md 11 节结构**（对齐 MiMo-Code）：
+**checkpoint.md 11 节结构**（对齐 MiMo-Code `checkpoint-templates.ts`）：
 
 ```markdown
 # Session Checkpoint
-## 1. Active intent          — 当前会话目标
-## 2. Next action           — 下一步
-## 3. Directives            — 用户指令/优先级
-## 4. Task tree             — 任务树（含状态）
-## 5. Current work          — 正在进行的任务详情
-## 6. Files                 — 涉及文件
-## 7. Learnings             — 学到的知识
-## 8. Errors                — 遇到的错误/教训
-## 9. Live resources        — 运行中的资源（端口/进程）
-## 10. Design decisions     — 设计决策记录
-## 11. Open notes           — 未决问题
+## 1. Active intent          — 当前会话目标（≤500 tokens）
+## 2. Next action           — 下一步（≤1000 tokens）
+## 3. Directives            — 用户指令/优先级（≤800 tokens）
+## 4. Task tree             — 任务树（含状态）（≤1000 tokens）
+## 5. Current work          — 正在进行的任务详情（≤2000 tokens）
+## 6. Files                 — 涉及文件（≤1500 tokens）
+## 7. Learnings             — 学到的知识（≤2000 tokens）
+## 8. Errors                — 遇到的错误/教训（≤1500 tokens）
+## 9. Live resources        — 运行中的资源（≤1000 tokens）
+## 10. Design decisions     — 设计决策记录（≤3000 tokens）
+## 11. Open notes           — 未决问题（≤800 tokens）
+```
+
+**节预算与溢出机制**（对齐 MiMo-Code spillover，统一配置见 §13.1 `TokenBudget`）：
+
+| 节 | 预算 | 溢出目标 |
+|----|------|---------|
+| §1 Active intent | 500 tokens | 不溢出（截断） |
+| §2 Next action | 1000 tokens | 不溢出（截断） |
+| §3 Directives | 800 tokens | MEMORY.md Rules |
+| §4 Task tree | 1000 tokens | 不溢出（截断） |
+| §5 Current work | 2000 tokens | 不溢出（截断） |
+| §6 Files | 1500 tokens | 不溢出（截断） |
+| §7 Learnings | 2000 tokens | MEMORY.md Discovered |
+| §8 Errors | 1500 tokens | 不溢出（截断） |
+| §9 Live resources | 1000 tokens | 不溢出（截断） |
+| §10 Design decisions | 3000 tokens | `checkpoint-{topic}.md` |
+| §11 Open notes | 800 tokens | `checkpoint-{topic}.md` |
+
+溢出格式：在原节写 `- See checkpoint-{topic}.md (N entries)` + 在溢出文件写完整内容。
+
+**MEMORY.md 4 节结构**（对齐 MiMo-Code `MEMORY_TEMPLATE`）：
+
+```markdown
+# Project memory
+_Durable project-level knowledge. Persists across all sessions in this project._
+
+## Project context            — 项目是什么（≤1000 tokens）
+## Rules                      — 硬约束（≤2000 tokens）
+## Architecture decisions     — 设计选择 + 理由（≤3000 tokens）
+## Discovered durable knowledge — 跨会话持久事实（≤4000 tokens）
+```
+
+**校验与重试机制**（对齐 MiMo-Code `checkpoint-validator.ts`）：
+
+```rust
+pub enum CheckpointViolation {
+    TopicMissing,                    // 缺少 "Topic:" 行
+    TopicTooLong,                    // > 80 字符
+    SubsectionMissing(String),       // 必要子节缺失
+    SubsectionOutOfOrder,            // 节顺序错误
+    DiscoveredDuplicateTitle(String), // §7 标题重复
+    DiscoveredMissingWhy,            // §7 缺少 "Why:" 行
+    DiscoveredMissingHowToApply,     // §7 缺少 "How to apply:" 行
+    NextFiller,                      // §2 仅为 "continue"/"resume" 等
+    BudgetExceeded,                  // 总 token 超预算
+    SectionBudgetExceeded(String),   // 单节 token 超预算
+}
+
+pub fn validate_checkpoint(content: &str) -> Vec<CheckpointViolation> { ... }
+
+/// 校验失败时：重命名 checkpoint.md → checkpoint.invalid.md，通知 writer 重试
+pub fn quarantine_checkpoint(sid: &str) -> Result<(), AppError> { ... }
 ```
 
 **notes.md 草稿本**：主 agent 的合法 scratchpad（引用/未决问题/跨项目观察），writer 在 checkpoint 时整理归纳进对应节。
@@ -3618,6 +3818,80 @@ writer 执行：
 | `memory:reconcile` | `{}` | `{indexed, pruned}` | 手动全量重建索引 |
 | `memory:context-dump` | `{}` | `Vec<MemoryDump>` | 当前注入记忆摘要（调试用） |
 
+#### 10.7.6 写入沙箱（Write Security）
+
+**来源**：MiMo-Code `tool/memory-path-guard.ts` — 不同 agent 有不同的记忆写入权限。
+
+```rust
+pub enum WriteSandbox {
+    /// checkpoint-writer：只能写入 memory 树下的特定文件
+    CheckpointWriter,
+    /// dream/distill：可写入 memory 树 + 工作目录 .prism/
+    DreamDistill,
+    /// 主 agent：完整记忆写入权限（但不能写 tasks/*）
+    MainAgent,
+    /// 子 agent：只能写 tasks/{TID}/*.md（且 TID 必须匹配）
+    SubAgent { task_id: String },
+}
+
+/// 写入校验：检查路径是否在当前 agent 的沙箱内
+pub fn assert_memory_write_allowed(
+    agent: &WriteSandbox, path: &Path, worktree: &Path,
+) -> Result<(), AppError> {
+    match agent {
+        WriteSandbox::CheckpointWriter => {
+            // 只允许写入：
+            // - projects/{pid}/MEMORY.md (或 memory-{topic}.md)
+            // - sessions/{sid}/checkpoint.md (或 checkpoint-{topic}.md)
+            // - sessions/{sid}/notes.md
+            // - sessions/{sid}/tasks/{tid}/*.md
+            if !is_checkpoint_writer_path(path) {
+                return Err(AppError::Forbidden("checkpoint-writer 只能写入记忆树".into()));
+            }
+        }
+        WriteSandbox::MainAgent => {
+            // 允许写入 memory 树，但不能写 tasks/*（那是 writer 的领域）
+            if path.contains("/tasks/") {
+                return Err(AppError::Forbidden("主 agent 不能写入 tasks/".into()));
+            }
+        }
+        WriteSandbox::SubAgent { task_id } => {
+            // 只能写 tasks/{task_id}/*.md
+            if !path.ends_with(&format!("/tasks/{}/progress.md", task_id)) {
+                return Err(AppError::Forbidden("子 agent 只能写入自己的任务进度".into()));
+            }
+        }
+        WriteSandbox::DreamDistill => {
+            // memory 树 + .prism/ 目录
+        }
+    }
+    Ok(())
+}
+```
+
+#### 10.7.7 主动召回注入（Active Recall）
+
+**来源**：MiMo-Code 在每条用户消息后注入记忆召回提示。
+
+```rust
+/// 在上下文重建时，向最后一条用户消息追加召回提示
+pub fn inject_active_recall(session_dir: &Path) -> String {
+    format!(
+        "This session has memory at {session_dir}/. Recall content\n\
+         not in your context with:\n\
+         - memory({{ operation: \"search\", query: \"<keyword>\" }})\n\
+         - Read(file_path=\"{session_dir}/checkpoint.md\")\n\
+         - task({{ operation: \"list\" }})\n\
+         Don't ask the user about something memory may already record."
+    )
+}
+```
+
+**注入规则**：
+- 仅当记忆文件存在时注入（`has_memory_or_tasks` 检查）
+- 追加到**最后一条用户消息**的尾部（作为合成文本）
+- 每轮对话都注入（确保 agent 始终知道记忆可用）
+
 **事件**：`memory:changed`（文件被 writer/agent 更新后广播，前端记忆面板刷新）。
 
 #### 10.7.5 记忆前端（设置页 → 记忆管理）
@@ -3645,6 +3919,454 @@ writer 执行：
 - `file:pick` 使用 Tauri dialog 插件
 - `file:parse` 支持 txt/md/pdf/doc/docx/html/json/csv/xml → 文本（`pdf-extract`、`docx-rs`、`scraper`、`html2md`）
 - 对话附件：解析后作为 user 消息 attachments 元数据，注入 prompt 或走 RAG
+
+### 10.9 反思模式（Reflection Pattern）
+
+**来源**：Agentic Design Patterns Ch.4 — 生产者-评审者（Generator-Reviewer）模型。
+
+**设计目标**：Agent 生成的初始输出可能不最优。通过引入独立的「评审者」角色，对输出进行批判性评估，驱动迭代优化。
+
+**架构**：
+
+```rust
+// core/rig/reflection.rs
+pub struct ReflectionConfig {
+    pub enabled: bool,                   // 是否启用反思循环
+    pub max_iterations: u32,             // 最大迭代次数（默认 3）
+    pub reviewer_prompt: String,         // 评审者系统提示（独立于生产者）
+    pub stop_condition: StopCondition,   // 停止条件
+}
+
+pub enum StopCondition {
+    ScoreAbove(f32),                     // LLM-as-Judge 评分超过阈值
+    NoChanges,                           // 连续两次输出无差异
+    KeywordsPresent(Vec<String>),        // 输出包含特定关键词（如 "CODE_IS_PERFECT"）
+}
+
+/// 反思循环：生成 → 评审 → 优化 → 重复
+pub async fn run_reflection_loop(
+    &self, agent: &RigAgent, reviewer: &RigAgent,
+    request: GenerationRequest, config: &ReflectionConfig,
+) -> Result<ReflectionResult, AgentError> {
+    let mut current = request;
+    let mut history = Vec::new();
+
+    for i in 0..config.max_iterations {
+        // 1. 生产者生成
+        let output = agent.run(current.clone()).await?;
+        history.push(output.text.clone());
+
+        // 2. 评审者评估
+        let critique = reviewer.generate(GenerationRequest {
+            messages: vec![
+                ChatMessage::system(&config.reviewer_prompt),
+                ChatMessage::user(&format!("原始任务：{}\n\n生成输出：\n{}", current.prompt(), &output.text)),
+            ],
+            temperature: Some(0.1),
+            ..Default::default()
+        }).await?;
+
+        // 3. 检查停止条件
+        if self.should_stop(&critique.text, &config.stop_condition) {
+            return Ok(ReflectionResult { text: output.text, iterations: i + 1, history });
+        }
+
+        // 4. 将评审反馈注入下一轮
+        current = current.with_feedback(&critique.text);
+    }
+    Ok(ReflectionResult { text: history.last().unwrap().clone(), iterations: config.max_iterations, history })
+}
+```
+
+**使用场景**：
+
+| 场景 | 反思配置 |
+|------|----------|
+| 代码生成 | 评审者 = "高级软件工程师"，停止条件 = 代码通过静态分析 |
+| 翻译校对 | 评审者 = "专业翻译"，停止条件 = 无术语不一致 |
+| 文档撰写 | 评审者 = "技术编辑"，停止条件 = 结构完整 + 无事实错误 |
+| 工作流阶段 | StageTemplate 增加 `reflection: Option<ReflectionConfig>` 字段 |
+
+**成本权衡**：每次反思循环增加一次 LLM 调用。仅在高精度场景启用，Agent 配置中默认关闭。
+
+### 10.10 人机协同（Human-in-the-Loop）
+
+**来源**：Agentic Design Patterns Ch.13 — 人类监督、干预与升级。
+
+**设计目标**：关键操作（文件写入、删除、外部 API 调用）需用户确认后执行；Agent 遇到无法处理的情况时自动升级给用户。
+
+#### 10.10.1 工具审批流程
+
+```rust
+// 核心数据结构
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ToolApprovalRequest {
+    pub call_id: String,                 // 工具调用 ID
+    pub tool_name: String,               // 工具名称
+    pub arguments: serde_json::Value,    // 调用参数
+    pub agent_id: String,                // 发起的 Agent
+    pub risk_level: RiskLevel,           // 风险等级
+    pub description: String,             // 人类可读描述
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub enum RiskLevel {
+    Low,       // 自动放行（read/list/glob/grep）
+    Medium,    // 静默记录（write_file 到已知目录）
+    High,      // 需要审批（delete/edit/外部 API）
+    Critical,  // 需要二次确认（rm -rf/数据库操作/发送消息）
+}
+
+pub enum ToolApprovalResponse {
+    Approved,                   // 批准执行
+    Rejected(String),           // 拒绝（附原因）
+    AlwaysApprove(String),      // 本次会话始终批准此类工具
+    Defer,                      // 延后（Agent 尝试其他方案）
+}
+```
+
+**审批流程**：
+
+```
+Agent 调用工具 → ToolExecutor 检查 RiskLevel
+  ├─ Low/Medium → 自动执行，记录日志
+  ├─ High → emit('tool:approval-request', request)
+  │         → 前端弹出 ToolApprovalDialog
+  │         → 用户响应 → emit('tool:approval-response', response)
+  │         → 批准 → 执行；拒绝 → 返回拒绝结果给 Agent
+  └─ Critical → 二次确认弹窗 + 执行摘要预览
+```
+
+**前端 ToolApprovalDialog**：
+
+```
+┌─ 工具审批 ─────────────────────────────┐
+│ Agent "研究员" 请求调用工具              │
+│                                        │
+│ 工具: write_file                       │
+│ 风险: 🔴 高                            │
+│                                        │
+│ 参数:                                  │
+│   path: src/main.rs                    │
+│   content: (234 行代码变更)             │
+│                                        │
+│ 影响: 将覆盖现有文件                    │
+│ ──────────────────────────────────────  │
+│ [✅ 批准] [❌ 拒绝] [📋 查看详情]       │
+│ [☑ 本次会话始终批准 write_file]         │
+└────────────────────────────────────────┘
+```
+
+#### 10.10.2 升级机制
+
+Agent 在以下情况自动升级给用户：
+
+| 升级触发条件 | 处理方式 |
+|-------------|----------|
+| 连续 3 次工具调用失败 | 暂停执行 + 通知用户 + 建议替代方案 |
+| 工具审批被拒绝 | Agent 尝试其他方案；若无则请求用户指导 |
+| 上下文窗口 > 90% | 提示用户开启新会话或压缩上下文 |
+| 工作流阶段失败 | 可选：自动跳过 / 重试 / 暂停等用户决策 |
+| 检测到循环行为（重复相同操作 > 5 次） | 自动中断 + 诊断报告 |
+
+### 10.11 目标设定与监控（Goal Setting & Monitoring）
+
+**来源**：Agentic Design Patterns Ch.11 — SMART 目标 + 进度监控 + 反馈循环。
+
+**设计目标**：为工作流和 Agent 任务定义可衡量的成功标准，运行时持续评估是否达成。
+
+**目标定义**（扩展 TaskDefinition）：
+
+```rust
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TaskGoal {
+    pub description: String,             // "生成一份包含 5 个章节的研究报告"
+    pub criteria: Vec<GoalCriterion>,    // 可衡量的标准
+    pub timeout_secs: Option<u64>,       // 超时限制
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GoalCriterion {
+    pub metric: String,                  // "output_length" | "contains_sections" | "no_hallucination"
+    pub operator: CriterionOp,           // Gt | Contains | NotContains | LlmJudge
+    pub value: serde_json::Value,        // 阈值
+    pub weight: f32,                     // 权重（0~1）
+}
+
+pub enum CriterionOp {
+    Gt, Lt, Eq, Contains, NotContains, RegexMatch, LlmJudge,
+}
+```
+
+**监控实现**：
+
+```rust
+// 运行时监控
+pub struct GoalMonitor {
+    goals: Vec<TaskGoal>,
+    check_interval: Duration,            // 检查间隔（默认 5s）
+}
+
+impl GoalMonitor {
+    /// 评估当前状态是否满足目标
+    pub async fn evaluate(&self, state: &WorkflowState) -> GoalStatus {
+        let mut scores = Vec::new();
+        for goal in &self.goares {
+            for criterion in &goal.criteria {
+                let score = self.evaluate_criterion(criterion, state).await;
+                scores.push(score * criterion.weight);
+            }
+        }
+        let total: f32 = scores.iter().sum();
+        GoalStatus {
+            achieved: total >= 0.8,      // 80% 权重达标 = 目标达成
+            score: total,
+            details: scores,
+        }
+    }
+
+    /// 偏离目标时触发重新规划或升级
+    pub async fn on偏离(&self, status: GoalStatus) -> RecoveryAction {
+        if status.score < 0.3 {
+            RecoveryAction::EscalateToUser("目标严重偏离，建议人工介入".into())
+        } else if status.score < 0.6 {
+            RecoveryAction::Replan("目标部分达成，尝试调整策略".into())
+        } else {
+            RecoveryAction::Continue
+        }
+    }
+}
+```
+
+**前端展示**（工作流运行面板）：
+
+```
+┌─ 目标监控 ──────────────────────────────┐
+│ 目标: 生成 5 章节研究报告               │
+│ 进度: ████████████░░░ 78%               │
+│ ─────────────────────────────────────── │
+│ ✅ 包含摘要章节        (已完成)         │
+│ ✅ 包含正文 ≥ 3 章节   (3/3)            │
+│ ⚠️ 包含参考文献        (进行中)         │
+│ ❌ 无事实错误          (待验证)         │
+│ ─────────────────────────────────────── │
+│ 预计剩余: ~2 分钟                       │
+│ [暂停] [调整目标] [跳过]                │
+└─────────────────────────────────────────┘
+```
+
+### 10.12 安全护栏（Guardrails）
+
+**来源**：Agentic Design Patterns Ch.18 — 多层防御机制。
+
+**设计目标**：在 Agent 输入/输出两端增加安全过滤层，防止有害内容、注入攻击和策略违规。
+
+**护栏层级**：
+
+```
+用户输入
+  │
+  ├─ L1: 输入过滤（规则引擎） ← §10.12 InjectionDetector
+  │   ├─ 提示注入检测（"忽略之前的指令"等模式）
+  │   ├─ 敏感词过滤（可配置黑名单）
+  │   └─ 输入长度限制
+  │
+  ├─ L2: Agent 处理
+  │   ├─ 系统提示约束（角色定义 + 行为边界）
+  │   ├─ 工具权限控制（§10.10 RiskLevel）← §10.10 ToolExecutor
+  │   └─ 上下文窗口保护
+  │
+  ├─ L3: 输出过滤（LLM 预筛） ← §10.12 ToxicityFilter
+  │   ├─ 毒性/偏见检测（轻量模型，如 Gemini Flash）
+  │   ├─ 事实一致性检查（RAG 增强时）
+  │   └─ 格式合规验证（结构化输出校验）
+  │
+  └─ L4: 人工监督（§10.10 HITL）
+      ├─ 高风险操作审批
+      ├─ 输出审核（可选）
+      └─ 升级机制
+```
+
+**InjectionDetector vs RiskLevel 分工**：
+
+| 维度 | InjectionDetector（§10.12 L1） | RiskLevel（§10.10 L2） |
+|------|------------------------------|----------------------|
+| 作用点 | 用户输入进入 Agent **之前** | Agent 调用工具 **之前** |
+| 检测对象 | 文本内容（提示注入/敏感词） | 工具调用行为（write/delete/外部 API） |
+| 执行者 | 规则引擎（零延迟，无 LLM） | ToolExecutor + 前端审批对话框 |
+| 结果 | Pass / Block / Warn / Replace | 自动放行 / 需审批 / 拒绝 |
+| 典型场景 | "忽略之前的指令" → Block | `write_file` → High → 审批对话框 |
+| 不处理 | 工具调用安全 | 输入文本安全 |
+
+**实现**：
+
+```rust
+// core/rig/guardrails.rs
+pub struct GuardrailPipeline {
+    input_filters: Vec<Box<dyn InputFilter>>,
+    output_filters: Vec<Box<dyn OutputFilter>>,
+}
+
+#[async_trait]
+pub trait InputFilter: Send + Sync {
+    async fn check(&self, input: &str, context: &AgentContext) -> FilterResult;
+}
+
+#[async_trait]
+pub trait OutputFilter: Send + Sync {
+    async fn check(&self, output: &str, context: &AgentContext) -> FilterResult;
+}
+
+pub enum FilterResult {
+    Pass,                              // 通过
+    Block(String),                     // 拦截（附原因）
+    Warn(String),                      // 警告但放行
+    Replace(String),                   // 替换后放行
+}
+
+// 内置过滤器
+pub struct InjectionDetector;          // 提示注入模式匹配
+pub struct ToxicityFilter;            // 毒性检测（调用轻量 LLM）
+pub struct LengthLimiter { max_chars: usize }
+pub struct FormatValidator { schema: serde_json::Value }
+```
+
+**注入检测模式**（规则引擎，零延迟）：
+
+```rust
+const INJECTION_PATTERNS: &[&str] = &[
+    "ignore previous instructions",
+    "忽略之前的指令",
+    "ignore all rules",
+    "forget everything you know",
+    "repeat your system prompt",
+    "你现在是",
+    "bypass",
+    "jailbreak",
+    // ... 可扩展
+];
+```
+
+**毒性检测**（异步，使用轻量模型）：
+
+```rust
+pub struct ToxicityFilter {
+    model: Arc<dyn ModelProvider>,      // 推荐使用 Gemini Flash / 小模型
+}
+
+impl ToxicityFilter {
+    async fn check(&self, text: &str) -> FilterResult {
+        let result = self.model.generate(GenerationRequest {
+            messages: vec![ChatMessage::user(&format!(
+                "评估以下文本是否包含毒性/偏见/有害内容。仅返回 JSON: {{\"safe\": bool, \"reason\": string}}\n\n{}", text
+            ))],
+            temperature: Some(0.0),
+            max_tokens: Some(100),
+            ..Default::default()
+        }).await?;
+        // 解析 JSON 判断 safe/unsafe
+    }
+}
+```
+
+### 10.13 评估与监控（Evaluation & Monitoring）
+
+**来源**：Agentic Design Patterns Ch.19 — Agent 轨迹分析 + LLM-as-Judge + 性能仪表盘。
+
+**设计目标**：记录 Agent 执行轨迹，支持质量评估和性能分析。
+
+#### 10.13.1 Agent 轨迹记录
+
+```rust
+// 每次 Agent 执行记录完整轨迹
+#[derive(Serialize, Deserialize)]
+pub struct AgentTrace {
+    pub session_id: String,
+    pub agent_id: String,
+    pub trace_id: String,               // UUID
+    pub started_at: u64,
+    pub finished_at: Option<u64>,
+    pub steps: Vec<TraceStep>,          // 每步详情
+    pub total_tokens: TokenUsage,
+    pub total_cost: f64,
+    pub outcome: TraceOutcome,          // Success | Failure | Abandoned | Timeout
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TraceStep {
+    pub step_index: u32,
+    pub kind: StepKind,                 // LlmCall | ToolCall | Reflection | HumanApproval
+    pub input_summary: String,          // 输入摘要（防日志过大）
+    pub output_summary: String,
+    pub tokens: TokenUsage,
+    pub latency_ms: u64,
+    pub tool_name: Option<String>,      // ToolCall 时
+    pub tool_args: Option<serde_json::Value>,
+    pub tool_result_ok: Option<bool>,
+    pub error: Option<String>,
+}
+```
+
+**存储**：`agent_traces` 表（迁移 007），保留最近 1000 条轨迹，支持按 session/agent/outcome 查询。
+
+#### 10.13.2 LLM-as-Judge 评估
+
+```rust
+pub struct AgentJudge {
+    model: Arc<dyn ModelProvider>,      // 评审模型
+}
+
+impl AgentJudge {
+    /// 评估 Agent 输出质量
+    pub async fn evaluate(
+        &self, task: &str, output: &str, criteria: &[String],
+    ) -> JudgeResult {
+        let prompt = format!(
+            "你是一个 AI 输出质量评审员。\n\n任务: {}\n\n输出:\n{}\n\n评估标准: {}\n\n\
+             返回 JSON: {{\"score\": 1-5, \"rationale\": string, \"criteria_scores\": {{...}}}}",
+            task, output, criteria.join(", ")
+        );
+        // 调用 LLM → 解析 JSON → 返回评分
+    }
+
+    /// 比较两个 Agent 版本的输出质量
+    pub async fn compare(
+        &self, task: &str, output_a: &str, output_b: &str,
+    ) -> ComparisonResult { ... }
+}
+```
+
+#### 10.13.3 性能仪表盘
+
+**数据聚合命令**（`agent:stats`）：
+
+| 指标 | 计算方式 | 用途 |
+|------|----------|------|
+| 成功率 | `outcome=Success / total` | Agent 可靠性 |
+| 平均延迟 | `avg(latency_ms)` per step | 性能瓶颈定位 |
+| Token 效率 | `output_tokens / input_tokens` | 提示词优化 |
+| 工具使用分布 | `tool_name` group by count | 工具偏好分析 |
+| 失败原因分布 | `error` group by category | 系统改进方向 |
+| 反思循环平均次数 | `avg(reflection.iterations)` | 反思效果评估 |
+
+**前端**（设置页 → Agent 评估 Tab）：
+
+```
+┌─ Agent 评估 ──────────────────────────────┐
+│ 选择 Agent: [▾ 研究员 Agent]               │
+│ 时间范围: [最近 7 天 ▾]                     │
+│ ────────────────────────────────────────── │
+│ 成功率: 94%  · 平均延迟: 2.3s              │
+│ Token 效率: 0.42  · 总调用: 156 次         │
+│ ────────────────────────────────────────── │
+│ 失败原因:                                   │
+│   🔴 工具超时 42%                           │
+│   🟡 上下文溢出 28%                         │
+│   🟡 用户取消 18%                           │
+│ ────────────────────────────────────────── │
+│ [查看轨迹详情] [导出报告] [对比版本]         │
+└─────────────────────────────────────────────┘
+```
 
 ---
 
@@ -3703,6 +4425,9 @@ impl serde::Serialize for AppError {
 | 路径安全 | 所有文件读写强制 `canonicalize` 后前缀校验，防目录穿越 |
 | 日志脱敏 | 日志过滤 API Key / Token 模式（`sk-` 等） |
 | 远程 MCP | OAuth 回调本地监听随机端口 + PKCE |
+| 安全护栏 | 四层防御：输入过滤（注入检测/敏感词）→ Agent 约束（系统提示/工具权限）→ 输出过滤（毒性检测）→ 人工监督（审批/升级），详见 §10.12 |
+| 人机协同 | 工具审批分级（Low/Medium/High/Critical）+ 升级机制 + ToolApprovalDialog，详见 §10.10 |
+| SSRF 防护 | web 工具过滤 private/loopback IP 段 |
 
 ---
 
@@ -3722,6 +4447,324 @@ impl serde::Serialize for AppError {
 - 消息历史分页加载（每页 50 条）
 - WebView 侧 `content-visibility: auto` 懒渲染长会话
 - 代码高亮按需加载（shiki 动态 import）
+
+### 13.1 上下文压缩（Context Compaction）
+
+**来源**：MiMo-Code `session/compaction.ts` + `session/overflow.ts` + `session/prune.ts`。
+
+**设计目标**：当对话历史超过模型上下文窗口时，自动压缩旧消息，保留最近上下文，确保 Agent 持续运行。
+
+#### Token 计数与窗口计算
+
+```rust
+/// 简单 token 估算（对齐 MiMo-Code util/token.ts）
+pub fn estimate_tokens(text: &str) -> usize {
+    text.len() / 4  // 英文约 4 字符/token，中文约 2 字符/token，取平均
+}
+
+/// 上下文窗口（对齐 MiMo-Code overflow.ts Window）
+pub struct ContextWindow {
+    pub hard: usize,          // 模型最大 prompt tokens
+    pub effective: usize,     // 应用 max_context 预算后的有效窗口
+    pub usable: usize,        // 触发压缩的阈值（effective - 预留）
+}
+
+/// 预留空间：compaction buffer + output cap
+pub fn compute_usable(effective: usize, model: &ModelConfig) -> usize {
+    let reserved = 20_000;   // compaction buffer
+    let output_cap = model.max_output_tokens.min(20_000);
+    effective - reserved - output_cap
+}
+```
+
+#### 压力等级（Pressure Levels）
+
+```rust
+/// 上下文压力等级（对齐 MiMo-Code contextPressureLevel）
+pub fn pressure_level(used: usize, limit: usize) -> u8 {
+    let ratio = used as f64 / limit as f64;
+    if ratio < 0.50 { 0 }      // 无压力
+    else if ratio < 0.70 { 1 }  // 轻度 → 软裁剪
+    else if ratio < 0.85 { 2 }  // 中度 → 硬裁剪 + 剥离非必要内容
+    else { 3 }                   // 高度（与 2 相同处理）
+}
+```
+
+#### 工具输出裁剪（Tool Output Pruning）
+
+```rust
+/// 裁剪常量（对齐 MiMo-Code prune.ts）
+const PRUNE_MINIMUM: usize = 20_000;      // 至少裁剪 20K tokens 才值得
+const PRUNE_PROTECT: usize = 40_000;      // 保护最近 40K tokens 的工具输出
+const SOFT_TRIM_THRESHOLD: usize = 4096;  // 软裁剪触发阈值（字符数）
+const SOFT_TRIM_KEEP: usize = 1536;       // 保留头尾各 1.5K 字符
+
+/// 不可裁剪的工具（对齐 MiMo-Code PRUNE_PROTECTED_TOOLS）
+const PROTECTED_TOOLS: &[&str] = &["skill"];
+
+/// 软裁剪（压力等级 1）：保留头尾，中间用占位符
+pub fn soft_trim(output: &str) -> String {
+    if output.len() <= SOFT_TRIM_THRESHOLD {
+        return output.to_string();
+    }
+    let head: String = output.chars().take(SOFT_TRIM_KEEP).collect();
+    let tail: String = output.chars().rev().take(SOFT_TRIM_KEEP)
+        .collect::<Vec<_>>().into_iter().rev().collect();
+    format!("{}[... trimmed ...]{}", head, tail)
+}
+
+/// 硬裁剪（压力等级 >=2）：标记为已裁剪，渲染时显示占位符
+pub fn hard_prune(part: &mut ToolPart) {
+    part.compacted_at = Some(Instant::now());
+}
+
+/// 渲染时：已裁剪的工具输出
+pub fn render_tool_output(part: &ToolPart) -> &str {
+    if part.compacted_at.is_some() {
+        "[Old tool result content cleared]"
+    } else {
+        &part.output
+    }
+}
+```
+
+#### 压缩流程（LLM Summarization）
+
+```rust
+/// 压缩代理（对齐 MiMo-Code compaction agent）
+/// - 无工具权限（纯 LLM 总结）
+/// - 隐藏（不在 agent 列表中显示）
+pub struct CompactionAgent {
+    pub model: Arc<dyn ModelProvider>,
+}
+
+/// 压缩提示词（对齐 MiMo-Code compaction.txt）
+const COMPACTION_SYSTEM_PROMPT: &str = r#"
+You are an anchored context summarization assistant for coding sessions.
+
+Summarize only the conversation history you are given. The newest turns may be kept
+verbatim outside your summary, so focus on the older context that still matters for
+continuing the work.
+
+If the prompt includes a <previous-summary> block, treat it as the current anchored
+summary. Update it with the new history by preserving still-true details, removing
+stale details, and merging in new facts.
+
+Always follow the exact output structure requested by the user prompt. Keep every
+section, preserve exact file paths and identifiers when known, and prefer terse
+bullets over paragraphs.
+
+Do not answer the conversation itself. Do not mention that you are summarizing,
+compacting, or merging context. Respond in the same language as the conversation.
+"#;
+
+/// 默认总结模板（对齐 MiMo-Code compaction.ts）
+const SUMMARY_TEMPLATE: &str = r#"
+## Goal
+[What goal(s) is the user trying to accomplish?]
+
+## Instructions
+- [What important instructions did the user give you that are relevant]
+- [If there is a plan or spec, include information about it]
+
+## Discoveries
+[What notable things were learned during this conversation]
+
+## Accomplished
+[What work has been completed, what is still in progress, what is left?]
+
+## Relevant files / directories
+[Structured list of relevant files read, edited, or created]
+"#;
+```
+
+#### Head/Tail 选择（保留最近对话）
+
+```rust
+/// 保留最近对话的预算（对齐 MiMo-Code preserveRecentBudget）
+const MIN_PRESERVE_RECENT: usize = 2_000;
+const MAX_PRESERVE_RECENT: usize = 8_000;
+const DEFAULT_TAIL_TURNS: usize = 2;
+
+pub fn preserve_recent_budget(usable: usize) -> usize {
+    let target = (usable as f64 * 0.25) as usize;  // 25% of usable
+    target.clamp(MIN_PRESERVE_RECENT, MAX_PRESERVE_RECENT)
+}
+
+/// 选择 head/tail 分界点
+/// head → 送入 LLM 总结；tail → 保留原文
+pub fn select_head_tail(messages: &[Message], tail_turns: usize, budget: usize) -> HeadTail {
+    let turns = identify_user_turns(messages);
+    if turns.len() <= tail_turns {
+        return HeadTail { head: messages.to_vec(), tail_start: None };
+    }
+
+    let recent = &turns[turns.len() - tail_turns..];
+    let mut total = 0;
+    let mut keep_from = None;
+
+    for turn in recent.iter().rev() {
+        let size = estimate_tokens(&turn.text);
+        if total + size > budget { break; }
+        total += size;
+        keep_from = Some(turn.start_index);
+    }
+
+    match keep_from {
+        Some(idx) => HeadTail {
+            head: messages[..idx].to_vec(),
+            tail_start: Some(idx),
+        },
+        None => HeadTail { head: messages.to_vec(), tail_start: None },
+    }
+}
+```
+
+#### 溢出检测与恢复
+
+```rust
+/// 溢出检测时机（对齐 MiMo-Code prompt.ts runLoop）
+pub enum OverflowTrigger {
+    PreLlmCheck,              // LLM 调用前：token 超过 usable
+    PostLlmError,             // LLM 调用后：provider 返回 overflow 错误
+}
+
+/// 恢复策略（对齐 MiMo-Code rebuildEnsuringCheckpoint）
+pub async fn handle_overflow(
+    &self, session: &Session, trigger: OverflowTrigger,
+) -> OverflowResult {
+    // 1. 主 Agent → 优先从 checkpoint 重建
+    if session.is_main_agent() {
+        if let Ok(true) = self.try_rebuild_from_checkpoint(session).await {
+            return OverflowResult::Rebuilt;
+        }
+        // checkpoint 不存在或写入失败 → 降级为压缩
+    }
+
+    // 2. 子 Agent → 直接压缩（子 agent 无 checkpoint）
+    self.compaction.create(session).await;
+    OverflowResult::Compacted
+}
+
+/// 微压缩（Microcompact）：重建时清理可重新生成的工具结果
+const COMPACTABLE_TOOLS: &[&str] = &[
+    "read", "bash", "grep", "glob", "webfetch", "websearch",
+    "edit", "write", "codesearch",
+];
+
+pub fn microcompact(messages: &mut [Message], boundary_time: u64) {
+    for msg in messages.iter_mut() {
+        if msg.created_at <= boundary_time { continue; }
+        for part in msg.parts.iter_mut() {
+            if let Part::Tool { tool, .. } = part {
+                if COMPACTABLE_TOOLS.contains(&tool.as_str()) && part.compacted_at.is_none() {
+                    part.compacted_at = Some(Instant::now());
+                }
+            }
+        }
+    }
+}
+```
+
+#### 压缩与 Checkpoint 的交互
+
+```
+runLoop 每次迭代：
+  1. prune.fireCheckpoints() → 按阈值（20%/40%/60%/80%）触发 checkpoint writer
+  2. 溢出检测（Pre-LLM）→ 重建或压缩
+  3. LLM 调用
+  4. 溢出检测（Post-LLM）→ 重建或压缩
+
+重建 vs 压缩决策：
+  ├─ 主 Agent → 优先 checkpoint 重建（保留更多上下文）
+  │   ├─ checkpoint 存在 → 重建成功
+  │   └─ checkpoint 不存在/写入失败 → 降级压缩
+  └─ 子 Agent → 直接压缩（无 checkpoint 机制）
+
+压缩后：
+  ├─ 插入边界标记（compaction part）
+  ├─ 边界前的消息对模型不可见
+  ├─ 边界消息携带总结文本
+  └─ 自动继续（插入 "Continue if you have next steps"）
+```
+
+#### 配置选项（统一 TokenBudget）
+
+**所有 token 预算集中定义在此处**，§10.7.3 checkpoint 节预算和 §13.1 重建注入预算均从此配置读取：
+
+```rust
+/// 统一 token 预算配置（Single Source of Truth）
+pub struct TokenBudget {
+    // === 压缩配置 ===
+    pub compaction_auto: bool,                // 自动压缩（默认 true）
+    pub compaction_prune: bool,               // 工具输出裁剪（默认 true）
+    pub compaction_tail_turns: usize,         // 保留最近轮数（默认 2）
+    pub compaction_preserve_recent: usize,    // 保留最近 token 数（2K~8K，默认 usable*0.25）
+    pub compaction_reserved: usize,           // 压缩预留空间（默认 20K）
+
+    // === Checkpoint 触发 ===
+    pub checkpoint_thresholds: Vec<String>,   // 触发阈值（默认 ["20%","40%","60%","80%"]）
+    pub checkpoint_reserved: usize,           // 预留空间（默认 20K）
+
+    // === 重建注入上限（renderRebuildContext 使用） ===
+    pub inject_checkpoint: usize,             // checkpoint.md 注入上限（默认 11K）
+    pub inject_memory: usize,                 // MEMORY.md 注入上限（默认 10K）
+    pub inject_global: usize,                 // 全局记忆注入上限（默认 6K）
+    pub inject_notes: usize,                  // notes.md 注入上限（默认 6K）
+    pub inject_recent_user: usize,            // 最近用户输入注入上限（默认 16K）
+    pub inject_recent_user_per_msg: usize,    // 单条用户消息上限（默认 2K）
+    pub inject_tasks_ledger: usize,           // 任务清单注入上限（默认 2K）
+    pub inject_actor_ledger: usize,           // Actor 清单注入上限（默认 500）
+    pub inject_memory_titles: usize,          // 记忆标题注入上限（默认 500）
+
+    // === Checkpoint 节预算（§10.7.3 引用此处） ===
+    pub ckpt_section_active_intent: usize,    // §1（默认 500）
+    pub ckpt_section_next_action: usize,      // §2（默认 1000）
+    pub ckpt_section_directives: usize,       // §3（默认 800）
+    pub ckpt_section_task_tree: usize,        // §4（默认 1000）
+    pub ckpt_section_current_work: usize,     // §5（默认 2000）
+    pub ckpt_section_files: usize,            // §6（默认 1500）
+    pub ckpt_section_learnings: usize,        // §7（默认 2000）
+    pub ckpt_section_errors: usize,           // §8（默认 1500）
+    pub ckpt_section_live_resources: usize,   // §9（默认 1000）
+    pub ckpt_section_design_decisions: usize, // §10（默认 3000）
+    pub ckpt_section_open_notes: usize,       // §11（默认 800）
+}
+
+impl Default for TokenBudget {
+    fn default() -> Self {
+        Self {
+            compaction_auto: true,
+            compaction_prune: true,
+            compaction_tail_turns: 2,
+            compaction_preserve_recent: 0, // 计算时用 usable * 0.25
+            compaction_reserved: 20_000,
+            checkpoint_thresholds: vec!["20%".into(), "40%".into(), "60%".into(), "80%".into()],
+            checkpoint_reserved: 20_000,
+            inject_checkpoint: 11_000,
+            inject_memory: 10_000,
+            inject_global: 6_000,
+            inject_notes: 6_000,
+            inject_recent_user: 16_000,
+            inject_recent_user_per_msg: 2_000,
+            inject_tasks_ledger: 2_000,
+            inject_actor_ledger: 500,
+            inject_memory_titles: 500,
+            ckpt_section_active_intent: 500,
+            ckpt_section_next_action: 1_000,
+            ckpt_section_directives: 800,
+            ckpt_section_task_tree: 1_000,
+            ckpt_section_current_work: 2_000,
+            ckpt_section_files: 1_500,
+            ckpt_section_learnings: 2_000,
+            ckpt_section_errors: 1_500,
+            ckpt_section_live_resources: 1_000,
+            ckpt_section_design_decisions: 3_000,
+            ckpt_section_open_notes: 800,
+        }
+    }
+}
+```
 
 ---
 
@@ -3875,6 +4918,7 @@ impl serde::Serialize for AppError {
 | T7 | 主页面板 + 多 Agent 任务设计区（依赖 T15 完成） |
 | T6 补充 | dashboard/usage/workspace/lsp 命令落地 |
 | T9 补充 | 市场三源搜索 + 去重排序 |
+| T19 | 人机协同（HITL）— 工具审批流程 + 升级机制 |
 
 ### Phase 3 — 扩展功能
 
@@ -3884,6 +4928,11 @@ impl serde::Serialize for AppError {
 | T13 | 翻译 + OCR |
 | T14 | 会议系统（8 后端 ASR） |
 | T17 | 安全与设置（API Key 加密可提前在 T6 引入基础版） |
+| T20 | 反思模式（Reflection）— 生产者-评审者循环 |
+| T21 | 安全护栏（Guardrails）— 输入/输出过滤 |
+| T22 | 目标设定与监控 — SMART 目标 + 进度评估 |
+| T23 | 评估与监控 — Agent 轨迹 + LLM-as-Judge + 性能仪表盘 |
+| T24 | 上下文压缩 — 压力等级 + 工具裁剪 + Head/Tail 选择 + 溢出恢复 + TokenBudget 统一配置 |
 | T18 | 测试与验证（贯穿各阶段，Phase 3 汇总） |
 
 ---
@@ -3911,6 +4960,7 @@ impl serde::Serialize for AppError {
 - [ ] T11 增强: 对话前端嵌入 Agent 侧边栏（T10 完成后合并） (covers: S2-9.10; depends: T10)
 - [ ] T9 补充: 市场三源搜索（协议细节/去重排序/缓存） (covers: S2-10.4.1~10.4.4; depends: T9)
 - [ ] T6 补充: dashboard/usage/workspace/lsp 命令 + 单价表与用量聚合 (covers: S2-9.9 数据源; depends: T6, T10)
+- [ ] T19: **人机协同（HITL）** — 工具审批流程（ToolApprovalRequest/Response + ToolApprovalDialog） + RiskLevel 分级 + 升级机制 + 会话级始终批准 (covers: S2-10.10, S2-10.10.1~10.10.2; depends: T5, T6, T10, T11)
 
 **Phase 3 — 扩展功能**
 
@@ -3918,4 +4968,9 @@ impl serde::Serialize for AppError {
 - [ ] T13: 翻译 + OCR — TranslateService（多 Provider/批量/文件翻译/术语表/缓存）+ OcrService 多后端 + 前端翻译页 (covers: S2-10.5, S2-10.5.1~10.5.4; depends: T5)
 - [ ] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + 前端 (covers: S2-10.3, S2-10.3.1~10.3.8; depends: T5, T6)
 - [ ] T17: 安全与设置 — Key 加密存储 + capabilities 权限 + 设置页 (covers: S2-12; depends: T6)
-- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: S2-11, S2-13, S2-14; depends: T6, T8, T12, T15)
+- [ ] T20: **反思模式（Reflection）** — ReflectionConfig + run_reflection_loop + 评审者 Agent 配置 + StageTemplate 反思字段 + 前端反思循环展示 (covers: S2-10.9; depends: T5, T15)
+- [ ] T21: **安全护栏（Guardrails）** — GuardrailPipeline + InjectionDetector + ToxicityFilter + 输入/输出过滤器接口 + 前端护栏配置 (covers: S2-10.12; depends: T5, T6)
+- [ ] T22: **目标设定与监控** — TaskGoal/GoalCriterion 数据结构 + GoalMonitor 运行时评估 + 前端目标进度条 (covers: S2-10.11; depends: T15, T7)
+- [ ] T23: **评估与监控** — AgentTrace 轨迹记录 + agent_traces 表 + AgentJudge LLM-as-Judge + 性能仪表盘（agent:stats）+ 前端评估 Tab (covers: S2-10.13; depends: T6, T10)
+- [ ] T24: **上下文压缩** — CompactionAgent + ContextWindow + 压力等级 + 工具输出裁剪（soft trim/hard prune）+ Head/Tail 选择 + 溢出检测与恢复 + 微压缩 + TokenBudget 统一配置 (covers: S2-13.1; depends: T5, T16)
+- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: S2-11, S2-13, S2-13.1, S2-14; depends: T6, T8, T12, T15)
