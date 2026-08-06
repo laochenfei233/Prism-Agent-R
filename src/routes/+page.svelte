@@ -13,6 +13,7 @@
 	import SkillOverviewCard from '$lib/components/dashboard/SkillOverviewCard.svelte';
 	import McpOverviewCard from '$lib/components/dashboard/McpOverviewCard.svelte';
 	import RecentSessionsCard from '$lib/components/dashboard/RecentSessionsCard.svelte';
+	import TaskDesigner from '$lib/components/task/TaskDesigner.svelte';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
@@ -169,6 +170,11 @@
 					sessions={dashboardStore.overview?.recent_sessions ?? []}
 					onOpenSession={handleOpenSession}
 				/>
+
+				<!-- Row 5: Task Designer -->
+				<div class="row-five">
+					<TaskDesigner />
+				</div>
 			</div>
 		</div>
 	{:else}
@@ -355,6 +361,11 @@
 		grid-template-columns: 1fr 1fr;
 		gap: 16px;
 		padding: 0 24px;
+	}
+
+	.row-five {
+		padding: 0 24px;
+		height: 520px;
 	}
 
 	@media (max-width: 900px) {
