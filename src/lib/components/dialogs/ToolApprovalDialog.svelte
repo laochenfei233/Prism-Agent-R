@@ -75,7 +75,7 @@
 		min-width: 380px;
 		max-width: 520px;
 		padding: var(--space-6);
-		animation: scaleIn var(--duration-base) var(--spring);
+		animation: scaleIn var(--duration-normal) var(--spring);
 		background: var(--color-bg);
 		border: 1px solid var(--color-separator);
 		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
