@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
+	import { contextStore } from '$lib/stores/context.svelte';
+	import AgentSidebar from '$lib/components/sidebar/AgentSidebar.svelte';
 	import type { AgentDto, SessionDto } from '$lib/api';
 
 	let { children } = $props();
@@ -11,6 +13,14 @@
 
 	$effect(() => {
 		agentStore.loadAgents();
+	});
+
+	$effect(() => {
+		const agent = agentStore.currentAgent;
+		const session = agentStore.currentSession;
+		if (agent) {
+			contextStore.loadContext(agent.id, session?.id);
+		}
 	});
 
 	async function handleCreateAgent() {
@@ -149,6 +159,11 @@
 	<main class="content">
 		{@render children()}
 	</main>
+
+	<!-- Agent Context Sidebar -->
+	{#if agentStore.currentAgent}
+		<AgentSidebar />
+	{/if}
 </div>
 
 <style>
