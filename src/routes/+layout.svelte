@@ -4,6 +4,7 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { contextStore } from '$lib/stores/context.svelte';
 	import AgentSidebar from '$lib/components/sidebar/AgentSidebar.svelte';
+	import ToolApprovalDialog from '$lib/components/dialogs/ToolApprovalDialog.svelte';
 	import type { AgentDto, SessionDto } from '$lib/api';
 
 	let { children } = $props();
@@ -165,6 +166,9 @@
 		<AgentSidebar />
 	{/if}
 </div>
+
+<!-- Global Tool Approval Dialog -->
+<ToolApprovalDialog />
 
 <style>
 	.app {

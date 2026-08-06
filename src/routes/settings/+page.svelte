@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invoke } from '$lib/api/client';
 	import { agentApi, mcpApi, skillApi } from '$lib/api';
+	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
@@ -304,6 +305,14 @@
 					</div>
 				{/each}
 			{/if}
+		</div>
+	</div>
+
+	<!-- Skill Market -->
+	<div class="group">
+		<div class="group-header">Market</div>
+		<div class="group-body">
+			<SkillMarket />
 		</div>
 	</div>
 </div>
