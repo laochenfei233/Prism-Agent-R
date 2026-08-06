@@ -224,6 +224,55 @@ fn topological_sort(stages: &[WorkflowStage]) -> Result<Vec<WorkflowStage>, AppE
     Ok(sorted)
 }
 
+// ── 任务定义（Phase 2 UI 设计区） ──────────────────────────
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TaskDefinition {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub inputs: Vec<TaskInputDef>,
+    pub stages: Vec<TaskStageDef>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TaskStageDef {
+    pub id: String,
+    pub name: String,
+    pub role: String,
+    pub agent_id: Option<String>,
+    pub prompt_template: String,
+    pub tools: Vec<String>,
+    pub max_iterations: u32,
+    pub depends_on: Vec<String>,
+    pub model_hint: Option<String>,
+    pub output_spec: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TaskInputDef {
+    pub key: String,
+    pub label: String,
+    pub kind: InputKindDef,
+    pub options: Option<Vec<serde_json::Value>>,
+    pub default: Option<serde_json::Value>,
+    pub required: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub enum InputKindDef {
+    Text,
+    Textarea,
+    Select,
+    Number,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TaskValidationResult {
+    pub ok: bool,
+    pub errors: Vec<String>,
+}
+
 // ── AppError 转换 ─────────────────────────────────────────
 
 impl From<AppError> for AgentError {
