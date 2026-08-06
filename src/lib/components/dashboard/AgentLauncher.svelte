@@ -92,7 +92,7 @@
 	}
 
 	.action-btn:hover {
-		background: rgba(0, 113, 227, 0.08);
+		background: rgba(255, 105, 0, 0.08);
 	}
 
 	.action-btn.secondary {

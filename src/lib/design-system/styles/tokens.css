@@ -1,7 +1,7 @@
 :root {
 	/* iOS 18 System Colors */
-	--color-accent: #007AFF;
-	--color-accent-hover: #0066D6;
+	--color-accent: #FF6900;
+	--color-accent-hover: #E85D00;
 	--color-green: #34C759;
 	--color-red: #FF3B30;
 	--color-orange: #FF9500;
@@ -122,8 +122,8 @@
 	--color-glass-border: rgba(255, 255, 255, 0.08);
 
 	/* Dark Mode System Colors */
-	--color-accent: #0A84FF;
-	--color-accent-hover: #409CFF;
+	--color-accent: #FF8533;
+	--color-accent-hover: #FF6900;
 	--color-green: #30D158;
 	--color-red: #FF453A;
 	--color-orange: #FF9F0A;

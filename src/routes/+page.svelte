@@ -471,26 +471,26 @@
 		padding: 12px 20px;
 		border-radius: 12px;
 		border: none;
-		background: #007AFF;
+		background: #FF6900;
 		color: #fff;
 		font-size: 17px;
 		font-weight: 600;
 		cursor: pointer;
 	}
-	.btn-primary:hover { background: #0066D6; }
+	.btn-primary:hover { background: #E85D00; }
 	.btn-primary:active { transform: scale(0.98); }
 
 	.btn-secondary {
 		padding: 10px 16px;
 		border-radius: 10px;
-		border: 1px solid #007AFF;
+		border: 1px solid #FF6900;
 		background: transparent;
-		color: #007AFF;
+		color: #FF6900;
 		font-size: 15px;
 		font-weight: 500;
 		cursor: pointer;
 	}
-	.btn-secondary:hover { background: rgba(0, 122, 255, 0.08); }
+	.btn-secondary:hover { background: rgba(255, 105, 0, 0.08); }
 	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.btn-green {
@@ -555,7 +555,7 @@
 		word-break: break-word;
 	}
 	.message.user .bubble {
-		background: #007AFF;
+		background: #FF6900;
 		color: #fff;
 		border-bottom-right-radius: 4px;
 	}
@@ -564,7 +564,7 @@
 	}
 
 	.streaming { border-bottom-left-radius: 4px; }
-	.cursor { animation: blink 1s infinite; color: #007AFF; }
+	.cursor { animation: blink 1s infinite; color: #FF6900; }
 
 	.composer {
 		padding: 12px 16px;
@@ -590,14 +590,14 @@
 		min-height: 40px;
 		max-height: 120px;
 	}
-	textarea:focus { border-color: #007AFF; }
+	textarea:focus { border-color: #FF6900; }
 
 	.send-btn {
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
 		border: none;
-		background: #007AFF;
+		background: #FF6900;
 		color: #fff;
 		cursor: pointer;
 		display: flex;
@@ -605,7 +605,7 @@
 		justify-content: center;
 		flex-shrink: 0;
 	}
-	.send-btn:hover { background: #0066D6; }
+	.send-btn:hover { background: #E85D00; }
 	.send-btn:active { transform: scale(0.95); }
 	.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 

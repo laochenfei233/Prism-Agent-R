@@ -6,13 +6,6 @@
 		onStartChat?: (agentId: string) => void;
 	} = $props();
 
-	const initials = $derived(
-		agent.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
-	);
-
-	const colors = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#5856D6'];
-	const bgColor = $derived(colors[agent.name.charCodeAt(0) % colors.length]);
-
 	function formatRelative(dateStr: string | null): string {
 		if (!dateStr) return '从未使用';
 		const d = new Date(dateStr);
@@ -33,7 +26,7 @@
 		{#if agent.avatar}
 			<img class="avatar-img" src={agent.avatar} alt={agent.name} />
 		{:else}
-			<div class="avatar-fallback" style:background={bgColor}>{initials}</div>
+			<img src="/icon.svg" alt="" class="avatar-icon" />
 		{/if}
 		<div class="card-info">
 			<h4 class="card-name">{agent.name}</h4>
@@ -92,16 +85,10 @@
 		flex-shrink: 0;
 	}
 
-	.avatar-fallback {
-		width: 44px;
-		height: 44px;
-		border-radius: var(--radius-sm);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: #fff;
-		font-size: 16px;
-		font-weight: 600;
+	.avatar-icon {
+		width: 40px;
+		height: 40px;
+		border-radius: 8px;
 		flex-shrink: 0;
 	}
 
@@ -146,7 +133,7 @@
 	}
 
 	.model-tag {
-		background: rgba(0, 113, 227, 0.1);
+		background: rgba(255, 105, 0, 0.1);
 		color: var(--color-accent);
 	}
 

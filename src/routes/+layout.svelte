@@ -260,7 +260,7 @@
 		cursor: pointer;
 		transition: background 0.15s ease;
 	}
-	.icon-btn-sm:hover { background: rgba(0, 113, 227, 0.1); }
+	.icon-btn-sm:hover { background: rgba(255, 105, 0, 0.1); }
 
 	/* ── List ───────────────────────────────────── */
 	.list {
