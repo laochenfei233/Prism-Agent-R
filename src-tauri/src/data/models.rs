@@ -212,6 +212,69 @@ pub struct WorkflowDto {
     pub definition: serde_json::Value,
 }
 
+// ── Sidebar types ──
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AgentContext {
+    pub agent: AgentDto,
+    pub session_usage: SessionUsage,
+    pub workspace: WorkspaceInfo,
+    pub instructions: Vec<InstructionFile>,
+    pub mcp: Vec<McpServerStatus>,
+    pub lsp: Vec<LspServerInfo>,
+    pub tree: DirTree,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SessionUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub context_used: u64,
+    pub context_limit: u64,
+    pub tool_calls: u64,
+    pub cost_est: f64,
+    pub today_calls: u64,
+    pub today_tokens: u64,
+    pub today_cost: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct WorkspaceInfo {
+    pub current_dir: String,
+    pub recent_dirs: Vec<String>,
+    pub bound_agent_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct InstructionFile {
+    pub path: String,
+    pub name: String,
+    pub lines: usize,
+    pub injected: bool,
+    pub priority: u8,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LspServerInfo {
+    pub id: String,
+    pub cmd: String,
+    pub status: String,
+    pub langs: Vec<String>,
+    pub index_file_count: Option<u64>,
+    pub last_error: Option<String>,
+    pub install_hint: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DirTree {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub children: Option<Vec<DirTree>>,
+    pub language: Option<String>,
+    pub line_count: Option<u64>,
+}
+
 // ── Dashboard types ──
 
 #[derive(Serialize, Deserialize, Clone)]

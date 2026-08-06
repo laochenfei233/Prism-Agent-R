@@ -47,6 +47,8 @@ pub fn run() {
             commands::agent::agent_create,
             commands::agent::agent_update,
             commands::agent::agent_delete,
+            commands::agent::context_agent,
+            commands::agent::session_inject_file,
             commands::session::session_list,
             commands::session::session_create,
             commands::session::session_rename,
