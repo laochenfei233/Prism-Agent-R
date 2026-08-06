@@ -48,6 +48,7 @@ pub fn run() {
             commands::session::session_create,
             commands::session::session_rename,
             commands::session::session_delete,
+            commands::session::session_search,
             commands::chat::chat_history,
             commands::chat::chat_send,
             commands::chat::chat_abort,

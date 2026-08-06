@@ -36,6 +36,9 @@ impl Database {
         sqlx::query(include_str!("migrations/005_glossary_memory.sql"))
             .execute(&pool)
             .await?;
+        sqlx::query(include_str!("migrations/012_session_fts.sql"))
+            .execute(&pool)
+            .await?;
 
         Ok(Self { pool })
     }
