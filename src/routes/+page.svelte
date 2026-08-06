@@ -4,10 +4,18 @@
 	import { agentApi } from '$lib/api';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
+	import { dashboardStore } from '$lib/stores/dashboard.svelte';
+
+	import DashboardHeader from '$lib/components/dashboard/DashboardHeader.svelte';
+	import UsageStatsCard from '$lib/components/dashboard/UsageStatsCard.svelte';
+	import UsageTrendChart from '$lib/components/dashboard/UsageTrendChart.svelte';
+	import AgentLauncher from '$lib/components/dashboard/AgentLauncher.svelte';
+	import SkillOverviewCard from '$lib/components/dashboard/SkillOverviewCard.svelte';
+	import McpOverviewCard from '$lib/components/dashboard/McpOverviewCard.svelte';
+	import RecentSessionsCard from '$lib/components/dashboard/RecentSessionsCard.svelte';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
-	let msg = $state('');
 
 	// Setup form
 	let pName = $state('');
@@ -18,6 +26,7 @@
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
+	let msg = $state('');
 
 	// Chat
 	let input = $state('');
@@ -77,8 +86,31 @@
 			msg = '✓ Agent 已创建';
 			await load();
 			agentStore.loadAgents();
+			dashboardStore.loadOverview();
 		} catch (e) {
 			msg = '错误: ' + String(e);
+		}
+	}
+
+	async function handleStartChat(agentId: string) {
+		const agent = agentStore.agents.find((a) => a.id === agentId);
+		if (!agent) return;
+		try {
+			agentStore.selectAgent(agent);
+			const session = await agentStore.createSession(agent.id, '新会话');
+			if (agentStore.currentSession) {
+				chatStore.loadHistory(agentStore.currentSession.id);
+			}
+		} catch (e) {
+			console.error('Failed to start chat:', e);
+		}
+	}
+
+	function handleOpenSession(sessionId: string) {
+		const session = agentStore.sessions.find((s) => s.id === sessionId);
+		if (session) {
+			agentStore.selectSession(session);
+			chatStore.loadHistory(session.id);
 		}
 	}
 
@@ -96,20 +128,51 @@
 		}
 	}
 
-	$effect(() => { load(); });
+	$effect(() => {
+		load();
+		dashboardStore.loadOverview();
+	});
 </script>
 
 {#if !agentStore.currentSession}
-	<!-- 无会话：设置向导或欢迎页 -->
+	<!-- 无会话：Dashboard -->
 	{#if providers.length > 0 && models.length > 0}
-		<div class="welcome">
-			<div class="welcome-content">
-				<img src="/icon.svg" alt="" width="64" height="64" />
-				<h1>Prism Agent</h1>
-				<p>选择左侧 Agent，点击 + 创建会话开始对话</p>
+		<div class="dashboard">
+			<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? 0} />
+
+			<div class="dashboard-body">
+				<!-- Row 1: Usage Stats -->
+				<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
+
+				<!-- Row 2: Agent Launcher + Trend -->
+				<div class="row-two">
+					<div class="col-main">
+						<AgentLauncher
+							agents={dashboardStore.overview?.agents ?? []}
+							onStartChat={handleStartChat}
+							onCreateAgent={createAgent}
+						/>
+					</div>
+					<div class="col-side">
+						<UsageTrendChart data={dashboardStore.overview?.usage_trend ?? []} />
+					</div>
+				</div>
+
+				<!-- Row 3: Skill + MCP -->
+				<div class="row-three">
+					<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
+					<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
+				</div>
+
+				<!-- Row 4: Recent Sessions -->
+				<RecentSessionsCard
+					sessions={dashboardStore.overview?.recent_sessions ?? []}
+					onOpenSession={handleOpenSession}
+				/>
 			</div>
 		</div>
 	{:else}
+		<!-- Setup wizard -->
 		<div class="page">
 			<div class="header">
 				<h1>Prism Agent</h1>
@@ -261,30 +324,43 @@
 {/if}
 
 <style>
-	/* ── Welcome ────────────────────────────────── */
-	.welcome {
-		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-	.welcome-content {
-		text-align: center;
+	/* ── Dashboard ──────────────────────────────── */
+	.dashboard {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		gap: 12px;
+		height: 100%;
+		overflow-y: auto;
 	}
-	.welcome-content h1 {
-		font-size: 28px;
-		font-weight: 700;
-		color: var(--color-fg);
-		margin: 0;
+
+	.dashboard-body {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		padding-bottom: 24px;
 	}
-	.welcome-content p {
-		font-size: 15px;
-		color: var(--color-fg-secondary);
-		margin: 0;
+
+	.row-two {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 16px;
+		padding: 0 24px;
+	}
+
+	.col-main, .col-side {
+		min-width: 0;
+	}
+
+	.row-three {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 16px;
+		padding: 0 24px;
+	}
+
+	@media (max-width: 900px) {
+		.row-two, .row-three {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	/* ── Setup Page ─────────────────────────────── */

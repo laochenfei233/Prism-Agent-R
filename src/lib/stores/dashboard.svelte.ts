@@ -1,0 +1,116 @@
+import { invoke } from '$lib/api/client';
+
+// ── Types (mirror backend DashboardOverview) ───────────────
+
+export interface UsageStats {
+	today_tokens: number;
+	week_tokens: number;
+	month_tokens: number;
+	month_cost: number;
+	today_calls: number;
+}
+
+export interface UsagePoint {
+	date: string;
+	tokens: number;
+	cost: number;
+}
+
+export interface AgentSummary {
+	id: string;
+	name: string;
+	description: string;
+	avatar: string | null;
+	model_name: string | null;
+	skill_count: number;
+	mcp_count: number;
+	last_used: string | null;
+	order_key: number;
+}
+
+export interface SkillOverview {
+	enabled: number;
+	total: number;
+	popular: string[];
+}
+
+export interface McpServerStatus {
+	id: string;
+	name: string;
+	status: string;
+	tools_count: number;
+	last_error: string | null;
+}
+
+export interface SessionSummary {
+	id: string;
+	title: string;
+	agent_name: string;
+	updated_at: string;
+	message_count: number;
+}
+
+export interface WorkflowSummary {
+	id: string;
+	name: string;
+	description: string;
+	stage_count: number;
+	source: string;
+}
+
+export interface TaskRunSummary {
+	run_id: string;
+	workflow_name: string;
+	status: string;
+	started_at: string;
+	finished_at: string | null;
+	source: string;
+}
+
+export interface ModelStatus {
+	provider_name: string;
+	model_id: string;
+	display_name: string;
+	status: string;
+}
+
+export interface DashboardOverview {
+	agents: AgentSummary[];
+	usage: UsageStats;
+	usage_trend: UsagePoint[];
+	skills: SkillOverview;
+	mcp_servers: McpServerStatus[];
+	recent_sessions: SessionSummary[];
+	models: ModelStatus[];
+	workflows: WorkflowSummary[];
+	task_runs: TaskRunSummary[];
+}
+
+// ── Store ──────────────────────────────────────────────────
+
+function createDashboardStore() {
+	let overview = $state<DashboardOverview | null>(null);
+	let loading = $state(false);
+	let error = $state<string | null>(null);
+
+	async function loadOverview() {
+		loading = true;
+		error = null;
+		try {
+			overview = await invoke<DashboardOverview>('dashboard_overview');
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
+	}
+
+	return {
+		get overview() { return overview; },
+		get loading() { return loading; },
+		get error() { return error; },
+		loadOverview,
+	};
+}
+
+export const dashboardStore = createDashboardStore();
