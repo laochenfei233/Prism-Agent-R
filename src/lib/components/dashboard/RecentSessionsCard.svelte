@@ -21,7 +21,7 @@
 	}
 
 	const agentColors: Record<string, string> = {};
-	const palette = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#5856D6'];
+	const palette = ['#FF6900', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#5856D6'];
 
 	function agentColor(name: string): string {
 		if (!agentColors[name]) {
