@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../app.css';
 	import { goto } from '$app/navigation';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
