@@ -18,78 +18,21 @@
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
 
-	// Setup form
-	let pName = $state('');
-	let pKind = $state('openai');
-	let pUrl = $state('');
-	let pKey = $state('');
-	let mProvider = $state('');
-	let mModelId = $state('');
-	let availableModels = $state<string[]>([]);
-	let loadingModels = $state(false);
-	let msg = $state('');
-
 	// Chat
 	let input = $state('');
-
-	async function fetchModels() {
-		if (!mProvider) return;
-		loadingModels = true;
-		availableModels = [];
-		try {
-			const result = await invoke<{models: string[]}>('model_fetch_available', { providerId: mProvider });
-			availableModels = result.models || [];
-		} catch (e) {
-			msg = '拉取失败: ' + String(e);
-		} finally {
-			loadingModels = false;
-		}
-	}
 
 	async function load() {
 		providers = await invoke<any[]>('model_providers');
 		models = await invoke<any[]>('model_list');
 	}
 
-	async function saveProvider() {
-		if (!pName.trim()) { msg = '请输入名称'; return; }
-		try {
-			await invoke('settings_add_provider', {
-				name: pName.trim(), kind: pKind,
-				baseUrl: pUrl.trim() || null, apiKey: pKey.trim() || null
-			});
-			pName = ''; pUrl = ''; pKey = '';
-			await load();
-			msg = '✓ Provider 已添加';
-		} catch (e) {
-			msg = '错误: ' + String(e);
-		}
-	}
-
-	async function saveModel() {
-		if (!mProvider || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
-		try {
-			await invoke('settings_add_model', {
-				providerId: mProvider, modelId: mModelId.trim(),
-				displayName: null, isDefault: true
-			});
-			mModelId = '';
-			await load();
-			msg = '✓ 模型已添加';
-		} catch (e) {
-			msg = '错误: ' + String(e);
-		}
-	}
-
 	async function createAgent() {
 		try {
 			await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
-			msg = '✓ Agent 已创建';
-			await load();
 			agentStore.loadAgents();
 			dashboardStore.loadOverview();
 		} catch (e) {
-			msg = '错误: ' + String(e);
+			console.error('Failed to create agent:', e);
 		}
 	}
 
@@ -331,138 +274,6 @@
 			grid-template-columns: 1fr;
 		}
 	}
-
-	/* ── Setup Page ─────────────────────────────── */
-	.page {
-		padding: 24px;
-		max-width: 480px;
-		overflow-y: auto;
-	}
-
-	.header { margin-bottom: 20px; }
-	.header h1 {
-		font-size: 28px;
-		font-weight: 700;
-		color: var(--color-fg);
-		margin: 0 0 4px;
-	}
-	.header p {
-		font-size: 15px;
-		color: var(--color-fg-secondary);
-		margin: 0;
-	}
-
-	.toast {
-		padding: 10px 16px;
-		border-radius: 10px;
-		background: #34C759;
-		color: #fff;
-		font-size: 15px;
-		margin-bottom: 16px;
-	}
-	.toast.error { background: #FF3B30; }
-
-	.card {
-		background: var(--color-bg-secondary);
-		border-radius: 14px;
-		padding: 16px;
-		margin-bottom: 12px;
-	}
-	.card.disabled { opacity: 0.5; pointer-events: none; }
-
-	.card-header {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		margin-bottom: 14px;
-	}
-	.step-num {
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		background: var(--color-accent);
-		color: #fff;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 13px;
-		font-weight: 600;
-	}
-	.step-title {
-		font-size: 17px;
-		font-weight: 600;
-		color: var(--color-fg);
-	}
-
-	.form { display: flex; flex-direction: column; gap: 12px; }
-	.input-group { display: flex; flex-direction: column; gap: 4px; }
-	.input-group label {
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--color-fg-secondary);
-	}
-	.input-group input,
-	.input-group select {
-		padding: 10px 12px;
-		border-radius: 10px;
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
-		color: var(--color-fg);
-		font-size: 15px;
-		outline: none;
-	}
-	.input-group input:focus,
-	.input-group select:focus { border-color: var(--color-accent); }
-
-	.hint { font-size: 14px; color: var(--color-fg-tertiary); margin: 0; }
-
-	.done-badge {
-		margin-top: 12px;
-		padding: 8px 12px;
-		border-radius: 8px;
-		background: rgba(52, 199, 89, 0.12);
-		color: #34C759;
-		font-size: 14px;
-	}
-
-	.btn-primary {
-		padding: 12px 20px;
-		border-radius: 12px;
-		border: none;
-		background: #FF6900;
-		color: #fff;
-		font-size: 17px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.btn-primary:hover { background: #E85D00; }
-	.btn-primary:active { transform: scale(0.98); }
-
-	.btn-secondary {
-		padding: 10px 16px;
-		border-radius: 10px;
-		border: 1px solid #FF6900;
-		background: transparent;
-		color: #FF6900;
-		font-size: 15px;
-		font-weight: 500;
-		cursor: pointer;
-	}
-	.btn-secondary:hover { background: rgba(255, 105, 0, 0.08); }
-	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-	.btn-green {
-		padding: 12px 20px;
-		border-radius: 12px;
-		border: none;
-		background: #34C759;
-		color: #fff;
-		font-size: 17px;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.btn-green:hover { background: #2DB84E; }
-	.btn-green:active { transform: scale(0.98); }
 
 	/* ── Chat ───────────────────────────────────── */
 	.chat {
