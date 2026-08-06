@@ -228,10 +228,154 @@ impl SkillService {
         Ok(ids)
     }
 
-    /// 搜索市场（简化版本，返回空列表）
-    pub async fn search_market(&self, _query: &str) -> Result<Vec<SkillSearchHit>, AppError> {
-        // MVP 阶段返回空列表，Phase 2 实现三源搜索
-        Ok(Vec::new())
+    /// 搜索市场（三源并发：skills.sh / claude-plugins.dev / clawhub.ai）
+    pub async fn search_market(&self, query: &str) -> Result<Vec<SkillSearchHit>, AppError> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| AppError::Internal(format!("HTTP client: {e}")))?;
+
+        let encoded = urlencoding::encode(query);
+
+        let url_skills = format!("https://skills.sh/api/search?q={encoded}");
+        let url_plugins = format!("https://claude-plugins.dev/api/skills?q={encoded}");
+        let url_claw = format!("https://clawhub.ai/api/v1/search?query={encoded}");
+
+        let (skills_res, plugins_res, claw_res) = tokio::join!(
+            fetch_json(&client, &url_skills),
+            fetch_json(&client, &url_plugins),
+            fetch_json(&client, &url_claw),
+        );
+
+        let mut all_hits: Vec<SkillSearchHit> = Vec::new();
+
+        // Parse skills.sh
+        if let Some(val) = skills_res {
+            if let Some(arr) = val.as_array() {
+                for item in arr {
+                    let name = item["name"].as_str().unwrap_or("").to_string();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    all_hits.push(SkillSearchHit {
+                        id: format!("skills-sh:{}", name),
+                        name: name.clone(),
+                        description: item["description"].as_str().unwrap_or("").to_string(),
+                        source: "skills.sh".into(),
+                        tags: item["tags"]
+                            .as_array()
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        author: item["author"].as_str().map(|s| s.to_string()),
+                        installed: false,
+                    });
+                }
+            }
+        }
+
+        // Parse claude-plugins.dev
+        if let Some(val) = plugins_res {
+            if let Some(arr) = val.as_array() {
+                for item in arr {
+                    let name = item["name"].as_str().unwrap_or("").to_string();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    all_hits.push(SkillSearchHit {
+                        id: format!("claude-plugins:{}", name),
+                        name: name.clone(),
+                        description: item["description"].as_str().unwrap_or("").to_string(),
+                        source: "claude-plugins.dev".into(),
+                        tags: item["tags"]
+                            .as_array()
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        author: item["author"].as_str().map(|s| s.to_string()),
+                        installed: false,
+                    });
+                }
+            }
+        }
+
+        // Parse clawhub.ai
+        if let Some(val) = claw_res {
+            if let Some(arr) = val.as_array() {
+                for item in arr {
+                    let name = item["name"].as_str().unwrap_or("").to_string();
+                    if name.is_empty() {
+                        continue;
+                    }
+                    all_hits.push(SkillSearchHit {
+                        id: format!("clawhub:{}", name),
+                        name: name.clone(),
+                        description: item["description"].as_str().unwrap_or("").to_string(),
+                        source: "clawhub.ai".into(),
+                        tags: item["tags"]
+                            .as_array()
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        author: item["author"].as_str().map(|s| s.to_string()),
+                        installed: false,
+                    });
+                }
+            }
+        }
+
+        // 查数据库标记已安装
+        let installed_names: Vec<String> = sqlx::query_scalar::<_, String>("SELECT name FROM skills")
+            .fetch_all(&self.db.pool)
+            .await?
+            .into_iter()
+            .map(|n| n.to_lowercase().replace(' ', ""))
+            .collect();
+
+        for hit in &mut all_hits {
+            let normalized = hit.name.to_lowercase().replace(' ', "");
+            hit.installed = installed_names.contains(&normalized);
+        }
+
+        // 去重：按归一化名称合并
+        let mut map = std::collections::HashMap::new();
+        for hit in all_hits {
+            let key = normalize_name(&hit.name);
+            map.entry(key)
+                .and_modify(|existing: &mut SkillSearchHit| {
+                    if !hit.description.is_empty() && existing.description.is_empty() {
+                        existing.description = hit.description.clone();
+                    }
+                    if !hit.tags.is_empty() && existing.tags.is_empty() {
+                        existing.tags = hit.tags.clone();
+                    }
+                    if hit.author.is_some() && existing.author.is_none() {
+                        existing.author = hit.author.clone();
+                    }
+                    if hit.installed {
+                        existing.installed = true;
+                    }
+                })
+                .or_insert(hit);
+        }
+
+        let mut results: Vec<SkillSearchHit> = map.into_values().collect();
+        results.sort_by(|a, b| {
+            b.installed
+                .cmp(&a.installed)
+                .then_with(|| b.description.is_empty().cmp(&a.description.is_empty()))
+        });
+
+        Ok(results)
     }
 
     /// 列出本地技能（指定目录下的 SKILL.md）
@@ -336,6 +480,27 @@ fn compute_hash(content: &str) -> String {
     let mut hasher = DefaultHasher::new();
     content.hash(&mut hasher);
     format!("{:x}", hasher.finish())
+}
+
+// ── 名称归一化（去重用） ──────────────────────────────────
+
+fn normalize_name(name: &str) -> String {
+    let mut s = name.to_lowercase().replace(' ', "");
+    for suffix in &["-agent", "-skill", "agent", "skill"] {
+        if let Some(stripped) = s.strip_suffix(suffix) {
+            if !stripped.is_empty() {
+                s = stripped.to_string();
+            }
+        }
+    }
+    s
+}
+
+// ── HTTP 请求辅助 ─────────────────────────────────────────
+
+async fn fetch_json(client: &reqwest::Client, url: &str) -> Option<serde_json::Value> {
+    let resp = client.get(url).send().await.ok()?;
+    resp.json::<serde_json::Value>().await.ok()
 }
 
 // ── 目录复制 ──────────────────────────────────────────────
