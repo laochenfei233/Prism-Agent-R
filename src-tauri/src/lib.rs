@@ -78,6 +78,7 @@ pub fn run() {
             commands::memory::memory_read,
             commands::memory::memory_write,
             commands::memory::memory_context_dump,
+            commands::dashboard::dashboard_overview,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
