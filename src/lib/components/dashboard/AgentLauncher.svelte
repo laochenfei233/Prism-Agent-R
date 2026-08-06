@@ -51,9 +51,10 @@
 
 <style>
 	.agent-launcher {
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-md);
-		padding: 16px;
+		background: #f7f7f8;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 12px;
+		padding: 20px;
 		min-height: 200px;
 	}
 
@@ -65,9 +66,9 @@
 	}
 
 	.launcher-header h2 {
-		font-size: var(--text-headline);
+		font-size: 15px;
 		font-weight: 600;
-		color: var(--color-fg);
+		color: #171717;
 		margin: 0;
 	}
 
@@ -79,35 +80,37 @@
 	.action-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
-		padding: 5px 12px;
-		border-radius: 9999px;
-		border: 1px solid var(--color-accent);
-		background: transparent;
-		color: var(--color-accent);
-		font-size: var(--text-caption1);
-		font-weight: 600;
+		gap: 5px;
+		padding: 6px 14px;
+		border-radius: 8px;
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		background: #fff;
+		color: #171717;
+		font-size: 13px;
+		font-weight: 500;
 		cursor: pointer;
-		transition: background 0.15s ease;
+		transition: all 0.15s ease;
 	}
 
 	.action-btn:hover {
-		background: rgba(255, 105, 0, 0.08);
+		background: #efefef;
+		border-color: rgba(0, 0, 0, 0.15);
 	}
 
 	.action-btn.secondary {
-		border-color: var(--color-separator);
-		color: var(--color-fg-secondary);
+		border-color: rgba(0, 0, 0, 0.06);
+		color: #6b6b6b;
 	}
 
 	.action-btn.secondary:hover {
-		background: var(--color-bg-tertiary);
+		background: #f0f0f0;
+		color: #171717;
 	}
 
 	.agent-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-		gap: 12px;
+		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+		gap: 10px;
 	}
 
 	.empty-state {
@@ -115,34 +118,33 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		padding: 32px 16px;
+		padding: 40px 16px;
 		gap: 12px;
 	}
 
 	.empty-icon {
-		color: var(--color-fg-tertiary);
-		opacity: 0.5;
+		color: #c5c5c5;
 	}
 
 	.empty-state p {
-		font-size: var(--text-subheadline);
-		color: var(--color-fg-secondary);
+		font-size: 14px;
+		color: #6b6b6b;
 		margin: 0;
 	}
 
 	.create-btn {
-		padding: 8px 20px;
-		border-radius: 9999px;
+		padding: 8px 18px;
+		border-radius: 8px;
 		border: none;
-		background: var(--color-accent);
+		background: #171717;
 		color: #fff;
-		font-size: var(--text-subheadline);
-		font-weight: 600;
+		font-size: 13px;
+		font-weight: 500;
 		cursor: pointer;
 		transition: background 0.15s ease;
 	}
 
 	.create-btn:hover {
-		background: var(--color-accent-hover);
+		background: #404040;
 	}
 </style>

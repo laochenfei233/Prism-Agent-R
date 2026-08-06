@@ -84,11 +84,13 @@
 		<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? agentStore.agents.length} />
 
 		<div class="dashboard-body">
-			<!-- Row 1: Usage Stats -->
-			<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
+			<!-- Row 1: Task Designer（核心功能前置） -->
+			<div class="section-row">
+				<TaskDesigner />
+			</div>
 
-			<!-- Row 2: Agent Launcher + Trend -->
-			<div class="row-two">
+			<!-- Row 2: Agent Launcher + Usage Trend -->
+			<div class="section-row two-col">
 				<div class="col-main">
 					<AgentLauncher
 						agents={dashboardStore.overview?.agents ?? agentStore.agents.map(a => ({
@@ -105,8 +107,9 @@
 				</div>
 			</div>
 
-			<!-- Row 3: Skill + MCP -->
-			<div class="row-three">
+			<!-- Row 3: Stats + Skill + MCP（三列紧凑布局） -->
+			<div class="section-row three-col">
+				<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
 				<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
 				<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
 			</div>
@@ -117,12 +120,7 @@
 				onOpenSession={handleOpenSession}
 			/>
 
-			<!-- Row 5: Task Designer -->
-			<div class="row-five">
-				<TaskDesigner />
-			</div>
-
-			<!-- Row 6: Quick Setup (if no providers/models) -->
+			<!-- Quick Setup Banner -->
 			{#if providers.length === 0 || models.length === 0}
 				<div class="setup-banner">
 					<div class="setup-banner-content">
@@ -187,91 +185,98 @@
 {/if}
 
 <style>
-	/* ── Dashboard ──────────────────────────────── */
+	/* ── Dashboard (OpenAI-style) ──────────────── */
 	.dashboard {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 		overflow-y: auto;
+		background: #ffffff;
 	}
 
 	.dashboard-body {
+		max-width: 960px;
+		width: 100%;
+		margin: 0 auto;
+		padding: 20px 32px 48px;
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
-		padding-bottom: 24px;
+		gap: 24px;
 	}
 
-	.row-two {
+	.section-row {
+		width: 100%;
+	}
+
+	.section-row.two-col {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1.6fr 1fr;
 		gap: 16px;
-		padding: 0 24px;
+	}
+
+	.section-row.three-col {
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr;
+		gap: 16px;
 	}
 
 	.col-main, .col-side {
 		min-width: 0;
 	}
 
-	.row-three {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 16px;
-		padding: 0 24px;
-	}
-
-	.row-five {
-		padding: 0 24px;
-		height: 520px;
-	}
-
 	/* ── Setup Banner ─────────────────────────── */
 	.setup-banner {
-		padding: 0 24px;
+		width: 100%;
 	}
 	.setup-banner-content {
 		display: flex;
 		align-items: center;
-		gap: 12px;
-		padding: 14px 20px;
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-accent);
-		border-radius: var(--radius-md);
+		gap: 14px;
+		padding: 16px 20px;
+		background: #f7f7f8;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 12px;
 	}
 	.setup-icon {
-		font-size: 24px;
+		font-size: 20px;
 		flex-shrink: 0;
 	}
 	.setup-text {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 1px;
 	}
 	.setup-text strong {
-		font-size: var(--text-body);
-		color: var(--color-fg);
+		font-size: 14px;
+		font-weight: 600;
+		color: #171717;
 	}
 	.setup-text span {
-		font-size: var(--text-caption1);
-		color: var(--color-fg-secondary);
+		font-size: 13px;
+		color: #6b6b6b;
 	}
 	.setup-btn {
-		padding: 8px 16px;
-		border-radius: 9999px;
+		padding: 7px 14px;
+		border-radius: 8px;
 		border: none;
-		background: var(--color-accent);
+		background: #171717;
 		color: #fff;
-		font-size: var(--text-caption1);
-		font-weight: 600;
+		font-size: 13px;
+		font-weight: 500;
 		cursor: pointer;
 		white-space: nowrap;
+		transition: background 0.15s;
 	}
-	.setup-btn:hover { background: var(--color-accent-hover); }
+	.setup-btn:hover { background: #404040; }
 
 	@media (max-width: 900px) {
-		.row-two, .row-three {
+		.section-row.two-col,
+		.section-row.three-col {
 			grid-template-columns: 1fr;
+		}
+		.dashboard-body {
+			padding: 16px;
 		}
 	}
 

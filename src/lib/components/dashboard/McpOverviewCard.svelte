@@ -6,169 +6,125 @@
 	const connectedCount = $derived(servers.filter((s) => s.status === 'connected').length);
 	const totalTools = $derived(servers.reduce((sum, s) => sum + s.tools_count, 0));
 
-	function statusColor(status: string): string {
+	function statusDot(status: string): string {
 		switch (status) {
-			case 'connected': return 'var(--color-green)';
-			case 'error': return 'var(--color-red)';
-			default: return 'var(--color-gray)';
-		}
-	}
-
-	function statusLabel(status: string): string {
-		switch (status) {
-			case 'connected': return '已连接';
-			case 'error': return '错误';
-			case 'disconnected': return '未连接';
-			default: return status;
+			case 'connected': return '#22c55e';
+			case 'error': return '#ef4444';
+			default: return '#a0a0a0';
 		}
 	}
 </script>
 
 <div class="mcp-card">
 	<div class="card-header">
-		<h3>MCP 服务</h3>
+		<h3>MCP Servers</h3>
 	</div>
-
-	<div class="mcp-summary">
-		<div class="summary-item">
-			<span class="summary-dot" style:background={connectedCount > 0 ? 'var(--color-green)' : 'var(--color-gray)'}></span>
-			<span class="summary-value">{connectedCount}/{servers.length}</span>
-			<span class="summary-label">已连接</span>
+	<div class="mcp-stats">
+		<div class="stat-row">
+			<span class="stat-label">Connected</span>
+			<span class="stat-value">{connectedCount} / {servers.length}</span>
 		</div>
-		<div class="summary-divider"></div>
-		<div class="summary-item">
-			<span class="summary-value">{totalTools}</span>
-			<span class="summary-label">工具总数</span>
+		<div class="stat-row">
+			<span class="stat-label">Total tools</span>
+			<span class="stat-value">{totalTools}</span>
 		</div>
 	</div>
-
 	{#if servers.length > 0}
 		<div class="server-list">
-			{#each servers as server}
+			{#each servers.slice(0, 4) as server}
 				<div class="server-row">
-					<span class="server-dot" style:background={statusColor(server.status)}></span>
-					<span class="server-name">{server.name}</span>
-					<span class="server-tools">{server.tools_count} 工具</span>
-					<span class="server-status">{statusLabel(server.status)}</span>
+					<span class="dot" style:background={statusDot(server.status)}></span>
+					<span class="name">{server.name}</span>
+					<span class="tools">{server.tools_count}</span>
 				</div>
 			{/each}
 		</div>
 	{:else}
-		<div class="empty">暂无 MCP 服务</div>
+		<div class="empty">No servers configured</div>
 	{/if}
 </div>
 
 <style>
 	.mcp-card {
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-md);
-		padding: 16px;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
+		background: #f7f7f8;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 12px;
+		padding: 20px;
 	}
 
 	.card-header {
-		margin-bottom: 16px;
+		margin-bottom: 14px;
 	}
 
 	.card-header h3 {
-		font-size: var(--text-headline);
+		font-size: 15px;
 		font-weight: 600;
-		color: var(--color-fg);
+		color: #171717;
 		margin: 0;
 	}
 
-	.mcp-summary {
+	.mcp-stats {
 		display: flex;
-		align-items: center;
-		gap: 20px;
-		margin-bottom: 16px;
+		flex-direction: column;
+		gap: 8px;
+		margin-bottom: 14px;
 	}
 
-	.summary-item {
+	.stat-row {
 		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		gap: 6px;
 	}
 
-	.summary-dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex-shrink: 0;
+	.stat-label {
+		font-size: 13px;
+		color: #6b6b6b;
 	}
 
-	.summary-value {
-		font-size: var(--text-title3);
-		font-weight: 700;
-		color: var(--color-fg);
-	}
-
-	.summary-label {
-		font-size: var(--text-caption1);
-		color: var(--color-fg-secondary);
-	}
-
-	.summary-divider {
-		width: 1px;
-		height: 24px;
-		background: var(--color-separator);
+	.stat-value {
+		font-size: 13px;
+		font-weight: 600;
+		color: #171717;
 	}
 
 	.server-list {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		flex: 1;
-		overflow-y: auto;
+		gap: 6px;
+		border-top: 1px solid rgba(0, 0, 0, 0.06);
+		padding-top: 12px;
 	}
 
 	.server-row {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px 10px;
-		border-radius: var(--radius-sm);
-		background: var(--color-bg);
+		font-size: 13px;
 	}
 
-	.server-dot {
+	.dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
 		flex-shrink: 0;
 	}
 
-	.server-name {
-		font-size: var(--text-subheadline);
-		font-weight: 500;
-		color: var(--color-fg);
+	.name {
 		flex: 1;
+		color: #171717;
 		min-width: 0;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.server-tools {
-		font-size: var(--text-caption2);
-		color: var(--color-fg-secondary);
-		flex-shrink: 0;
-	}
-
-	.server-status {
-		font-size: var(--text-caption2);
-		color: var(--color-fg-tertiary);
-		flex-shrink: 0;
+	.tools {
+		color: #a0a0a0;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.empty {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--color-fg-tertiary);
-		font-size: var(--text-subheadline);
+		font-size: 13px;
+		color: #a0a0a0;
 	}
 </style>

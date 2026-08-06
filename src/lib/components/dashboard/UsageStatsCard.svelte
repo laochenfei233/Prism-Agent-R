@@ -12,82 +12,72 @@
 	function formatCost(n: number): string {
 		return '$' + n.toFixed(2);
 	}
-
-	const stats = $derived(usage ? [
-		{ label: '今日 Tokens', value: formatTokens(usage.today_tokens), icon: '⚡', color: 'var(--color-accent)' },
-		{ label: '本周 Tokens', value: formatTokens(usage.week_tokens), icon: '📊', color: 'var(--color-purple)' },
-		{ label: '本月费用', value: formatCost(usage.month_cost), icon: '💰', color: 'var(--color-green)' },
-		{ label: '调用次数', value: String(usage.today_calls), icon: '🔄', color: 'var(--color-orange)' },
-	] : []);
 </script>
 
-<div class="stats-grid">
-	{#each stats as stat}
-		<div class="stat-card">
-			<div class="stat-icon" style:background="{stat.color}15" style:color={stat.color}>
-				{stat.icon}
-			</div>
-			<div class="stat-content">
-				<div class="stat-value">{stat.value}</div>
-				<div class="stat-label">{stat.label}</div>
-			</div>
+<div class="usage-card">
+	<div class="card-header">
+		<h3>Usage</h3>
+	</div>
+	<div class="stats-list">
+		<div class="stat-row">
+			<span class="stat-label">Today</span>
+			<span class="stat-value">{formatTokens(usage?.today_tokens ?? 0)} tokens</span>
 		</div>
-	{/each}
+		<div class="stat-row">
+			<span class="stat-label">This week</span>
+			<span class="stat-value">{formatTokens(usage?.week_tokens ?? 0)} tokens</span>
+		</div>
+		<div class="stat-row">
+			<span class="stat-label">Month cost</span>
+			<span class="stat-value">{formatCost(usage?.month_cost ?? 0)}</span>
+		</div>
+		<div class="stat-row">
+			<span class="stat-label">Calls today</span>
+			<span class="stat-value">{usage?.today_calls ?? 0}</span>
+		</div>
+	</div>
 </div>
 
 <style>
-	.stats-grid {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: 12px;
-		padding: 0 24px;
+	.usage-card {
+		background: #f7f7f8;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 12px;
+		padding: 20px;
 	}
 
-	.stat-card {
+	.card-header {
+		margin-bottom: 16px;
+	}
+
+	.card-header h3 {
+		font-size: 15px;
+		font-weight: 600;
+		color: #171717;
+		margin: 0;
+	}
+
+	.stats-list {
 		display: flex;
-		align-items: center;
+		flex-direction: column;
 		gap: 12px;
-		padding: 16px;
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-md);
-		transition: transform 0.15s var(--ease-default);
 	}
 
-	.stat-card:hover {
-		transform: translateY(-1px);
-	}
-
-	.stat-icon {
-		width: 40px;
-		height: 40px;
-		border-radius: var(--radius-sm);
+	.stat-row {
 		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		justify-content: center;
-		font-size: 18px;
-		flex-shrink: 0;
-	}
-
-	.stat-content {
-		min-width: 0;
-	}
-
-	.stat-value {
-		font-size: var(--text-headline);
-		font-weight: 700;
-		color: var(--color-fg);
-		line-height: 1.2;
 	}
 
 	.stat-label {
-		font-size: var(--text-caption1);
-		color: var(--color-fg-secondary);
-		margin-top: 2px;
+		font-size: 13px;
+		color: #6b6b6b;
 	}
 
-	@media (max-width: 900px) {
-		.stats-grid {
-			grid-template-columns: repeat(2, 1fr);
-		}
+	.stat-value {
+		font-size: 13px;
+		font-weight: 600;
+		color: #171717;
+		font-variant-numeric: tabular-nums;
 	}
 </style>

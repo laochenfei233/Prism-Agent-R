@@ -11,47 +11,43 @@
 		const now = new Date();
 		const diff = now.getTime() - d.getTime();
 		const mins = Math.floor(diff / 60_000);
-		if (mins < 1) return '刚刚';
-		if (mins < 60) return `${mins} 分钟前`;
+		if (mins < 1) return 'just now';
+		if (mins < 60) return `${mins}m ago`;
 		const hours = Math.floor(mins / 60);
-		if (hours < 24) return `${hours} 小时前`;
+		if (hours < 24) return `${hours}h ago`;
 		const days = Math.floor(hours / 24);
-		if (days < 7) return `${days} 天前`;
+		if (days < 7) return `${days}d ago`;
 		return `${d.getMonth() + 1}/${d.getDate()}`;
 	}
 
-	const agentColors: Record<string, string> = {};
 	const palette = ['#FF6900', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#5856D6'];
+	const colorMap: Record<string, string> = {};
+	let colorIdx = 0;
 
 	function agentColor(name: string): string {
-		if (!agentColors[name]) {
-			agentColors[name] = palette[Object.keys(agentColors).length % palette.length];
+		if (!colorMap[name]) {
+			colorMap[name] = palette[colorIdx % palette.length];
+			colorIdx++;
 		}
-		return agentColors[name];
+		return colorMap[name];
 	}
 </script>
 
 <div class="sessions-card">
 	<div class="card-header">
-		<h3>最近会话</h3>
+		<h3>Recent Sessions</h3>
 	</div>
-
 	{#if sessions.length === 0}
-		<div class="empty">暂无会话记录</div>
+		<div class="empty">No sessions yet</div>
 	{:else}
 		<div class="session-list">
 			{#each sessions as session}
 				<button class="session-row" onclick={() => onOpenSession?.(session.id)}>
-					<div class="session-dot" style:background={agentColor(session.agent_name)}></div>
-					<div class="session-content">
-						<div class="session-title">{session.title || '新会话'}</div>
-						<div class="session-meta">
-							<span class="session-agent">{session.agent_name}</span>
-							<span class="session-sep">·</span>
-							<span class="session-time">{formatTime(session.updated_at)}</span>
-						</div>
+					<span class="dot" style:background={agentColor(session.agent_name)}></span>
+					<div class="content">
+						<span class="title">{session.title || 'New session'}</span>
+						<span class="meta">{session.agent_name} · {formatTime(session.updated_at)}</span>
 					</div>
-					<span class="session-count">{session.message_count} 条</span>
 				</button>
 			{/each}
 		</div>
@@ -60,9 +56,10 @@
 
 <style>
 	.sessions-card {
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-md);
-		padding: 16px;
+		background: #f7f7f8;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 12px;
+		padding: 20px;
 	}
 
 	.card-header {
@@ -70,24 +67,24 @@
 	}
 
 	.card-header h3 {
-		font-size: var(--text-headline);
+		font-size: 15px;
 		font-weight: 600;
-		color: var(--color-fg);
+		color: #171717;
 		margin: 0;
 	}
 
 	.session-list {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 2px;
 	}
 
 	.session-row {
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 10px 12px;
-		border-radius: var(--radius-sm);
+		padding: 8px 10px;
+		border-radius: 8px;
 		border: none;
 		background: transparent;
 		cursor: pointer;
@@ -97,62 +94,42 @@
 	}
 
 	.session-row:hover {
-		background: var(--color-bg);
+		background: rgba(0, 0, 0, 0.04);
 	}
 
-	.session-dot {
-		width: 8px;
-		height: 8px;
+	.dot {
+		width: 7px;
+		height: 7px;
 		border-radius: 50%;
 		flex-shrink: 0;
 	}
 
-	.session-content {
+	.content {
 		flex: 1;
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
 	}
 
-	.session-title {
-		font-size: var(--text-subheadline);
+	.title {
+		font-size: 13px;
 		font-weight: 500;
-		color: var(--color-fg);
+		color: #171717;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.session-meta {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		margin-top: 2px;
-	}
-
-	.session-agent {
-		font-size: var(--text-caption2);
-		color: var(--color-fg-secondary);
-	}
-
-	.session-sep {
-		font-size: var(--text-caption2);
-		color: var(--color-fg-tertiary);
-	}
-
-	.session-time {
-		font-size: var(--text-caption2);
-		color: var(--color-fg-tertiary);
-	}
-
-	.session-count {
-		font-size: var(--text-caption2);
-		color: var(--color-fg-tertiary);
-		flex-shrink: 0;
+	.meta {
+		font-size: 12px;
+		color: #a0a0a0;
 	}
 
 	.empty {
-		padding: 24px;
+		padding: 20px;
 		text-align: center;
-		color: var(--color-fg-tertiary);
-		font-size: var(--text-subheadline);
+		color: #a0a0a0;
+		font-size: 13px;
 	}
 </style>
