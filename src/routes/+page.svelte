@@ -136,150 +136,64 @@
 </script>
 
 {#if !agentStore.currentSession}
-	<!-- 无会话：Dashboard -->
-	{#if providers.length > 0 && models.length > 0}
-		<div class="dashboard">
-			<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? 0} />
+	<!-- 无会话：Dashboard（始终显示） -->
+	<div class="dashboard">
+		<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? agentStore.agents.length} />
 
-			<div class="dashboard-body">
-				<!-- Row 1: Usage Stats -->
-				<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
+		<div class="dashboard-body">
+			<!-- Row 1: Usage Stats -->
+			<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
 
-				<!-- Row 2: Agent Launcher + Trend -->
-				<div class="row-two">
-					<div class="col-main">
-						<AgentLauncher
-							agents={dashboardStore.overview?.agents ?? []}
-							onStartChat={handleStartChat}
-							onCreateAgent={createAgent}
-						/>
-					</div>
-					<div class="col-side">
-						<UsageTrendChart data={dashboardStore.overview?.usage_trend ?? []} />
-					</div>
+			<!-- Row 2: Agent Launcher + Trend -->
+			<div class="row-two">
+				<div class="col-main">
+					<AgentLauncher
+						agents={dashboardStore.overview?.agents ?? agentStore.agents.map(a => ({
+							id: a.id, name: a.name, description: a.description ?? '',
+							avatar: null, model_name: null, skill_count: 0, mcp_count: 0,
+							last_used: null, order_key: a.order_key ?? 0
+						}))}
+						onStartChat={handleStartChat}
+						onCreateAgent={createAgent}
+					/>
 				</div>
-
-				<!-- Row 3: Skill + MCP -->
-				<div class="row-three">
-					<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
-					<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
-				</div>
-
-				<!-- Row 4: Recent Sessions -->
-				<RecentSessionsCard
-					sessions={dashboardStore.overview?.recent_sessions ?? []}
-					onOpenSession={handleOpenSession}
-				/>
-
-				<!-- Row 5: Task Designer -->
-				<div class="row-five">
-					<TaskDesigner />
+				<div class="col-side">
+					<UsageTrendChart data={dashboardStore.overview?.usage_trend ?? []} />
 				</div>
 			</div>
-		</div>
-	{:else}
-		<!-- Setup wizard -->
-		<div class="page">
-			<div class="header">
-				<h1>Prism Agent</h1>
-				<p>开始使用前，请先配置模型</p>
+
+			<!-- Row 3: Skill + MCP -->
+			<div class="row-three">
+				<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
+				<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
 			</div>
 
-			{#if msg}
-				<div class="toast" class:error={msg.startsWith('错误')}>{msg}</div>
-			{/if}
+			<!-- Row 4: Recent Sessions -->
+			<RecentSessionsCard
+				sessions={dashboardStore.overview?.recent_sessions ?? []}
+				onOpenSession={handleOpenSession}
+			/>
 
-			<!-- Step 1: Provider -->
-			<div class="card">
-				<div class="card-header">
-					<span class="step-num">1</span>
-					<span class="step-title">添加 Provider</span>
-				</div>
-				<div class="form">
-					<div class="input-group">
-						<label for="p-kind">类型</label>
-						<select id="p-kind" bind:value={pKind}>
-							<option value="openai">OpenAI 兼容</option>
-							<option value="ollama">Ollama（本地）</option>
-						</select>
-					</div>
-					<div class="input-group">
-						<label for="p-name">名称</label>
-						<input id="p-name" bind:value={pName} placeholder="如 OpenAI、通义千问" />
-					</div>
-					<div class="input-group">
-						<label for="p-url">Base URL</label>
-						<input id="p-url" bind:value={pUrl} placeholder={pKind === 'ollama' ? 'http://localhost:11434/v1' : 'https://api.openai.com/v1'} />
-					</div>
-					<div class="input-group">
-						<label for="p-key">API Key</label>
-						<input id="p-key" bind:value={pKey} type="password" placeholder="sk-..." />
-					</div>
-					<button class="btn-primary" onclick={saveProvider}>保存 Provider</button>
-				</div>
-				{#if providers.length > 0}
-					<div class="done-badge">✓ 已添加：{providers.map(p => p.name).join(', ')}</div>
-				{/if}
+			<!-- Row 5: Task Designer -->
+			<div class="row-five">
+				<TaskDesigner />
 			</div>
 
-			<!-- Step 2: Model -->
-			<div class="card" class:disabled={providers.length === 0}>
-				<div class="card-header">
-					<span class="step-num">2</span>
-					<span class="step-title">添加模型</span>
-				</div>
-				{#if providers.length === 0}
-					<p class="hint">请先完成步骤 1</p>
-				{:else}
-					<div class="form">
-						<div class="input-group">
-							<label for="m-provider">Provider</label>
-							<select id="m-provider" bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
-								<option value="">选择 Provider</option>
-								{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
-							</select>
+			<!-- Row 6: Quick Setup (if no providers/models) -->
+			{#if providers.length === 0 || models.length === 0}
+				<div class="setup-banner">
+					<div class="setup-banner-content">
+						<span class="setup-icon">⚡</span>
+						<div class="setup-text">
+							<strong>快速开始</strong>
+							<span>配置 Provider 和模型后即可开始对话</span>
 						</div>
-						{#if mProvider}
-							<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
-								{loadingModels ? '拉取中...' : '拉取可用模型'}
-							</button>
-						{/if}
-						{#if availableModels.length > 0}
-							<div class="input-group">
-								<label for="m-model">选择模型</label>
-								<select id="m-model" bind:value={mModelId}>
-									<option value="">-- 选择模型 --</option>
-									{#each availableModels as m}<option value={m}>{m}</option>{/each}
-								</select>
-							</div>
-						{:else}
-							<div class="input-group">
-								<label for="m-model-id">模型 ID</label>
-								<input id="m-model-id" bind:value={mModelId} placeholder="如 gpt-4o、qwen2.5" />
-							</div>
-						{/if}
-						<button class="btn-primary" onclick={saveModel}>保存模型</button>
+						<button class="setup-btn" onclick={() => goto('/settings')}>去设置</button>
 					</div>
-				{/if}
-				{#if models.length > 0}
-					<div class="done-badge">✓ 已添加：{models.map(m => m.display_name || m.model_id).join(', ')}</div>
-				{/if}
-			</div>
-
-			<!-- Step 3: Agent -->
-			<div class="card" class:disabled={models.length === 0}>
-				<div class="card-header">
-					<span class="step-num">3</span>
-					<span class="step-title">创建 Agent</span>
 				</div>
-				{#if models.length === 0}
-					<p class="hint">请先完成步骤 2</p>
-				{:else}
-					<button class="btn-green" onclick={createAgent}>创建默认 Agent</button>
-				{/if}
-			</div>
+			{/if}
 		</div>
-	{/if}
+	</div>
 {:else}
 	<!-- 有会话：对话界面 -->
 	<div class="chat">
@@ -367,6 +281,50 @@
 		padding: 0 24px;
 		height: 520px;
 	}
+
+	/* ── Setup Banner ─────────────────────────── */
+	.setup-banner {
+		padding: 0 24px;
+	}
+	.setup-banner-content {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 14px 20px;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-md);
+	}
+	.setup-icon {
+		font-size: 24px;
+		flex-shrink: 0;
+	}
+	.setup-text {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.setup-text strong {
+		font-size: var(--text-body);
+		color: var(--color-fg);
+	}
+	.setup-text span {
+		font-size: var(--text-caption1);
+		color: var(--color-fg-secondary);
+	}
+	.setup-btn {
+		padding: 8px 16px;
+		border-radius: 9999px;
+		border: none;
+		background: var(--color-accent);
+		color: #fff;
+		font-size: var(--text-caption1);
+		font-weight: 600;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.setup-btn:hover { background: var(--color-accent-hover); }
 
 	@media (max-width: 900px) {
 		.row-two, .row-three {
