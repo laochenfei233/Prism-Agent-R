@@ -11,11 +11,13 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use mcp::McpRuntime;
+use core::adk::tool::ToolApprovalStore;
 
 pub struct AppState {
     pub db: Database,
     pub active_cancels: Mutex<HashMap<String, CancellationToken>>,
     pub mcp_runtime: std::sync::Arc<McpRuntime>,
+    pub approval_store: std::sync::Arc<ToolApprovalStore>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -35,6 +37,7 @@ pub fn run() {
                 db,
                 active_cancels: Mutex::new(HashMap::new()),
                 mcp_runtime,
+                approval_store: std::sync::Arc::new(ToolApprovalStore::new()),
             });
             Ok(())
         })
@@ -52,6 +55,7 @@ pub fn run() {
             commands::chat::chat_history,
             commands::chat::chat_send,
             commands::chat::chat_abort,
+            commands::chat::tool_approval_respond,
             commands::model::model_list,
             commands::model::model_providers,
             commands::settings::settings_save_provider_key,

@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use tokio::sync::{Mutex, oneshot};
 
 use super::error::AgentError;
 use super::model::ToolOutput;
@@ -7,6 +9,106 @@ use super::model::ToolOutput;
 // ── Tool Spec (re-export for convenience) ─────────────────
 
 pub use super::model::ToolSpec;
+
+// ── Risk Level ────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub enum RiskLevel {
+    /// read/list/glob/grep — auto-approve
+    Low,
+    /// write to known directory — silent log
+    Medium,
+    /// delete/edit/external API — needs approval
+    High,
+    /// rm -rf/database ops/send message — double confirm
+    Critical,
+}
+
+// ── Tool Approval Request / Response ──────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ToolApprovalRequest {
+    pub call_id: String,
+    pub tool_name: String,
+    pub arguments: serde_json::Value,
+    pub agent_id: String,
+    pub risk_level: RiskLevel,
+    pub description: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ToolApprovalResponse {
+    Approved,
+    Rejected(String),
+    AlwaysApprove(String),
+    Defer,
+}
+
+// ── Risk Assessment ───────────────────────────────────────
+
+pub fn assess_risk(tool_name: &str, _args: &serde_json::Value) -> RiskLevel {
+    match tool_name {
+        "read_file" | "list_dir" | "glob" | "grep" | "lsp:diagnostics" => RiskLevel::Low,
+        "write_file" | "edit_file" => RiskLevel::Medium,
+        "delete_file" | "run_command" | "http_request" => RiskLevel::High,
+        "rm_rf" | "database_drop" | "send_message" => RiskLevel::Critical,
+        _ => RiskLevel::High,
+    }
+}
+
+// ── Approval Store ────────────────────────────────────────
+
+type PendingMap = std::collections::HashMap<String, oneshot::Sender<ToolApprovalResponse>>;
+
+pub struct ToolApprovalStore {
+    pending: Mutex<PendingMap>,
+    always_approve: Mutex<HashSet<String>>,
+}
+
+impl ToolApprovalStore {
+    pub fn new() -> Self {
+        Self {
+            pending: Mutex::new(PendingMap::new()),
+            always_approve: Mutex::new(HashSet::new()),
+        }
+    }
+
+    /// Register a pending approval and return the receiver to await.
+    pub async fn request_approval(
+        &self,
+        call_id: String,
+    ) -> oneshot::Receiver<ToolApprovalResponse> {
+        let (tx, rx) = oneshot::channel();
+        self.pending.lock().await.insert(call_id, tx);
+        rx
+    }
+
+    /// Complete a pending approval by call_id.
+    pub async fn respond(&self, call_id: &str, response: ToolApprovalResponse) -> bool {
+        if let Some(tx) = self.pending.lock().await.remove(call_id) {
+            let _ = tx.send(response);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Check if a tool is in the always-approve list.
+    pub async fn is_always_approved(&self, tool_name: &str) -> bool {
+        self.always_approve.lock().await.contains(tool_name)
+    }
+
+    /// Add a tool to the always-approve list.
+    pub async fn add_always_approve(&self, tool_name: &str) {
+        self.always_approve.lock().await.insert(tool_name.to_string());
+    }
+}
+
+impl Default for ToolApprovalStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // ── Tool Executor Trait ───────────────────────────────────
 
