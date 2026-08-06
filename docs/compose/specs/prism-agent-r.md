@@ -1,7 +1,7 @@
 ---
 feature: prism-agent-r
 status: in-progress
-updated: 2026-08-05
+updated: 2026-08-06
 branch: main
 commits: # filled at delivery
 platform: windows | macos | linux
@@ -24,7 +24,7 @@ platform: windows | macos | linux
 |------|------|------|--------|
 | [`phase1-core.md`](../design/phase1-core.md) | **Phase 1 — Agent 核心闭环** | §3 后端三层架构 · §4 目录结构 · §5 数据库（含 §5.7 数据存储跨阶段基础：PRAGMA/消息FTS/分页/保留/索引） · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础（设计系统+对话） · §10.4 Skill（含市场搜索详设） · §10.6 工作流引擎+模板系统 · §10.7 记忆系统（完整设计） · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能基线（§13.1 见 phase3） · §14 旧版规避 | ~3150 |
 | [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.4.1-10.4.4 市场搜索 · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~889 |
-| [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~1828 |
+| [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG（含 10.2.2 Contextual Retrieval / 10.2.3 文档解析 / 10.2.4 可追溯引用 / 10.2.5 多维评测） · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §10.14 Skill/MCP Router（每轮意图路由） · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~2164 |
 | 本文件 | 总览 | 设计模式参考 · 问题定义 · 架构总览（含 §1.1/§1.2） · 技术选型 · MVP 规划 · 各功能 MVP 清单 · [S4] 错误矩阵 · [S5] 功能建议 · Tasks · Phase 1 完成报告 | ~817 |
 
 **阅读建议**：
@@ -53,6 +53,7 @@ platform: windows | macos | linux
 | 014_session_archive | 会话归档 | sessions.archived_at 列 | phase1 §9.5.1 | 后续 |
 | 015_prompt_templates | 提示词模板 | prompt_templates | phase1 §9.8.2 | 后续 |
 | 016_workflow_versions | 工作流版本 | workflow_versions | phase1 §10.6.4.1 | 后续 |
+| 017_rag_context | RAG 上下文增强 | rag_chunks 扩展 + rag_eval_cases | phase3 §10.2.5 | 🟩 |
 
 > ⚠️ **本文档由原单文件 `docs/compose/specs/prism-agent-r.md` 按阶段拆分而来**，章节编号与设计内容保持不变。
 

@@ -2,9 +2,9 @@
 
 > **归属**：Phase 3（扩展功能）· 本文件来自 `prism-agent-r` 设计文档按阶段拆分
 > **总索引**：[`prism-agent-r.md`](../compose/specs/prism-agent-r.md) · **Phase 1**：[`phase1-core.md`](./phase1-core.md) · **Phase 2**：[`phase2-panel.md`](./phase2-panel.md)
-> **Updated**：2026-08-05
+> **Updated**：2026-08-06
 > **读者假设**：面向熟悉 Rust（tokio/sqlx/serde）、Svelte 5（runes）、Tauri 2.x（IPC/WebView）的开发者；不解释语言/框架基础语法。
-> **内容**：§10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §11A 无障碍 · §13.1 上下文压缩
+> **内容**：§10.1 Wiki · §10.2 RAG · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §10.14 Skill/MCP Router · §11A 无障碍 · §13.1 上下文压缩
 > **依赖基础（见 `phase1-core.md`）**：后端三层架构/流式/IPC（§3/§7/§8）、数据库（§5 含 §5.7）、记忆系统（§10.7，含 checkpoint 节预算 §10.7.3/注入预算 §10.7.4）、工作流引擎（§10.6.1 StageTemplate）
 > **依赖基础（见 `phase2-panel.md`）**：人机协同/工具审批（§10.10）、任务定义（§9.9.1 TaskDefinition）
 
@@ -16,6 +16,8 @@
 > §10.4/10.6-10.8 见 `phase1-core.md`；§10.10 见 `phase2-panel.md`。
 
 ### 10.1 LLM Wiki 知识库系统
+
+> **Phase 3 增强**：raw/ 导入的 PDF 等文档走 §10.2.3 统一文档解析管线（文本层 + 视觉层双通道、表格/图表分块）；解析产物携带页面/章节 meta，供 §10.2.4 可追溯引用与 §10.2.5 评测。
 
 **文件结构**（磁盘即数据）：
 
@@ -251,8 +253,9 @@ pub async fn hybrid_search(&self, wiki_id: &str, query: &str, top_k: usize) -> R
 **摄取流程**（后台任务）：
 
 ```
-文件 → file:parse 提取文本 → chunker 分块 → rag_documents(pending)
-     → batch 嵌入 → rag_chunks(BLOB) → 状态 ready
+文件 → file:parse 提取文本（PDF 走 §10.2.3 双通道解析）→ chunker 分块（保留 page/章节 meta）
+     → rag_documents(pending) → contextualize（§10.2.2，LLM 补 chunk 上下文）
+     → batch 嵌入（context + 原文拼接）→ rag_chunks(BLOB + meta) → 状态 ready
 进度走 rag:progress 事件；失败标记 error
 ```
 
@@ -285,6 +288,209 @@ pub async fn hybrid_search(&self, wiki_id: &str, query: &str, top_k: usize) -> R
 | watcher 事件风暴 | 高频变更（>10/s） | 延长 debounce + 合并批 | 无感（自动） |
 | 索引目录被删除 | watcher 删除事件 | 清空该目录索引 | 无感（自动清理） |
 | 与用户 Wiki 冲突 | 命名空间隔离检查 | 拒绝写入用户 wiki 空间 | 无感（隔离保证） |
+
+#### 10.2.2 Contextual Retrieval（chunk 上下文补全，核心增强）
+
+**来源**：Anthropic《Introducing Contextual Retrieval》（2024-09）。官方实验数据：仅 Contextual Embeddings 使 top-20 检索失败率降 **35%**（5.7%→3.7%）；叠加 Contextual BM25 降 **49%**（5.7%→2.9%）；再加 reranking 降 **67%**（5.7%→1.9%）。
+
+**问题**：传统切块丢失上下文——`"The company's revenue grew by 3% over the previous quarter."` 脱离整篇文档无法知道"哪家公司、哪个季度"，检索命中与回答质量都会失准。
+
+**方案**：摄取时用轻量 LLM 为每个 chunk 生成 50-100 token 的「上下文说明」（chunk 在文档中的位置、主题、涉及实体/时间/关系），**prepend 到 chunk 原文前**再做：① 嵌入（Contextual Embeddings）；② BM25 索引（Contextual BM25）。检索时查询匹配"上下文 + 原文"，命中率显著提升；回答注入时区分 `context` 与 `content`（只把原文给模型作答，上下文用于检索与展示）。
+
+**上下文生成 prompt**（借鉴 Anthropic 官方模板，适配中文）：
+
+```
+<document>
+{整篇文档；超长时改用「标题 + 摘要 + 前后相邻 chunk」}
+</document>
+这里是需要结合整篇文档定位的片段：
+<chunk>
+{CHUNK_CONTENT}
+</chunk>
+请用一两句简洁的中文说明该片段在文档中的位置与主题（所属章节、涉及实体、时间范围、上下文关系），用于改善检索。只输出说明本身，不要复述片段内容。
+```
+
+**实施要点**：
+
+| 要点 | 说明 |
+|------|------|
+| 模型 | `summary_model` 或配置的 contextualizer 模型，temperature 0.2，输出 ≤ 150 token |
+| 长文档 | 整文档超窗口 → 局部 contextualize（标题 + 摘要 + 前后相邻 chunk 为上下文），成本可控 |
+| 成本 | 借鉴官方估算（800 token chunks、8k token 文档、100 token 上下文/块）约 **$1/百万文档 token** 一次性；prompt caching 或本地 Ollama 小模型可再降 |
+| 存储 | `rag_chunks.context` 存说明、`content` 存原文；嵌入文本 = `context + content` 拼接 |
+| 开关 | `rag.contextual`（默认开）、`rag.contextual_model`（默认 summary_model） |
+| 存量重建 | 升级既有库时对存量 chunk 重跑 contextualize（后台任务，进度 `rag:progress`） |
+
+**可选 reranking**（[S5] 🔸 低，后续迭代）：初检 top-150 → reranker 打分 → top-20 注入（复用 §10.2 混合检索 top_k 链路）。本地实现走 ONNX 交叉编码器（同 fastembed 通道）或 API reranker；未配置时跳过（无感降级）。
+
+#### 10.2.3 文档解析（PDF 支持，借鉴 Claude PDF support 思路）
+
+**来源**：Anthropic Claude PDF support（官方文档已核对）——PDF 以 `document` 内容块传入（URL / base64 / Files API 三通道）。官方工作机制：**每页转成图像 + 每页提取文本**，文本与图像一并提供给模型，模型同时理解文字与图表等视觉内容，并可引用具体页码。官方限制：请求 ≤ 32MB（平台而异）；每请求 ≤ 600 页（上下文 ≥ 1M tokens 时）/ **≤ 100 页（上下文 < 1M tokens 时）**。
+
+**设计定位**：知识库统一文档解析入口（后续可解析 md/txt/docx/pdf/图片等所有文档，"文档解析"成为可插拔管线）。
+
+**DocumentParser 统一抽象**：
+
+```rust
+#[async_trait]
+pub trait DocumentParser: Send + Sync {
+    fn kind(&self) -> DocKind;                      // Markdown | Text | Docx | Pdf | Image
+    async fn parse(&self, path: &Path) -> Result<ParsedDoc, AppError>;
+}
+
+pub struct ParsedDoc {
+    pub pages: Vec<ParsedPage>,     // 页 + 章节定位
+    pub blocks: Vec<ParsedBlock>,   // 跨页块（表格/图表/代码）
+    pub meta: DocMeta,              // 标题/作者/页数/来源
+}
+
+pub struct ParsedPage {
+    pub page_no: u32,
+    pub text: String,                       // 文本层提取
+    pub blocks: Vec<BlockRef>,              // 本页块引用（table/image 的 bbox 与置信度）
+    pub image_path: Option<PathBuf>,        // 视觉块（页面渲染图，可选）
+}
+
+pub enum ParsedBlock {
+    Table { text: String, table_json: Option<String> },   // 表格块（结构化）
+    Image { path: PathBuf, caption: Option<String> },     // 图表块（图注可选）
+    Text { text: String },
+}
+```
+
+**PDF 双通道解析**：
+
+| 通道 | 实现 | 用途 |
+|------|------|------|
+| 文本层 | `pdf-extract` / `lopdf` 提取文本（保页序） | 分块主体、BM25/嵌入 |
+| 视觉层 | 页面渲染 PNG（`pdfium-render` / `mupdf-rs`），低分辨率缩略 | 复杂表格/图表/扫描件：块级理解（OCR/多模态） |
+
+- **三类 PDF 分流**：
+  - 数字版（有文本层）→ 文本层直取；视觉层仅对表格/图表区域补块（bbox 内文本 + 可选 OCR 校验）
+  - 扫描版（无文本层）→ 页面渲染 → OCR（复用 §10.5.3 OcrService：MiMo OCR / DashScope / tesseract）→ 文本 + 版面块（Table/Title 分类已具备）
+  - 混合版 → 文本层优先，缺失页走 OCR
+- **表格解析**：表格区域独立成块（`block_type=table`），结构化提取（Markdown 表格 / JSON）存 `table_json`
+- **图表理解**（[S5] 🔸 低）：`block_type=image` 块可选多模态模型生成图注（`caption`），纳入 chunk 供检索
+- **分页与章节**：chunk 携带 `page_start/page_end` + 章节路径（如 `3.2 架构`），供引用（§10.2.4）与评测（§10.2.5）
+
+**成本与最佳实践**（官方核对）：
+
+- **成本**：文本层每页约 **1,500–3,000 tokens**（按内容密度）；视觉层每页 1 张图像（按 vision 图像计费）；无额外 PDF 费用
+- **最佳实践**：PDF 内容置于文本之前 · 使用标准字体 · 页面保持正立 · prompt 中用逻辑页码（PDF 阅读器编号）· 超大 PDF 拆分为多段 · 重复分析开启 prompt caching
+- **二进制格式**（xlsx/docx）不能直接作为文档块，需先转换——本设计 DocumentParser 管线即承担该转换（docx→文本、pdf→文本+视觉）
+
+**摄取整合**：`file:parse`（phase1 §10.8）升级为按扩展名分发到对应 DocumentParser；Wiki raw/ 导入（§10.1）与项目级索引（§10.2.1）共用同一解析管线。
+
+#### 10.2.4 可追溯引用（Traceable Citations，借鉴 Anthropic Citations 思路）
+
+**来源**：Anthropic Citations（官方文档已核对）——启用 `citations.enabled=true` 后，文档内容被**按句子分块**（sentence chunking，定义引用最小粒度），模型回答自动输出 `citations` 数组：每条含 `cited_text`（原文片段）、`document_index`（0-indexed）、`document_title`、定位字段（`char_location` 字符索引 0-indexed / `page_location` 页码 1-indexed 且 end 独占 / `content_block_location` 内容块索引）。`cited_text` **不计输出 token**、回传时不计输入 token；流式响应经 `citations_delta` 增量到达。官方约束：Citations 与 structured outputs 互斥（启用引用时不可用 JSON schema 强制输出）。本设计 LLM 栈为 OpenAI 兼容（无原生 citations API），采用「**结构化约束 + 注入校验**」等价实现（引用校验为回答后处理，不依赖 structured outputs，二者不冲突）。
+
+**目标**：所有 RAG 回答必须携带可点击追溯的 meta——**页面范围、章节定位、原文片段**。
+
+**RagHit 扩展**：
+
+```rust
+#[derive(Serialize, Deserialize)]
+pub struct RagHit {
+    pub chunk_id: String,
+    pub document_title: String,
+    pub page_start: Option<u32>,     // 页码范围（PDF 有）
+    pub page_end: Option<u32>,
+    pub section: Option<String>,     // 章节定位（如 "3.2 架构"）
+    pub quote: String,               // 原文片段（cited_text 等价，≤ 200 字，取自 content 而非 context）
+    pub score: f32,
+}
+```
+
+> 字段对齐官方语义：`page_start/page_end` = `page_location` 的页码（1-indexed，end 独占）；`quote` = `cited_text`；`section` 为章节定位扩展（官方无原生章节，由解析层从目录/标题树推导）。
+
+**引用生成链路**（注入 → 约束 → 校验 → 渲染 → 落库）：
+
+1. **检索**：`hybrid_search` 返回带 meta 的 RagHit（含原文片段 quote）
+2. **注入**：上下文按「引用清单 + 原文」组织；prompt 明确要求——每个关键论断后附加引用标记
+3. **校验**（`validate_citations`）：结构化解析回答中的引用标记 → 与注入清单比对 → 缺失/错页引用时重试 1 次（附错误说明）→ 仍失败返回「该论断缺少可追溯来源」的降级回答
+4. **渲染**：前端将引用标记渲染为可点击徽标 → 跳转 Wiki 页 / PDF 查看器指定页（`wiki:open-page {wiki_id, page}`）
+5. **落库**：引用结构存入 `agent_traces`（§10.13.1）与消息附注，供评测（§10.2.5）与回看
+
+**官方 RAG 用法对照**（官方文档明确建议）：将每个 RAG chunk 放入一个 plain text document，可让 Claude 引用 chunk 内具体句子；若不想被额外按句分块，则用 custom content document 原样传入。本设计取后者思路——注入「引用清单 + 原文」组织上下文，等价于 custom content 模式（引用粒度 = chunk 粒度，不做额外句子分块）。
+
+**引用格式**（结构化，前端可解析）：
+
+```
+〔来源: 文档名 | 页 3-4 | 章节 2.1 | "原文片段前 40 字…"〕
+```
+
+**与 Contextual Retrieval 的关系**：`context` 列辅助检索命中；`quote` 取自 `content`（文档真实原文），保证引用的不是上下文说明。
+
+#### 10.2.5 多维评测（RAG Evaluation）
+
+**目标**：对检索与回答质量做可重复的多维量化评测，覆盖五个维度：**检索片段命中、页码定位正确、表格解析准确、OCR 无漏字、图表正确理解**。
+
+**评测集**（golden set，落库 `rag_eval_cases` 或 JSON 文件）：
+
+```json
+{
+  "id": "ev-001",
+  "wiki_id": "wk-1",
+  "question": "Q2 2023 收入增长是多少？",
+  "expect": {
+    "chunk_ids": ["ch-12", "ch-13"],
+    "pages": [3],
+    "section": "2.1 财务概览",
+    "answer_keywords": ["3%", "Q2 2023"],
+    "has_table": true
+  }
+}
+```
+
+**五维指标**：
+
+| 维度 | 指标 | 计算方式 |
+|------|------|----------|
+| 检索片段命中 | recall@k / hit@k | 期望 chunk_ids ∩ 检索 top-k / 期望总数 |
+| 页码定位正确 | page_acc | 回答引用页码与期望 pages 一致的比例 |
+| 表格解析准确 | table_acc | 引用 table 块时 `table_json` 与期望逐格匹配率（LLM-as-Judge 或结构化比对） |
+| OCR 无漏字 | ocr_completeness | 扫描件样本：OCR 文本与人工转录字符召回率（编辑距离） |
+| 图表正确理解 | chart_acc | `block_type=image` 块图注与期望语义一致性（LLM-as-Judge，5 分制） |
+
+**评测命令**：
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `rag:eval` | `{wiki_id?, suite?}` | `{report}` | 跑全部/指定评测集，输出五维报告 |
+| `rag:eval-add` | `{case}` | `{id}` | 添加评测用例 |
+| `rag:eval-report` | `{}` | `{reports}` | 历史评测报告（趋势对比） |
+
+- 检索类指标在检索层直接度量（零 LLM 成本）；回答类指标用 LLM-as-Judge（复用 §10.13.2 judge 通道，temperature 0）
+- 回归门槛（[S5] 🔸 低）：`rag:eval` 纳入 CI，page_acc/table_acc/ocr_completeness 低于基线时阻止合并
+
+**数据库补充**（迁移 **017_rag_context.sql**，编号已登记于总索引迁移表）：
+
+```sql
+-- rag_chunks 扩展：contextual 说明 + 引用 meta + 块类型
+ALTER TABLE rag_chunks ADD COLUMN context TEXT;              -- §10.2.2 上下文说明
+ALTER TABLE rag_chunks ADD COLUMN page_start INTEGER;
+ALTER TABLE rag_chunks ADD COLUMN page_end INTEGER;          -- §10.2.3 PDF 页码
+ALTER TABLE rag_chunks ADD COLUMN section TEXT;              -- 章节定位
+ALTER TABLE rag_chunks ADD COLUMN block_type TEXT NOT NULL DEFAULT 'text'; -- text|table|image
+ALTER TABLE rag_chunks ADD COLUMN char_start INTEGER;
+ALTER TABLE rag_chunks ADD COLUMN char_end INTEGER;          -- 原文偏移（引用校验）
+ALTER TABLE rag_chunks ADD COLUMN table_json TEXT;           -- 表格结构化（可选）
+ALTER TABLE rag_chunks ADD COLUMN caption TEXT;              -- 图表图注（可选）
+CREATE INDEX IF NOT EXISTS idx_rag_chunks_page ON rag_chunks(wiki_id, page_start);
+
+-- 评测用例
+CREATE TABLE IF NOT EXISTS rag_eval_cases (
+    id          TEXT PRIMARY KEY,
+    wiki_id     TEXT NOT NULL,
+    question    TEXT NOT NULL,
+    expect      TEXT NOT NULL,           -- JSON（chunk_ids/pages/section/keywords/table）
+    suite       TEXT NOT NULL DEFAULT 'default',
+    created_at  INTEGER NOT NULL
+);
+```
+
+---
 
 ### 10.3 会议纪要系统详细设计
 
@@ -1413,6 +1619,147 @@ impl AgentJudge {
 │ [查看轨迹详情] [导出报告] [对比版本]         │
 └─────────────────────────────────────────────┘
 ```
+
+---
+
+### 10.14 Skill / MCP Router 快速检索路由（Phase 3 增强）
+
+**定位**：为 Agent 增加「意图路由」层——每轮消息动态检索，只向 LLM 暴露 top-N 相关技能与 MCP 工具，解决技能/工具增多后的两个问题：① 全量注入导致 token 膨胀、首字延迟上升；② 无关工具干扰 LLM 选型（跑偏）。
+
+**现状问题**（对照 phase1 §6.6 / §10.4）：
+
+- `RigAgent.run` 每轮将 `ToolRegistry` **全部**工具 specs 注入请求（`core/rig/agent.rs`）
+- `PromptBuilder` 将 Agent **全部**启用技能的 SKILL.md 全文注入 system prompt（`core/adk/prompt.rs`）
+- MCP 工具目录仅做 TTL 缓存（`McpCatalog`），无检索能力；`find_tool_server` 线性扫描
+
+**设计目标**：
+
+| 目标 | 说明 |
+|------|------|
+| 快速 | 索引常驻内存，BM25 单次检索 < 1ms；注入 token 从「全部」降到「top-N」，首字延迟下降 |
+| 不跑偏 | LLM 上下文只出现与当前消息相关的技能/工具，无关工具不再干扰选型 |
+| 兜底 | LLM 可显式调用 `skill_search` / `mcp_search` 动态加载未命中工具 |
+| 离线可用 | 默认零依赖 BM25；嵌入模型可选，配置后自动升级为语义混合检索 |
+
+**架构总览**：
+
+```
+用户消息 + 最近 N 条对话
+        │
+        ▼
+┌─────────────────────────────────────────────────────┐
+│           ToolRouter（core/adk/router.rs）           │
+│  skill_index: 已安装技能（name+desc+tags+SKILL 摘要） │
+│  mcp_index:   已缓存 MCP 工具（name+desc+server）    │
+│  打分: BM25（0.6）+ 可选向量（0.4）                   │
+└───────────────┬──────────────────┬──────────────────┘
+                │                  │
+    top-N 技能全文 │                  │ top-N MCP 工具 specs
+   （其余仅索引行）▼                  ▼
+        PromptBuilder           RigAgent.tools
+  （system prompt 注入）   （未连接服务器 → 调用时懒连接）
+```
+
+**核心数据结构**：
+
+```rust
+// core/adk/router.rs
+/// 检索单元（技能与 MCP 工具统一抽象，共用打分）
+pub struct RouteItem {
+    pub id: String,             // skill_id 或 "server_id::tool_name"
+    pub kind: RouteKind,        // Skill | McpTool
+    pub name: String,
+    pub description: String,
+    pub keywords: Vec<String>,  // 标签/关键词（BM25 词典）
+    pub server_id: Option<String>, // MCP 工具所属服务器（懒连接用）
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RouteResult {
+    pub skills: Vec<RouteItem>,     // top-N 技能（按分排序）
+    pub tools: Vec<RouteItem>,      // top-N MCP 工具（按分排序）
+    pub semantic_used: bool,        // 是否走了语义混合
+}
+
+pub struct ToolRouter {
+    items: RwLock<Vec<RouteItem>>,          // 全量索引（技能 + MCP 工具）
+    embedding: Option<Arc<dyn Embedder>>,   // 复用 §10.2 RAG embedding 通道，可空
+}
+
+impl ToolRouter {
+    /// 每轮消息调用：打分 → 排序 → top_k 截断
+    pub async fn route(&self, query: &str, top_k_skills: usize, top_k_tools: usize) -> RouteResult;
+    /// 显式搜索（skill_search / mcp_search 工具入口，limit 默认 10）
+    pub async fn search(&self, query: &str, kind: RouteKind, limit: usize) -> Vec<RouteItem>;
+    /// 索引维护：技能安装/卸载/更新、MCP 连接/断开时增量刷新
+    pub async fn refresh(&self, items: Vec<RouteItem>);
+}
+```
+
+**BM25 打分**（零依赖实现，约 150 行）：
+
+- 语料 = 全部 RouteItem 的 name + description + keywords 拼接
+- 查询 = 当前用户消息 + 最近 3 条对话（截断 500 字），按空白 + 常见标点分词
+- 公式：`score = Σ IDF(t) · tf(t,d) · (k1+1) / (tf(t,d) + k1·(1-b+b·|d|/avgdl))`，`k1=1.2, b=0.75`
+- 语义混合（可选）：`score = 0.6 · bm25_norm + 0.4 · cosine(embedding(query), embedding(item))`；嵌入模型不可用/调用失败 → 自动回退纯 BM25（无感降级）
+
+**每轮动态路由接入**：
+
+1. `RigAgent.run` 每轮迭代前：`route(最新用户消息 + 最近 N 条对话, top_k)` 得到命中集
+2. `req.tools` 只注入命中集：自举工具（`skill_search` / `mcp_search` / 内置工具）恒注入 + 命中 MCP 工具
+3. 系统提示注入命中 top-N 技能全文（改造 `prompt.rs`）；其余启用技能只保留一行索引
+   （`- [skill] name — description（可用 skill_search 加载）`），LLM 需要时主动搜索
+4. 命中工具的服务器若未连接 → 调用时按需懒连接（见下），不再启动全连接
+
+**MCP 按需懒连接**：
+
+- 路由只扫描「已缓存工具目录」（runtime 内存 / McpCatalog，见 phase1 §6.6），不触发网络
+- 命中工具所在服务器状态为 `Disconnected` → `call_tool` 前 `connect(server_id)`（复用 `runtime.connect`；连接失败返回可读错误，不影响其他工具）
+- 启动仅 `register_server`（`McpService::load_all` 行为不变），连接全部推迟到首次命中调用
+- 工具目录变更（`notifications/tools/list_changed`）→ 失效并重建对应 RouteItem（增量）
+
+**显式搜索工具**（兜底，实现为 ToolExecutor）：
+
+| 工具 | 描述 | schema |
+|------|------|--------|
+| `skill_search` | 搜索已安装技能（名称/描述/标签），返回命中列表供 Agent 判断是否加载 | `{query: string, limit?: number}` |
+| `mcp_search` | 搜索已缓存 MCP 工具，返回工具名/描述/所属服务器 | `{query: string, limit?: number}` |
+
+- 两工具**恒注入**（token 代价极小，属自举能力）：路由未命中、用户需求模糊、上下文出现新话题时，LLM 主动搜索并按结果调用
+- 与隐式路由互补：隐式管「默认给什么」，显式管「漏了能自己找」
+
+**IPC 命令**（调试 + 面板预览）：
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `router:route` | `{query, top_k?}` | `RouteResult` | 调试/预览路由结果（前端 Router 面板） |
+| `router:index-status` | `{}` | `{skills, mcp_tools, updated_at}` | 索引状态 |
+
+**配置项**（preferences 表，设置页 Router 区）：
+
+| key | 默认 | 说明 |
+|-----|------|------|
+| `router.enabled` | `true` | 总开关（关闭回退全量注入 = 现状行为） |
+| `router.top_k_skills` | `3` | 每轮注入技能数 |
+| `router.top_k_tools` | `8` | 每轮注入 MCP 工具数 |
+| `router.semantic` | `false` | 启用语义混合检索（需嵌入模型，复用 §10.2） |
+
+**可能错误 + 处理方法**：
+
+| 错误 | 检测 | 处理 | 反馈 |
+|------|------|------|------|
+| 嵌入模型不可用 | embedding 调用失败/未配置 | 回退纯 BM25（无感） | 无 |
+| 路由零命中 | top_k 结果为空 | 保底：技能注入全部索引行（不注全文）；MCP 注入 top 5 通用工具 + 提示可用 `skill_search`/`mcp_search` | 无 |
+| 命中工具服务器连接失败 | `connect` 异常 | 该工具标记 Error 状态并移出本轮注入（下次路由重试） | 「工具 X 的服务器连接失败」 |
+| 索引过期（技能卸载/MCP 断开） | skill 变更 / mcp 状态变化事件 | 增量重建对应 RouteItem | 无 |
+| 全量注入兼容 | `router.enabled=false` | 保持现状行为 | 无 |
+
+**与现有组件关系**：
+
+- 不改 `ToolExecutor` / `ToolRegistry` 接口（`get`/`execute` 保持）；只替换「暴露哪些 specs」
+- 与 §10.10 工具审批正交：路由决定「注入哪些」，审批决定「能否执行」（见 phase2-panel.md）
+- 与 §10.2 RAG 复用 embedding 通道（不重复实现嵌入客户端）
+- 索引数据源 = phase1 §10.4 技能表 + §6.6 MCP 工具目录，**无新增表**（索引纯内存，启动时构建）
 
 ---
 

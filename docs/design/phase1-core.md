@@ -1346,6 +1346,7 @@ pub async fn call_tool(
 - 启动时对所有 active 服务器 `tools/list` → 内存 LRU 缓存（TTL 1h）
 - 监听 `notifications/tools/list_changed` → 失效 → 重新拉取
 - 目录供前端工具面板 + RigAgent 工具注入共用
+- **Phase 3 增强**：目录同时作为 ToolRouter 的检索语料（每轮按意图只注入 top-N 工具，见 phase3 §10.14）；路由只扫缓存目录，命中工具的服务器按需懒连接
 
 ---
 
@@ -2793,6 +2794,8 @@ impl PromptBuilder {
 }
 ```
 
+> **Phase 3 增强**：技能全文注入改为按意图路由——每轮仅注入 top-N 命中技能的全文，其余启用技能只保留一行索引（`name — description`），LLM 需要时用 `skill_search` 工具加载。完整设计见 phase3-extend.md §10.14。
+
 **市场搜索**（三源聚合）→ **完整设计见 phase2-panel.md §10.4.1-10.4.4**（Phase 2，T9 补充）。
 
 Phase 1 仅实现技能安装/卸载/启停/注入（本节约 10.4 主体）；市场三源搜索、去重排序、版本检测在 Phase 2 落地。
@@ -3451,6 +3454,7 @@ pub fn inject_active_recall(session_dir: &Path) -> String {
 - `file:pick` 使用 Tauri dialog 插件
 - `file:parse` 支持 txt/md/pdf/doc/docx/html/json/csv/xml → 文本（`pdf-extract`、`docx-rs`、`scraper`、`html2md`）
 - 对话附件：解析后作为 user 消息 attachments 元数据，注入 prompt 或走 RAG
+- **Phase 3 增强**：`file:parse` 升级为按扩展名分发到统一 `DocumentParser` 管线（PDF 文本层 + 视觉层双通道、表格/图表分块），完整设计见 phase3-extend.md §10.2.3
 
 #### 10.8.1 消息/session 导出与导入（后续迭代，[S5] ⭐ 高）
 
