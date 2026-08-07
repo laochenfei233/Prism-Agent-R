@@ -44,8 +44,22 @@
 		}
 	}
 
-	function statusColor(_stageId: string): string {
-		return '#d4d4d4';
+	const roleColors: Record<string, string> = {
+		'研究员': '#7c5cfc',
+		'分析师': '#0ea5e9',
+		'写手': '#f97316',
+		'翻译': '#10b981',
+		'审校员': '#ec4899',
+		'编辑': '#8b5cf6',
+		'审查员': '#ef4444',
+		'顾问': '#06b6d4',
+		'创意官': '#f59e0b',
+		'评审官': '#6366f1',
+		'策略师': '#14b8a6',
+	};
+
+	function getRoleColor(role: string): string {
+		return roleColors[role] || '#6b6b6b';
 	}
 </script>
 
@@ -72,9 +86,9 @@
 			</button>
 			<button class="tb-btn" onclick={taskStore.saveTemplate}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
-				保存
+				保存模板
 			</button>
-			<button class="tb-btn primary" onclick={() => taskStore.startRun()}>
+			<button class="tb-btn run" onclick={() => taskStore.startRun()}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
 				运行
 			</button>
@@ -93,21 +107,23 @@
 	<!-- Canvas -->
 	<div class="canvas">
 		<!-- Start Node -->
-		<div class="node start-node">
-			<div class="node-icon start">
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+		<div class="node-card start-node">
+			<div class="node-left">
+				<div class="node-icon-circle" style:background="linear-gradient(135deg, #6366f1, #8b5cf6)">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>
+				</div>
 			</div>
-			<div class="node-info">
-				<span class="node-title">开始</span>
-				<span class="node-sub">用户输入</span>
+			<div class="node-body">
+				<span class="node-label">开始</span>
+				<span class="node-hint">用户输入参数</span>
 			</div>
 		</div>
 
-		<!-- Connection line -->
-		<div class="connector">
-			<div class="line"></div>
-			<button class="add-btn" onclick={() => handleAddStage(-1)} title="添加阶段">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+		<!-- Connection -->
+		<div class="conn">
+			<div class="conn-line"></div>
+			<button class="conn-add" onclick={() => handleAddStage(-1)} title="添加阶段">
+				<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 			</button>
 		</div>
 
@@ -115,7 +131,7 @@
 		{#each taskStore.definition?.stages ?? [] as stage, i (stage.id)}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class="node stage-node"
+				class="node-card stage-node"
 				class:selected={selectedStageId === stage.id}
 				class:drag-over={dragOverIndex === i}
 				role="button"
@@ -128,32 +144,41 @@
 				ondrop={(e) => handleDrop(e, i)}
 				ondragleave={() => { dragOverIndex = null; }}
 			>
-				<div class="node-status" style:background={statusColor(stage.id)}></div>
-				<div class="node-icon stage">
-					<span class="stage-num">{i + 1}</span>
+				<div class="node-left">
+					<div class="node-num" style:background={getRoleColor(stage.role)}>
+						{i + 1}
+					</div>
 				</div>
-				<div class="node-info">
-					<span class="node-title">{stage.name || `阶段 ${i + 1}`}</span>
-					<div class="node-tags">
-						{#if stage.role}<span class="tag">{stage.role}</span>{/if}
-						{#if stage.agent_id}<span class="tag accent">Agent</span>{/if}
-						{#if stage.tools.length}<span class="tag">{stage.tools.length} 个工具</span>{/if}
-						<span class="tag muted">最多 {stage.max_iterations} 轮</span>
+				<div class="node-body">
+					<div class="node-top-row">
+						<span class="node-label">{stage.name || `阶段 ${i + 1}`}</span>
+						<button class="node-del" onclick={(e) => { e.stopPropagation(); taskStore.removeStage(stage.id); }} title="删除">
+							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+					<div class="node-chips">
+						<span class="chip" style:background="{getRoleColor(stage.role)}15" style:color={getRoleColor(stage.role)}>{stage.role}</span>
+						{#if stage.agent_id}
+							<span class="chip chip-accent">已绑定 Agent</span>
+						{/if}
+						{#if stage.tools.length}
+							<span class="chip">{stage.tools.length} 个工具</span>
+						{/if}
 					</div>
 					{#if stage.prompt_template}
-						<span class="node-preview">{stage.prompt_template.slice(0, 80)}{stage.prompt_template.length > 80 ? '...' : ''}</span>
+						<span class="node-prompt">{stage.prompt_template.slice(0, 60)}{stage.prompt_template.length > 60 ? '...' : ''}</span>
 					{/if}
 				</div>
-				<button class="node-delete" onclick={(e) => { e.stopPropagation(); taskStore.removeStage(stage.id); }} title="删除">
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-				</button>
 			</div>
 
-			<!-- Connector after each stage -->
-			<div class="connector">
-				<div class="line"></div>
-				<button class="add-btn" onclick={() => handleAddStage(i)} title="添加阶段">
-					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+			<!-- Connector with dependency label -->
+			<div class="conn">
+				<div class="conn-line"></div>
+				{#if stage.depends_on.length > 0}
+					<span class="conn-label">依赖: {stage.depends_on.length}</span>
+				{/if}
+				<button class="conn-add" onclick={() => handleAddStage(i)} title="添加阶段">
+					<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 				</button>
 			</div>
 		{/each}
@@ -161,23 +186,27 @@
 		<!-- Empty state -->
 		{#if !taskStore.definition?.stages.length}
 			<div class="empty-canvas">
-				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
-					<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/>
-				</svg>
-				<p>还没有阶段</p>
-				<button class="add-first" onclick={() => handleAddStage()}>添加第一个阶段</button>
+				<div class="empty-icon-wrap">
+					<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c0c0c0" stroke-width="1.5">
+						<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/>
+					</svg>
+				</div>
+				<p class="empty-text">还没有阶段</p>
+				<button class="empty-btn" onclick={() => handleAddStage()}>+ 添加第一个阶段</button>
 			</div>
 		{/if}
 
 		<!-- End Node -->
 		{#if taskStore.definition?.stages.length}
-			<div class="node end-node">
-				<div class="node-icon end">
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
+			<div class="node-card end-node">
+				<div class="node-left">
+					<div class="node-icon-circle" style:background="linear-gradient(135deg, #10b981, #34d399)">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+					</div>
 				</div>
-				<div class="node-info">
-					<span class="node-title">输出</span>
-					<span class="node-sub">最终结果</span>
+				<div class="node-body">
+					<span class="node-label">输出</span>
+					<span class="node-hint">最终结果</span>
 				</div>
 			</div>
 		{/if}
@@ -202,9 +231,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 12px 20px;
+		padding: 10px 16px;
 		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-		gap: 12px;
+		gap: 10px;
+		background: #fafafa;
 	}
 
 	.toolbar-left { flex: 1; min-width: 0; }
@@ -212,154 +242,162 @@
 
 	.name-input {
 		width: 100%;
-		padding: 7px 12px;
+		padding: 6px 10px;
 		border: 1px solid rgba(0, 0, 0, 0.08);
-		border-radius: 8px;
+		border-radius: 6px;
 		background: #fff;
 		color: #171717;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 500;
 		outline: none;
-		transition: border-color 0.15s;
 	}
-	.name-input:focus { border-color: #FF6900; }
+	.name-input:focus { border-color: #FF6900; box-shadow: 0 0 0 2px rgba(255, 105, 0, 0.08); }
 	.name-input::placeholder { color: #c0c0c0; }
 
 	.tb-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 5px;
-		padding: 6px 12px;
-		border-radius: 8px;
+		gap: 4px;
+		padding: 5px 10px;
+		border-radius: 6px;
 		border: 1px solid rgba(0, 0, 0, 0.08);
 		background: #fff;
-		color: #171717;
+		color: #525252;
 		font-size: 12px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.12s;
 	}
-	.tb-btn:hover { background: #f5f5f5; }
-	.tb-btn.primary {
-		background: #FF6900;
+	.tb-btn:hover { background: #f5f5f5; color: #171717; }
+	.tb-btn.run {
+		background: #171717;
 		color: #fff;
-		border-color: #FF6900;
+		border-color: #171717;
 	}
-	.tb-btn.primary:hover { background: #E85D00; }
+	.tb-btn.run:hover { background: #404040; }
 
 	/* ── Validation ───────────────────────────── */
 	.validation-bar {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 6px;
-		padding: 8px 20px;
+		gap: 4px;
+		padding: 6px 16px;
 		background: #fef2f2;
 		border-bottom: 1px solid #fecaca;
 	}
 	.err-item {
-		font-size: 12px;
+		font-size: 11px;
 		color: #dc2626;
 		background: #fff;
-		padding: 2px 8px;
-		border-radius: 6px;
-		border: 1px solid #fecaca;
+		padding: 2px 6px;
+		border-radius: 4px;
 	}
 
 	/* ── Canvas ───────────────────────────────── */
 	.canvas {
 		flex: 1;
 		overflow-y: auto;
-		padding: 24px 20px;
+		padding: 20px 16px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 0;
+		background: #fafafa;
 	}
 
-	/* ── Nodes ────────────────────────────────── */
-	.node {
+	/* ── Node Card ────────────────────────────── */
+	.node-card {
 		width: 100%;
-		max-width: 440px;
+		max-width: 420px;
 		display: flex;
 		align-items: flex-start;
 		gap: 12px;
 		padding: 14px 16px;
 		background: #fff;
-		border: 1px solid rgba(0, 0, 0, 0.08);
-		border-radius: 12px;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 10px;
 		cursor: pointer;
 		transition: all 0.15s;
-		position: relative;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 	}
-	.node:hover { border-color: rgba(0, 0, 0, 0.15); }
-	.node.selected {
+	.node-card:hover {
+		border-color: rgba(0, 0, 0, 0.12);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+	}
+	.node-card.selected {
 		border-color: #FF6900;
-		box-shadow: 0 0 0 3px rgba(255, 105, 0, 0.1);
+		box-shadow: 0 0 0 3px rgba(255, 105, 0, 0.08), 0 2px 8px rgba(255, 105, 0, 0.08);
 	}
-	.node.drag-over {
+	.node-card.drag-over {
 		border-color: #FF6900;
 		background: #fff8f0;
 	}
 
 	.start-node, .end-node {
 		cursor: default;
-		background: #f9f9f9;
+		background: #f9fafb;
 	}
-	.start-node:hover, .end-node:hover { border-color: rgba(0, 0, 0, 0.08); }
-
-	.node-status {
-		position: absolute;
-		left: 0;
-		top: 12px;
-		bottom: 12px;
-		width: 3px;
-		border-radius: 0 2px 2px 0;
+	.start-node:hover, .end-node:hover {
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 	}
 
-	.node-icon {
+	.node-left {
+		flex-shrink: 0;
+	}
+
+	.node-icon-circle {
 		width: 36px;
 		height: 36px;
 		border-radius: 10px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		flex-shrink: 0;
 	}
-	.node-icon.start { background: #f0f0f0; color: #6b6b6b; }
-	.node-icon.end { background: #f0f0f0; color: #6b6b6b; }
-	.node-icon.stage { background: #FF6900; color: #fff; }
 
-	.stage-num {
+	.node-num {
+		width: 36px;
+		height: 36px;
+		border-radius: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #fff;
 		font-size: 14px;
 		font-weight: 700;
 	}
 
-	.node-info {
+	.node-body {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 5px;
 	}
 
-	.node-title {
+	.node-top-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.node-label {
 		font-size: 14px;
 		font-weight: 600;
 		color: #171717;
 	}
 
-	.node-sub {
+	.node-hint {
 		font-size: 12px;
 		color: #a0a0a0;
 	}
 
-	.node-tags {
+	.node-chips {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 4px;
 	}
 
-	.tag {
+	.chip {
 		padding: 2px 7px;
 		border-radius: 5px;
 		font-size: 11px;
@@ -367,10 +405,9 @@
 		background: #f0f0f0;
 		color: #6b6b6b;
 	}
-	.tag.accent { background: #fff0e6; color: #FF6900; }
-	.tag.muted { background: transparent; color: #a0a0a0; }
+	.chip-accent { background: #fff0e6; color: #FF6900; }
 
-	.node-preview {
+	.node-prompt {
 		font-size: 12px;
 		color: #a0a0a0;
 		white-space: nowrap;
@@ -379,16 +416,13 @@
 		margin-top: 2px;
 	}
 
-	.node-delete {
-		position: absolute;
-		top: 8px;
-		right: 8px;
-		width: 24px;
-		height: 24px;
-		border-radius: 6px;
+	.node-del {
+		width: 22px;
+		height: 22px;
+		border-radius: 5px;
 		border: none;
 		background: transparent;
-		color: #c0c0c0;
+		color: #d4d4d4;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -396,35 +430,48 @@
 		opacity: 0;
 		transition: all 0.12s;
 	}
-	.node:hover .node-delete { opacity: 1; }
-	.node-delete:hover { background: #fee2e2; color: #dc2626; }
+	.node-card:hover .node-del { opacity: 1; }
+	.node-del:hover { background: #fee2e2; color: #dc2626; }
 
-	/* ── Connector ────────────────────────────── */
-	.connector {
+	/* ── Connection ───────────────────────────── */
+	.conn {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		position: relative;
-		height: 36px;
+		height: 32px;
 	}
 
-	.line {
+	.conn-line {
 		width: 1px;
 		height: 100%;
-		background: rgba(0, 0, 0, 0.12);
+		background: rgba(0, 0, 0, 0.1);
 	}
 
-	.add-btn {
+	.conn-label {
+		position: absolute;
+		top: 50%;
+		left: calc(50% + 10px);
+		transform: translateY(-50%);
+		font-size: 10px;
+		color: #a0a0a0;
+		background: #f5f5f5;
+		padding: 1px 5px;
+		border-radius: 3px;
+		white-space: nowrap;
+	}
+
+	.conn-add {
 		position: absolute;
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
-		width: 22px;
-		height: 22px;
+		width: 20px;
+		height: 20px;
 		border-radius: 50%;
 		border: 1px solid rgba(0, 0, 0, 0.1);
 		background: #fff;
-		color: #a0a0a0;
+		color: #c0c0c0;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -433,11 +480,11 @@
 		transition: all 0.15s;
 		z-index: 1;
 	}
-	.connector:hover .add-btn { opacity: 1; }
-	.add-btn:hover {
-		background: #FF6900;
+	.conn:hover .conn-add { opacity: 1; }
+	.conn-add:hover {
+		background: #171717;
 		color: #fff;
-		border-color: #FF6900;
+		border-color: #171717;
 	}
 
 	/* ── Empty ────────────────────────────────── */
@@ -445,23 +492,36 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 12px;
-		padding: 48px 20px;
+		gap: 10px;
+		padding: 40px 20px;
 	}
-	.empty-canvas p {
-		font-size: 14px;
+
+	.empty-icon-wrap {
+		width: 56px;
+		height: 56px;
+		border-radius: 14px;
+		background: #f0f0f0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.empty-text {
+		font-size: 13px;
 		color: #a0a0a0;
 		margin: 0;
 	}
-	.add-first {
-		padding: 8px 16px;
+
+	.empty-btn {
+		padding: 7px 14px;
 		border-radius: 8px;
 		border: 1px solid rgba(0, 0, 0, 0.1);
 		background: #fff;
 		color: #171717;
-		font-size: 13px;
+		font-size: 12px;
 		font-weight: 500;
 		cursor: pointer;
+		transition: all 0.12s;
 	}
-	.add-first:hover { background: #f5f5f5; }
+	.empty-btn:hover { background: #f5f5f5; }
 </style>
