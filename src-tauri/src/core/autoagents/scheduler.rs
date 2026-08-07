@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::Semaphore;
 
 // ── 任务调度器 ────────────────────────────────────────────
@@ -36,4 +36,13 @@ impl Default for TaskScheduler {
     fn default() -> Self {
         Self::new(4) // 默认 4 个并发 worker
     }
+}
+
+// ── 全局调度器 ────────────────────────────────────────────
+
+static GLOBAL_SCHEDULER: OnceLock<TaskScheduler> = OnceLock::new();
+
+/// 获取进程级全局调度器（懒初始化，默认 4 并发）
+pub fn global() -> &'static TaskScheduler {
+    GLOBAL_SCHEDULER.get_or_init(TaskScheduler::default)
 }

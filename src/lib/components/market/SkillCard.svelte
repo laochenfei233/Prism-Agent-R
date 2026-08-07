@@ -5,11 +5,12 @@
 
 	let installing = $state(false);
 	let installed = $state(false);
+	let error = $state<string | null>(null);
 
 	const sourceColors: Record<string, string> = {
-		SkillsSh: '#7C3AED',
-		ClaudePlugins: '#D97706',
-		Clawhub: '#059669',
+		'skills.sh': '#7C3AED',
+		'claude-plugins.dev': '#D97706',
+		'clawhub.ai': '#059669',
 		local: '#6B7280',
 	};
 
@@ -19,14 +20,13 @@
 
 	async function install() {
 		installing = true;
+		error = null;
 		try {
-			await invoke('skill_install_market', {
-				skillId: hit.id || hit.name,
-				source: hit.source,
-			});
+			await invoke('skill_install_market', { source: hit.install_source });
 			installed = true;
 		} catch (e) {
 			console.error('Install failed:', e);
+			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			installing = false;
 		}
@@ -55,12 +55,15 @@
 	{/if}
 
 	<div class="card-actions">
-		{#if installed}
+		{#if hit.installed || installed}
 			<span class="installed-label">&#10003; Installed</span>
 		{:else}
 			<button class="install-btn" onclick={install} disabled={installing}>
 				{installing ? 'Installing...' : 'Install'}
 			</button>
+		{/if}
+		{#if error}
+			<p class="install-error">{error}</p>
 		{/if}
 	</div>
 </div>
@@ -161,5 +164,16 @@
 		font-size: 14px;
 		font-weight: 500;
 		color: #34C759;
+	}
+
+	.install-error {
+		margin: 8px 0 0;
+		padding: 6px 10px;
+		border-radius: var(--radius-sm);
+		background: rgba(239, 68, 68, 0.08);
+		color: #EF4444;
+		font-size: 12px;
+		line-height: 1.4;
+		word-break: break-word;
 	}
 </style>

@@ -119,7 +119,7 @@ pub async fn chat_send(
         "你是一个有用的 AI 助手。请用中文回答用户的问题。".to_string()
     });
 
-    // 6. Create provider and run
+    // 6. Create provider and agent
     let provider = Arc::new(OpenAiProvider::new(
         model_row.provider_id.clone(),
         model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone()),
@@ -128,38 +128,87 @@ pub async fn chat_send(
         model_row.model_id.clone(),
     ));
 
-    let agent = RigAgent::new(provider, system_prompt, ToolRegistry::new());
-    let request = GenerationRequest { messages, ..Default::default() };
-
+    let message_id = uuid::Uuid::new_v4().to_string();
     let cancel = CancellationToken::new();
     state.active_cancels.lock().await.insert(session_id.clone(), cancel.clone());
+
+    // Stream event forwarding callbacks
+    let delta_app = app.clone();
+    let delta_sid = session_id.clone();
+    let delta_mid = message_id.clone();
+    let on_delta = move |delta: &str| {
+        let _ = delta_app.emit("chat:stream:delta", serde_json::json!({
+            "session_id": delta_sid,
+            "message_id": delta_mid,
+            "delta": delta,
+        }));
+    };
+
+    let call_app = app.clone();
+    let call_sid = session_id.clone();
+    let call_mid = message_id.clone();
+    let on_tool_call = move |call: &crate::core::adk::model::ToolCall| {
+        let _ = call_app.emit("chat:stream:tool_call", serde_json::json!({
+            "session_id": call_sid,
+            "message_id": call_mid,
+            "call": {
+                "id": call.id,
+                "name": call.name,
+                "arguments": call.arguments,
+            },
+        }));
+    };
+
+    let agent = RigAgent::new(provider, system_prompt, ToolRegistry::new())
+        .with_approval_store(state.approval_store.clone())
+        .with_app_handle(app.clone())
+        .with_agent_id(session_row.agent_id.clone())
+        .with_cancel_token(cancel.clone())
+        .with_on_delta(on_delta)
+        .with_on_tool_call(on_tool_call);
+
+    let request = GenerationRequest { messages, ..Default::default() };
 
     let session_id_clone = session_id.clone();
     let app_clone = app.clone();
     let pool = state.db.pool.clone();
     let model_id = model_row.model_id.clone();
-    let _approval_store = state.approval_store.clone();
-    let _agent_id = session_row.agent_id.clone();
 
     // Spawn task
     tokio::spawn(async move {
-        let message_id = uuid::Uuid::new_v4().to_string();
         let _ = app_clone.emit("chat:stream:start", serde_json::json!({
-            "session_id": session_id_clone,
-            "message_id": message_id,
-            "model": model_id,
+            "session_id": session_id_clone.clone(),
+            "message_id": message_id.clone(),
+            "model": model_id.clone(),
         }));
 
         match agent.run(request).await {
             Ok(result) => {
+                // Aborted: do not persist a partial message.
+                if cancel.is_cancelled() {
+                    let _ = app_clone.emit("chat:stream:error", serde_json::json!({
+                        "session_id": session_id_clone,
+                        "message_id": message_id,
+                        "message": "生成已中止",
+                    }));
+                    return;
+                }
+
                 let now = chrono::Utc::now().timestamp_millis();
+                let usage_str = result.usage.as_ref().map(|u| serde_json::json!({
+                    "prompt_tokens": u.prompt_tokens,
+                    "completion_tokens": u.completion_tokens,
+                    "total_tokens": u.total_tokens,
+                }).to_string());
+
                 let _ = sqlx::query(
-                    "INSERT INTO messages (id, session_id, role, content, tool_calls, tool_call_id, model_id, usage, created_at) VALUES (?, ?, 'assistant', ?, NULL, NULL, ?, NULL, ?)"
+                    "INSERT INTO messages (id, session_id, role, content, tool_calls, tool_call_id, model_id, usage, created_at) VALUES (?, ?, 'assistant', ?, NULL, NULL, ?, ?, ?)"
                 )
                 .bind(&message_id)
                 .bind(&session_id_clone)
                 .bind(&result.text)
                 .bind(&model_id)
+                .bind(usage_str.as_deref())
                 .bind(now)
                 .execute(&pool)
                 .await;
@@ -167,17 +216,39 @@ pub async fn chat_send(
                 let _ = sqlx::query("UPDATE sessions SET updated_at = ? WHERE id = ?")
                     .bind(now).bind(&session_id_clone).execute(&pool).await;
 
+                // Cumulative token usage for the session
+                let cum: (i64, i64, i64) = sqlx::query_as(
+                    "SELECT COALESCE(SUM(json_extract(usage, '$.prompt_tokens')), 0), COALESCE(SUM(json_extract(usage, '$.completion_tokens')), 0), COALESCE(SUM(json_extract(usage, '$.total_tokens')), 0) FROM messages WHERE session_id = ? AND usage IS NOT NULL"
+                )
+                .bind(&session_id_clone)
+                .fetch_one(&pool)
+                .await
+                .unwrap_or((0, 0, 0));
+
+                let _ = app_clone.emit("usage:updated", serde_json::json!({
+                    "session_id": session_id_clone.clone(),
+                    "prompt_tokens": cum.0,
+                    "completion_tokens": cum.1,
+                    "total_tokens": cum.2,
+                }));
+
                 let _ = app_clone.emit("chat:stream:done", serde_json::json!({
                     "session_id": session_id_clone,
                     "message_id": message_id,
-                    "usage": null,
+                    "usage": result.usage,
+                    "message": result.text,
                 }));
             }
             Err(e) => {
+                let message = if cancel.is_cancelled() {
+                    "生成已中止".to_string()
+                } else {
+                    format!("AI 调用失败: {e}")
+                };
                 let _ = app_clone.emit("chat:stream:error", serde_json::json!({
                     "session_id": session_id_clone,
                     "message_id": message_id,
-                    "message": format!("AI 调用失败: {e}"),
+                    "message": message,
                 }));
             }
         }
@@ -201,11 +272,21 @@ pub async fn chat_abort(
 pub async fn tool_approval_respond(
     state: State<'_, crate::AppState>,
     call_id: String,
-    response: ToolApprovalResponse,
+    response: String,
 ) -> Result<bool, AppError> {
+    // The UI sends plain strings; map them onto the response enum.
+    let parsed = match response.as_str() {
+        "Approved" => ToolApprovalResponse::Approved,
+        "AlwaysApprove" => ToolApprovalResponse::AlwaysApprove(String::new()),
+        "Defer" => ToolApprovalResponse::Defer,
+        other => ToolApprovalResponse::Rejected(other.to_string()),
+    };
+
     // If always-approve was chosen, persist it
-    if let ToolApprovalResponse::AlwaysApprove(ref tool_name) = response {
-        state.approval_store.add_always_approve(tool_name).await;
+    if let ToolApprovalResponse::AlwaysApprove(tool_name) = &parsed {
+        if !tool_name.is_empty() {
+            state.approval_store.add_always_approve(tool_name).await;
+        }
     }
-    Ok(state.approval_store.respond(&call_id, response).await)
+    Ok(state.approval_store.respond(&call_id, parsed).await)
 }

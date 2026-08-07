@@ -50,13 +50,18 @@
 			/>
 		</div>
 		<div class="source-filters">
-			{#each ['all', 'SkillsSh', 'ClaudePlugins', 'Clawhub'] as source}
+			{#each [
+				{ value: 'all', label: 'All' },
+				{ value: 'skills.sh', label: 'skills.sh' },
+				{ value: 'claude-plugins.dev', label: 'Claude 插件' },
+				{ value: 'clawhub.ai', label: 'ClawHub' },
+			] as { value, label }}
 				<button
 					class="filter-chip"
-					class:active={sourceFilter === source}
-					onclick={() => (sourceFilter = source)}
+					class:active={sourceFilter === value}
+					onclick={() => (sourceFilter = value)}
 				>
-					{source === 'all' ? 'All' : source}
+					{label}
 				</button>
 			{/each}
 		</div>

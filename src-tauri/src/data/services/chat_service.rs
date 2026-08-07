@@ -19,14 +19,16 @@ impl ChatService {
         limit: Option<i64>,
     ) -> Result<Vec<MessageDto>, AppError> {
         let limit = limit.unwrap_or(50);
-        let rows = sqlx::query_as::<_, MessageRow>(
-            "SELECT id, session_id, role, content, tool_calls, tool_call_id, model_id, usage, created_at FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ?"
+        // Fetch the latest N rows, then reverse so results are chronological.
+        let mut rows = sqlx::query_as::<_, MessageRow>(
+            "SELECT id, session_id, role, content, tool_calls, tool_call_id, model_id, usage, created_at FROM messages WHERE session_id = ? ORDER BY created_at DESC, id DESC LIMIT ?"
         )
         .bind(session_id)
         .bind(limit)
         .fetch_all(&self.pool)
         .await?;
 
+        rows.reverse();
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
@@ -70,6 +72,32 @@ impl ChatService {
         .await?;
 
         Ok(row.into())
+    }
+
+    pub async fn search_messages(
+        &self,
+        query: &str,
+        session_id: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<MessageDto>, AppError> {
+        let q = query.trim();
+        if q.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let rows = sqlx::query_as::<_, MessageRow>(
+            "SELECT m.* FROM messages_fts f JOIN messages m ON m.rowid = f.rowid \
+             WHERE messages_fts MATCH ? AND (? IS NULL OR m.session_id = ?) \
+             ORDER BY f.rank LIMIT ?",
+        )
+        .bind(q)
+        .bind(session_id)
+        .bind(session_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 }
 

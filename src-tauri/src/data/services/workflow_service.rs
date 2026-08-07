@@ -2,6 +2,7 @@ use crate::core::autoagents::workflow::{Workflow, WorkflowStage, TaskInput, Inpu
 use crate::data::models::{WorkflowDto, WorkflowRow};
 use crate::data::Database;
 use crate::utils::error::AppError;
+use sqlx::Row;
 
 // ── 工作流服务 ────────────────────────────────────────────
 
@@ -28,6 +29,74 @@ impl WorkflowService {
             description: r.description,
             definition: serde_json::from_str(&r.definition).unwrap_or(serde_json::json!({})),
         }).collect())
+    }
+
+    /// 列出用户保存的模板（排除内置 source='builtin' 的记录）
+    pub async fn list_templates(&self) -> Result<Vec<WorkflowDto>, AppError> {
+        self.ensure_schema().await?;
+        let rows = sqlx::query_as::<_, WorkflowRow>(
+            "SELECT id, name, description, definition, created_at, updated_at FROM workflows WHERE source != 'builtin' ORDER BY created_at"
+        )
+        .fetch_all(&self.db.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|r| WorkflowDto {
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            definition: serde_json::from_str(&r.definition).unwrap_or(serde_json::json!({})),
+        }).collect())
+    }
+
+    /// 确保 schema 兼容（补 source 列），幂等
+    pub async fn ensure_schema(&self) -> Result<(), AppError> {
+        Self::ensure_source_column(&self.db.pool, "workflows").await?;
+        Self::ensure_source_column(&self.db.pool, "workflow_runs").await?;
+        Ok(())
+    }
+
+    async fn ensure_source_column(pool: &sqlx::SqlitePool, table: &str) -> Result<(), AppError> {
+        let cols = sqlx::query(&format!("PRAGMA table_info('{table}')"))
+            .fetch_all(pool)
+            .await?;
+        let has_source = cols.iter().any(|r| r.get::<String, _>("name") == "source");
+        if !has_source {
+            sqlx::query(&format!(
+                "ALTER TABLE {table} ADD COLUMN source TEXT NOT NULL DEFAULT 'user'"
+            ))
+            .execute(pool)
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// 懒加载预置模板：workflows 表为空时插入 4 个内置工作流（source='builtin'）
+    pub async fn ensure_builtin_workflows(&self) -> Result<(), AppError> {
+        self.ensure_schema().await?;
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM workflows")
+            .fetch_one(&self.db.pool)
+            .await?;
+        if count > 0 {
+            return Ok(());
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        for wf in Self::builtin_workflows() {
+            let def_json = serde_json::to_string(&wf)?;
+            sqlx::query(
+                "INSERT INTO workflows (id, name, description, definition, created_at, updated_at, source) VALUES (?, ?, ?, ?, ?, ?, 'builtin')"
+            )
+            .bind(&wf.id)
+            .bind(&wf.name)
+            .bind(&wf.description)
+            .bind(&def_json)
+            .bind(now)
+            .bind(now)
+            .execute(&self.db.pool)
+            .await?;
+        }
+        Ok(())
     }
 
     /// 保存工作流

@@ -24,9 +24,15 @@ pub struct SkillSearchHit {
     pub id: String,
     pub name: String,
     pub description: String,
+    /// 统一小写来源标识：skills.sh / claude-plugins.dev / clawhub.ai / local
     pub source: String,
+    /// 安装指令：skills.sh:xxx / github:owner/repo[/path] / zip / local:path
+    pub install_source: String,
     pub tags: Vec<String>,
     pub author: Option<String>,
+    /// clawhub 提供，用于排序
+    pub stars: Option<u64>,
+    pub url: Option<String>,
     pub installed: bool,
 }
 
@@ -262,6 +268,7 @@ impl SkillService {
                         name: name.clone(),
                         description: item["description"].as_str().unwrap_or("").to_string(),
                         source: "skills.sh".into(),
+                        install_source: format!("skills.sh:{}", name),
                         tags: item["tags"]
                             .as_array()
                             .map(|a| {
@@ -271,6 +278,11 @@ impl SkillService {
                             })
                             .unwrap_or_default(),
                         author: item["author"].as_str().map(|s| s.to_string()),
+                        stars: None,
+                        url: item["url"]
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .or_else(|| item["download_url"].as_str().map(|s| s.to_string())),
                         installed: false,
                     });
                 }
@@ -290,6 +302,10 @@ impl SkillService {
                         name: name.clone(),
                         description: item["description"].as_str().unwrap_or("").to_string(),
                         source: "claude-plugins.dev".into(),
+                        install_source: item["github"]
+                            .as_str()
+                            .map(|g| format!("github:{}", g))
+                            .unwrap_or_else(|| format!("github:{}", name)),
                         tags: item["tags"]
                             .as_array()
                             .map(|a| {
@@ -299,6 +315,8 @@ impl SkillService {
                             })
                             .unwrap_or_default(),
                         author: item["author"].as_str().map(|s| s.to_string()),
+                        stars: None,
+                        url: item["url"].as_str().map(|s| s.to_string()),
                         installed: false,
                     });
                 }
@@ -318,6 +336,16 @@ impl SkillService {
                         name: name.clone(),
                         description: item["description"].as_str().unwrap_or("").to_string(),
                         source: "clawhub.ai".into(),
+                        install_source: item["github"]
+                            .as_str()
+                            .map(|g| format!("github:{}", g))
+                            .or_else(|| {
+                                item["download_url"]
+                                    .as_str()
+                                    .map(|u| format!("zip:{}", u))
+                            })
+                            .or_else(|| item["install_url"].as_str().map(|u| format!("zip:{}", u)))
+                            .unwrap_or_else(|| "zip".into()),
                         tags: item["tags"]
                             .as_array()
                             .map(|a| {
@@ -327,6 +355,11 @@ impl SkillService {
                             })
                             .unwrap_or_default(),
                         author: item["author"].as_str().map(|s| s.to_string()),
+                        stars: parse_clawhub_stars(item),
+                        url: item["url"]
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .or_else(|| item["github"].as_str().map(|s| format!("https://github.com/{s}"))),
                         installed: false,
                     });
                 }
@@ -361,6 +394,15 @@ impl SkillService {
                     if hit.author.is_some() && existing.author.is_none() {
                         existing.author = hit.author.clone();
                     }
+                    if !hit.install_source.is_empty() && existing.install_source.is_empty() {
+                        existing.install_source = hit.install_source.clone();
+                    }
+                    if hit.url.is_some() && existing.url.is_none() {
+                        existing.url = hit.url.clone();
+                    }
+                    if hit.stars.unwrap_or(0) > existing.stars.unwrap_or(0) {
+                        existing.stars = hit.stars;
+                    }
                     if hit.installed {
                         existing.installed = true;
                     }
@@ -372,10 +414,103 @@ impl SkillService {
         results.sort_by(|a, b| {
             b.installed
                 .cmp(&a.installed)
+                .then_with(|| b.stars.unwrap_or(0).cmp(&a.stars.unwrap_or(0)))
                 .then_with(|| b.description.is_empty().cmp(&a.description.is_empty()))
         });
 
         Ok(results)
+    }
+
+    /// 从市场安装指令安装技能（解析 install_source 前缀）
+    pub async fn install_from_source(&self, source: &str) -> Result<InstalledSkill, AppError> {
+        let lower = source.to_lowercase();
+        if lower.starts_with("local:") {
+            let folder_path = source[6..].trim();
+            if folder_path.is_empty() {
+                return Err(AppError::Validation("local: 缺少本地路径".into()));
+            }
+            self.install(folder_path, Some("local")).await
+        } else if lower.starts_with("github:") {
+            let spec = source[7..].trim();
+            if spec.is_empty() {
+                return Err(AppError::Validation("github: 缺少 owner/repo".into()));
+            }
+            self.install_from_github(spec).await
+        } else if lower.starts_with("skills.sh:") {
+            Err(AppError::Validation(
+                "skills.sh 在线安装暂不支持，请手动下载后使用 local: 本地路径安装".into(),
+            ))
+        } else if lower.starts_with("zip:") {
+            Err(AppError::Validation(
+                "zip 在线安装暂不支持，请手动下载后使用 local: 本地路径安装".into(),
+            ))
+        } else {
+            // 无前缀：视为本地路径
+            self.install(source, Some("local")).await
+        }
+    }
+
+    /// 从 GitHub 仓库安装（浅克隆后定位 SKILL.md），失败返回可读错误、不 panic
+    async fn install_from_github(&self, spec: &str) -> Result<InstalledSkill, AppError> {
+        let mut parts = spec.split('/').filter(|s| !s.is_empty());
+        let owner = parts
+            .next()
+            .ok_or_else(|| AppError::Validation("github: 缺少 owner".into()))?;
+        let repo = parts
+            .next()
+            .ok_or_else(|| AppError::Validation("github: 缺少 repo".into()))?;
+        let sub_path = {
+            let rest: Vec<&str> = parts.collect();
+            if rest.is_empty() {
+                None
+            } else {
+                Some(rest.join("/"))
+            }
+        };
+
+        let tmp_root = std::env::temp_dir().join(format!("prism_skill_{owner}_{repo}"));
+        let _ = tokio::fs::remove_dir_all(&tmp_root).await;
+
+        let repo_url = format!("https://github.com/{owner}/{repo}.git");
+        let status = tokio::process::Command::new("git")
+            .args(["clone", "--depth", "1", &repo_url])
+            .arg(&tmp_root)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+
+        let cleanup = || async {
+            let _ = tokio::fs::remove_dir_all(&tmp_root).await;
+        };
+
+        match status {
+            Ok(st) if st.success() => {}
+            Ok(_) => {
+                cleanup().await;
+                return Err(AppError::Internal(format!(
+                    "Git 克隆失败（{repo_url}），请手动 clone 后使用 local: 路径安装"
+                )));
+            }
+            Err(e) => {
+                cleanup().await;
+                return Err(AppError::Internal(format!(
+                    "未检测到 git 命令，无法从 GitHub 安装：{e}。请手动 clone 后使用 local: 路径安装"
+                )));
+            }
+        }
+
+        // 去掉 .git，仅保留技能内容
+        let _ = tokio::fs::remove_dir_all(tmp_root.join(".git")).await;
+
+        let skill_dir = match &sub_path {
+            Some(p) => tmp_root.join(p),
+            None => tmp_root.clone(),
+        };
+
+        let result = self.install(skill_dir.to_str().unwrap_or(""), Some("github")).await;
+        cleanup().await;
+        result
     }
 
     /// 列出本地技能（指定目录下的 SKILL.md）
@@ -501,6 +636,40 @@ fn normalize_name(name: &str) -> String {
 async fn fetch_json(client: &reqwest::Client, url: &str) -> Option<serde_json::Value> {
     let resp = client.get(url).send().await.ok()?;
     resp.json::<serde_json::Value>().await.ok()
+}
+
+// ── clawhub stars 解析 ────────────────────────────────────
+// clawhub API 结构多变：stars 可能为顶层字段、stats 子对象或字符串
+
+fn parse_clawhub_stars(item: &serde_json::Value) -> Option<u64> {
+    for key in [
+        "stars",
+        "star_count",
+        "stargazers_count",
+        "stats/stars",
+        "stats/star_count",
+        "stats/stargazers",
+    ] {
+        let v = item.pointer(&format!("/{key}"));
+        let v = match v {
+            Some(v) => v,
+            None => continue,
+        };
+        if let Some(n) = v.as_u64() {
+            return Some(n);
+        }
+        if let Some(f) = v.as_f64() {
+            if f > 0.0 && f.is_finite() {
+                return Some(f as u64);
+            }
+        }
+        if let Some(s) = v.as_str() {
+            if let Ok(n) = s.trim().parse::<u64>() {
+                return Some(n);
+            }
+        }
+    }
+    None
 }
 
 // ── 目录复制 ──────────────────────────────────────────────

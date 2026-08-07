@@ -220,7 +220,12 @@ async fn load_session_usage(
 }
 
 async fn load_workspace(state: &State<'_, crate::AppState>) -> WorkspaceInfo {
-    // Try to get current directory from the first agent's configuration
+    // 优先使用 preferences 中保存的工作目录（workspace_set 写入），保持侧边栏一致
+    if let Some(info) = crate::commands::workspace::load_workspace_pref(&state.db.pool).await {
+        return info;
+    }
+
+    // 回退：读取第一个 agent 的配置 workdir
     let result: Option<String> = sqlx::query_scalar(
         "SELECT configuration FROM agents ORDER BY order_key LIMIT 1"
     )

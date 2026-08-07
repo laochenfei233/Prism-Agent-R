@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::actor::ActorMessage;
 use super::coordinator::Coordinator;
-use crate::core::adk::error::AgentError;
+use crate::utils::error::AppError;
 
 // ── 工作流定义 ────────────────────────────────────────────
 
@@ -71,15 +71,45 @@ pub enum StageStatus {
     Failed,
 }
 
+impl StageStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            StageStatus::Pending => "pending",
+            StageStatus::Running => "running",
+            StageStatus::Completed => "completed",
+            StageStatus::Failed => "failed",
+        }
+    }
+}
+
 // ── 工作流引擎 ────────────────────────────────────────────
 
 pub struct WorkflowEngine {
     coordinator: Arc<Coordinator>,
+    on_stage: Option<Arc<dyn Fn(&str, &str, &StageStatus) + Send + Sync>>,
 }
 
 impl WorkflowEngine {
     pub fn new(coordinator: Arc<Coordinator>) -> Self {
-        Self { coordinator }
+        Self {
+            coordinator,
+            on_stage: None,
+        }
+    }
+
+    /// 注册阶段事件回调 (run_id, stage_id, status)
+    pub fn on_stage<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&str, &str, &StageStatus) + Send + Sync + 'static,
+    {
+        self.on_stage = Some(Arc::new(f));
+        self
+    }
+
+    fn emit_stage(&self, run_id: &str, stage_id: &str, status: &StageStatus) {
+        if let Some(f) = &self.on_stage {
+            f(run_id, stage_id, status);
+        }
     }
 
     /// 执行工作流
@@ -99,6 +129,7 @@ impl WorkflowEngine {
             // 检查依赖是否满足
             for dep in &stage.depends_on {
                 if !outputs.contains_key(dep) {
+                    self.emit_stage(run_id, &stage.id, &StageStatus::Failed);
                     stage_results.push(StageResult {
                         stage_id: stage.id.clone(),
                         status: StageStatus::Failed,
@@ -121,6 +152,7 @@ impl WorkflowEngine {
             };
 
             // 派发任务
+            self.emit_stage(run_id, &stage.id, &StageStatus::Running);
             stage_results.push(StageResult {
                 stage_id: stage.id.clone(),
                 status: StageStatus::Running,
@@ -138,6 +170,7 @@ impl WorkflowEngine {
                         output: Some(reply.output),
                         error: None,
                     });
+                    self.emit_stage(run_id, &stage.id, &StageStatus::Completed);
                 }
                 Err(e) => {
                     stage_results.pop();
@@ -147,6 +180,7 @@ impl WorkflowEngine {
                         output: None,
                         error: Some(e.to_string()),
                     });
+                    self.emit_stage(run_id, &stage.id, &StageStatus::Failed);
                     return Ok(WorkflowResult {
                         run_id: run_id.to_string(),
                         outputs,
@@ -273,22 +307,45 @@ pub struct TaskValidationResult {
     pub errors: Vec<String>,
 }
 
-// ── AppError 转换 ─────────────────────────────────────────
-
-impl From<AppError> for AgentError {
-    fn from(e: AppError) -> Self {
-        AgentError::Internal(e.to_string())
+impl From<TaskDefinition> for Workflow {
+    fn from(def: TaskDefinition) -> Self {
+        Workflow {
+            id: def.id,
+            name: def.name,
+            description: if def.description.is_empty() {
+                None
+            } else {
+                Some(def.description)
+            },
+            inputs: def
+                .inputs
+                .into_iter()
+                .map(|i| TaskInput {
+                    key: i.key,
+                    label: i.label,
+                    kind: match i.kind {
+                        InputKindDef::Text => InputKind::Text,
+                        InputKindDef::Textarea => InputKind::Textarea,
+                        InputKindDef::Select => InputKind::Select,
+                        InputKindDef::Number => InputKind::Number,
+                    },
+                    default: i.default,
+                    required: i.required,
+                })
+                .collect(),
+            stages: def
+                .stages
+                .into_iter()
+                .map(|s| WorkflowStage {
+                    id: s.id,
+                    name: s.name,
+                    role: s.role,
+                    prompt_template: s.prompt_template,
+                    tools: s.tools,
+                    max_iterations: s.max_iterations,
+                    depends_on: s.depends_on,
+                })
+                .collect(),
+        }
     }
-}
-
-// ── AppError 定义（简化版） ────────────────────────────────
-
-#[derive(Debug, thiserror::Error)]
-pub enum AppError {
-    #[error("验证错误: {0}")]
-    Validation(String),
-    #[error("内部错误: {0}")]
-    Internal(String),
-    #[error("Agent 错误: {0}")]
-    Agent(#[from] AgentError),
 }

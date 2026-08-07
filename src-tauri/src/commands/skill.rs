@@ -38,6 +38,15 @@ pub async fn skill_install(
 }
 
 #[tauri::command]
+pub async fn skill_install_market(
+    state: State<'_, crate::AppState>,
+    source: String,
+) -> Result<InstalledSkill, AppError> {
+    let svc = SkillService::new(state.db.clone());
+    svc.install_from_source(&source).await
+}
+
+#[tauri::command]
 pub async fn skill_uninstall(
     state: State<'_, crate::AppState>,
     id: String,

@@ -1,10 +1,13 @@
 pub mod agent;
 pub mod chat;
 pub mod dashboard;
+pub mod fs;
+pub mod lsp;
 pub mod mcp;
+pub mod memory;
 pub mod model;
 pub mod session;
 pub mod settings;
 pub mod skill;
 pub mod workflow;
-pub mod memory;
+pub mod workspace;
