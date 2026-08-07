@@ -1,9 +1,9 @@
 ---
 feature: prism-agent-r
 status: in-progress
-updated: 2026-08-06
-branch: main
-commits: # filled at delivery
+updated: 2026-08-07
+branch: feat/phase3-extend
+commits: 8804959..d67f823 # Phase 3 交付（T18 跨阶段收尾项延后，故保留 in-progress）
 platform: windows | macos | linux
 ---
 
@@ -59,7 +59,17 @@ platform: windows | macos | linux
 
 ## Report
 
-**当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16，见本文件「MVP Phase 1 完成报告」）；Phase 2（面板功能）已完成并合并；Phase 3（扩展功能）已完成（T12-T14/T17/T20-T24，见本文件「Phase 3 完成报告」）；T18（测试与验证，三平台打包 + CI 回归门槛）为跨阶段收尾项，部分延后。
+**当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16）；Phase 2（面板功能）已完成并合并；Phase 3（扩展功能）已完成（T12-T14/T17/T20-T24，见本文件「Phase 3 完成报告」）；T18（测试与验证：三平台打包 + CI 回归门槛）为跨阶段收尾项，部分延后。
+
+**What was built** — Phase 3 扩展功能全部落地：Wiki 知识库（write_ai 计划执行 + 分类树 UI）、RAG 引擎（分块/真实嵌入/混合检索/Contextual Retrieval/Reranker + 五维评测完整化：table_acc 结构化比对、ocr_completeness 字符召回率、chart_acc LLM-as-Judge、报告落库 `rag:eval-report` 趋势）、项目级自动索引（§10.2.1：指纹增量 + debounce + `__project__` 隔离 + 侧边栏状态条）、会议系统（8 后端可插拔 ASR + sherpa-rs + 说话人分离全链路 + 离线二次转写 + 摘要/QA/推送/导出）、翻译/OCR、反思/目标监控/安全护栏/评估监控（AgentTrace + AgentJudge + agent_stats）、Skill/MCP Router（BM25 意图路由）、上下文压缩（TokenBudget 统一配置）。迁移 015-022。
+
+**Verification** — `cargo check` 零警告；`cargo test` 43 passed（新增 eval 三维度 8 测试、项目索引 2 测试、报告落库与 json_each 集成测试、转写幂等 upsert 回归测试；临时库跑通全部 22 个迁移）；`svelte-check` 0 errors / 35 warnings（a11y，改动前既有）。Reranker 复验通过（4 测试 + 命令可用 + 无模型无感降级）。
+
+**Journey log** —
+- 转写落库曾用「每次新 UUID + INSERT OR REPLACE」，同 index 重复插入；评审发现后以 022 迁移先清重再建唯一索引 + ON CONFLICT upsert 修复（关键教训：OR REPLACE 依赖主键冲突，UUID 主键下形同虚设）。
+- 目录快照用 `entry.metadata()`（跟随符号链接）存在目录环无限递归风险；改用 `file_type().is_symlink()` 跳过（fs:watcher 与项目索引两处）。
+- eval 三维度中 chart_acc 走 LLM-as-Judge 有 token 成本，按 design 仅在有 `chart_expected` 用例时触发、无默认模型静默降级。
+- 项目自动索引首轮只建基线（避免启动即全量），变更触发全量重建走 `rag:progress` 后台任务。
 
 ## [S0] 设计模式参考
 
