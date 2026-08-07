@@ -3,6 +3,7 @@
 	import TaskNodeInspector from './TaskNodeInspector.svelte';
 
 	let selectedStageId = $state<string | null>(null);
+	let dragOverIndex = $state<number | null>(null);
 
 	let selectedStage = $derived(
 		selectedStageId
@@ -14,402 +15,453 @@
 		selectedStageId = selectedStageId === id ? null : id;
 	}
 
-	function handleCloseInspector() {
-		selectedStageId = null;
+	function handleAddStage(afterIndex?: number) {
+		const idx = afterIndex !== undefined ? afterIndex + 1 : undefined;
+		taskStore.addStage(idx);
+	}
+
+	function handleDragStart(e: DragEvent, stageId: string) {
+		e.dataTransfer?.setData('text/plain', stageId);
+	}
+
+	function handleDragOver(e: DragEvent, index: number) {
+		e.preventDefault();
+		dragOverIndex = index;
+	}
+
+	function handleDrop(e: DragEvent, targetIndex: number) {
+		e.preventDefault();
+		dragOverIndex = null;
+		const sourceId = e.dataTransfer?.getData('text/plain');
+		if (sourceId && taskStore.definition) {
+			const stages = [...taskStore.definition.stages];
+			const sourceIdx = stages.findIndex((s) => s.id === sourceId);
+			if (sourceIdx !== -1 && sourceIdx !== targetIndex) {
+				const [moved] = stages.splice(sourceIdx, 1);
+				stages.splice(targetIndex, 0, moved);
+				taskStore.definition = { ...taskStore.definition, stages };
+			}
+		}
+	}
+
+	function statusColor(_stageId: string): string {
+		return '#d4d4d4';
 	}
 </script>
 
-<div class="canvas-container">
-	<div class="canvas-toolbar">
+<div class="canvas-wrapper">
+	<!-- Toolbar -->
+	<div class="toolbar">
 		<div class="toolbar-left">
-			<div class="field">
-				<label for="task-name">任务名称</label>
-				<input
-					id="task-name"
-					type="text"
-					value={taskStore.definition?.name ?? ''}
-					oninput={(e) => {
-						if (taskStore.definition) {
-							taskStore.definition = { ...taskStore.definition, name: (e.target as HTMLInputElement).value };
-						}
-					}}
-					placeholder="输入任务名称"
-				/>
-			</div>
-			<div class="field">
-				<label for="task-desc">描述</label>
-				<input
-					id="task-desc"
-					type="text"
-					value={taskStore.definition?.description ?? ''}
-					oninput={(e) => {
-						if (taskStore.definition) {
-							taskStore.definition = { ...taskStore.definition, description: (e.target as HTMLInputElement).value };
-						}
-					}}
-					placeholder="简要描述任务"
-				/>
-			</div>
+			<input
+				type="text"
+				class="name-input"
+				value={taskStore.definition?.name ?? ''}
+				oninput={(e) => {
+					if (taskStore.definition) {
+						taskStore.definition = { ...taskStore.definition, name: (e.target as HTMLInputElement).value };
+					}
+				}}
+				placeholder="Workflow name"
+			/>
 		</div>
 		<div class="toolbar-right">
-			<button class="btn-sm btn-secondary" onclick={taskStore.addInput}>+ 输入变量</button>
-			<button class="btn-sm btn-primary" onclick={taskStore.validate}>验证</button>
-			<button class="btn-sm btn-primary" onclick={taskStore.saveTemplate}>保存模板</button>
+			<button class="tb-btn" onclick={taskStore.validate}>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+				Validate
+			</button>
+			<button class="tb-btn" onclick={taskStore.saveTemplate}>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+				Save
+			</button>
+			<button class="tb-btn primary" onclick={() => taskStore.startRun()}>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+				Run
+			</button>
 		</div>
 	</div>
 
-	{#if taskStore.definition?.inputs.length}
-		<div class="inputs-section">
-			<h4>输入变量</h4>
-			<div class="inputs-list">
-				{#each taskStore.definition.inputs as input (input.key)}
-					<div class="input-chip">
-						<span class="input-name">{input.label || input.key}</span>
-						<span class="input-kind">{input.kind}</span>
-						{#if input.required}
-							<span class="input-required">必填</span>
-						{/if}
-						<button class="chip-remove" onclick={() => taskStore.removeInput(input.key)}>&times;</button>
-					</div>
-				{/each}
-			</div>
+	<!-- Validation errors -->
+	{#if taskStore.validation && !taskStore.validation.ok}
+		<div class="validation-bar">
+			{#each taskStore.validation.errors as err}
+				<span class="err-item">{err}</span>
+			{/each}
 		</div>
 	{/if}
 
-	<div class="stages-section">
-		<div class="stages-header">
-			<h4>执行阶段</h4>
-			<button class="btn-sm btn-ghost" onclick={taskStore.addStage}>+ 添加阶段</button>
+	<!-- Canvas -->
+	<div class="canvas">
+		<!-- Start Node -->
+		<div class="node start-node">
+			<div class="node-icon start">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+			</div>
+			<div class="node-info">
+				<span class="node-title">Start</span>
+				<span class="node-sub">User Input</span>
+			</div>
 		</div>
 
-		{#if !taskStore.definition?.stages.length}
-			<div class="empty-stages">
-				<p>暂无阶段，点击上方添加</p>
-			</div>
-		{:else}
-			<div class="stages-flow">
-				{#each taskStore.definition.stages as stage, i (stage.id)}
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div
-						class="stage-node"
-						class:selected={selectedStageId === stage.id}
-						onclick={() => handleSelectStage(stage.id)}
-					>
-						<div class="node-header">
-							<span class="node-index">{i + 1}</span>
-							<span class="node-name">{stage.name}</span>
-							<button class="node-remove" onclick={(e) => { e.stopPropagation(); taskStore.removeStage(stage.id); }}>&times;</button>
-						</div>
-						<div class="node-body">
-							<span class="node-role">{stage.role}</span>
-							{#if stage.agent_id}
-								<span class="node-agent">Agent: {stage.agent_id.slice(0, 8)}</span>
-							{/if}
-							{#if stage.tools.length}
-								<span class="node-tools">{stage.tools.length} 工具</span>
-							{/if}
-							<span class="node-iter">最多 {stage.max_iterations} 轮</span>
-						</div>
-						{#if stage.prompt_template}
-							<div class="node-prompt">{stage.prompt_template.slice(0, 60)}{stage.prompt_template.length > 60 ? '...' : ''}</div>
-						{/if}
+		<!-- Connection line -->
+		<div class="connector">
+			<div class="line"></div>
+			<button class="add-btn" onclick={() => handleAddStage(-1)} title="Add stage">
+				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+			</button>
+		</div>
+
+		<!-- Stage Nodes -->
+		{#each taskStore.definition?.stages ?? [] as stage, i (stage.id)}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="node stage-node"
+				class:selected={selectedStageId === stage.id}
+				class:drag-over={dragOverIndex === i}
+				role="button"
+				tabindex="0"
+				draggable="true"
+				onclick={() => handleSelectStage(stage.id)}
+				onkeydown={(e) => e.key === 'Enter' && handleSelectStage(stage.id)}
+				ondragstart={(e) => handleDragStart(e, stage.id)}
+				ondragover={(e) => handleDragOver(e, i)}
+				ondrop={(e) => handleDrop(e, i)}
+				ondragleave={() => { dragOverIndex = null; }}
+			>
+				<div class="node-status" style:background={statusColor(stage.id)}></div>
+				<div class="node-icon stage">
+					<span class="stage-num">{i + 1}</span>
+				</div>
+				<div class="node-info">
+					<span class="node-title">{stage.name || `Stage ${i + 1}`}</span>
+					<div class="node-tags">
+						{#if stage.role}<span class="tag">{stage.role}</span>{/if}
+						{#if stage.agent_id}<span class="tag accent">Agent</span>{/if}
+						{#if stage.tools.length}<span class="tag">{stage.tools.length} tools</span>{/if}
+						<span class="tag muted">{stage.max_iterations} max turns</span>
 					</div>
-					{#if i < taskStore.definition!.stages.length - 1}
-						<div class="flow-arrow">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M12 5v14M5 12l7 7 7-7"/>
-							</svg>
-						</div>
+					{#if stage.prompt_template}
+						<span class="node-preview">{stage.prompt_template.slice(0, 80)}{stage.prompt_template.length > 80 ? '...' : ''}</span>
 					{/if}
-				{/each}
+				</div>
+				<button class="node-delete" onclick={(e) => { e.stopPropagation(); taskStore.removeStage(stage.id); }} title="Remove">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+				</button>
+			</div>
+
+			<!-- Connector after each stage -->
+			<div class="connector">
+				<div class="line"></div>
+				<button class="add-btn" onclick={() => handleAddStage(i)} title="Add stage">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+				</button>
+			</div>
+		{/each}
+
+		<!-- Empty state -->
+		{#if !taskStore.definition?.stages.length}
+			<div class="empty-canvas">
+				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+					<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/>
+				</svg>
+				<p>No stages yet</p>
+				<button class="add-first" onclick={() => handleAddStage()}>Add first stage</button>
+			</div>
+		{/if}
+
+		<!-- End Node -->
+		{#if taskStore.definition?.stages.length}
+			<div class="node end-node">
+				<div class="node-icon end">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
+				</div>
+				<div class="node-info">
+					<span class="node-title">Output</span>
+					<span class="node-sub">Final result</span>
+				</div>
 			</div>
 		{/if}
 	</div>
-
-	{#if taskStore.validation}
-		<div class="validation-bar" class:ok={taskStore.validation.ok}>
-			{#if taskStore.validation.ok}
-				<span>验证通过</span>
-			{:else}
-				<span>{taskStore.validation.errors.length} 个错误</span>
-				<ul>
-					{#each taskStore.validation.errors as err}
-						<li>{err}</li>
-					{/each}
-				</ul>
-			{/if}
-		</div>
-	{/if}
 </div>
 
+<!-- Inspector Panel -->
 {#if selectedStage}
-	<TaskNodeInspector stage={selectedStage} onClose={handleCloseInspector} />
+	<TaskNodeInspector stage={selectedStage} onClose={() => { selectedStageId = null; }} />
 {/if}
 
 <style>
-	.canvas-container {
+	.canvas-wrapper {
 		display: flex;
 		flex-direction: column;
-		gap: var(--spacing-md);
-		padding: var(--spacing-md);
 		flex: 1;
-		overflow-y: auto;
+		overflow: hidden;
 	}
 
-	.canvas-toolbar {
-		display: flex;
-		gap: var(--spacing-md);
-		align-items: flex-end;
-		flex-wrap: wrap;
-	}
-
-	.toolbar-left {
-		display: flex;
-		gap: var(--spacing-sm);
-		flex: 1;
-		min-width: 0;
-	}
-
-	.toolbar-right {
-		display: flex;
-		gap: var(--spacing-xs);
-		flex-shrink: 0;
-	}
-
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		flex: 1;
-		min-width: 0;
-	}
-
-	.field label {
-		font-size: var(--text-caption2);
-		font-weight: 500;
-		color: var(--color-fg-secondary);
-	}
-
-	.field input {
-		padding: 8px 12px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
-		color: var(--color-fg);
-		font-size: var(--text-base);
-		outline: none;
-	}
-
-	.field input:focus {
-		border-color: var(--color-accent);
-	}
-
-	.btn-sm {
-		padding: 6px 12px;
-		border-radius: var(--radius-full);
-		border: none;
-		cursor: pointer;
-		font-size: var(--text-caption1);
-		font-weight: 500;
-	}
-
-	.btn-primary {
-		background: var(--color-accent);
-		color: #fff;
-	}
-
-	.btn-secondary {
-		background: var(--color-bg);
-		color: var(--color-fg);
-	}
-
-	.btn-ghost {
-		background: transparent;
-		color: var(--color-accent);
-	}
-
-	/* Inputs */
-	.inputs-section h4,
-	.stages-header h4 {
-		font-size: var(--text-subheadline);
-		font-weight: 600;
-		color: var(--color-fg);
-		margin: 0 0 var(--spacing-xs);
-	}
-
-	.inputs-list {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--spacing-xs);
-	}
-
-	.input-chip {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 4px 10px;
-		background: var(--color-bg);
-		border-radius: var(--radius-full);
-		font-size: var(--text-caption1);
-		color: var(--color-fg);
-	}
-
-	.input-kind {
-		color: var(--color-fg-tertiary);
-		font-size: var(--text-caption2);
-	}
-
-	.input-required {
-		color: var(--color-orange);
-		font-size: var(--text-caption2);
-	}
-
-	.chip-remove {
-		border: none;
-		background: none;
-		color: var(--color-fg-tertiary);
-		cursor: pointer;
-		font-size: 14px;
-		padding: 0 2px;
-		line-height: 1;
-	}
-
-	.chip-remove:hover {
-		color: var(--color-red);
-	}
-
-	/* Stages */
-	.stages-header {
+	/* ── Toolbar ──────────────────────────────── */
+	.toolbar {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		padding: 12px 20px;
+		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		gap: 12px;
 	}
 
-	.empty-stages {
-		padding: var(--spacing-xxl);
-		text-align: center;
-		color: var(--color-fg-tertiary);
-		font-size: var(--text-subheadline);
+	.toolbar-left { flex: 1; min-width: 0; }
+	.toolbar-right { display: flex; gap: 6px; flex-shrink: 0; }
+
+	.name-input {
+		width: 100%;
+		padding: 7px 12px;
+		border: 1px solid rgba(0, 0, 0, 0.08);
+		border-radius: 8px;
+		background: #fff;
+		color: #171717;
+		font-size: 14px;
+		font-weight: 500;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+	.name-input:focus { border-color: #FF6900; }
+	.name-input::placeholder { color: #c0c0c0; }
+
+	.tb-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 6px 12px;
+		border-radius: 8px;
+		border: 1px solid rgba(0, 0, 0, 0.08);
+		background: #fff;
+		color: #171717;
+		font-size: 12px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.12s;
+	}
+	.tb-btn:hover { background: #f5f5f5; }
+	.tb-btn.primary {
+		background: #FF6900;
+		color: #fff;
+		border-color: #FF6900;
+	}
+	.tb-btn.primary:hover { background: #E85D00; }
+
+	/* ── Validation ───────────────────────────── */
+	.validation-bar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		padding: 8px 20px;
+		background: #fef2f2;
+		border-bottom: 1px solid #fecaca;
+	}
+	.err-item {
+		font-size: 12px;
+		color: #dc2626;
+		background: #fff;
+		padding: 2px 8px;
+		border-radius: 6px;
+		border: 1px solid #fecaca;
 	}
 
-	.stages-flow {
+	/* ── Canvas ───────────────────────────────── */
+	.canvas {
+		flex: 1;
+		overflow-y: auto;
+		padding: 24px 20px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 0;
 	}
 
-	.stage-node {
+	/* ── Nodes ────────────────────────────────── */
+	.node {
 		width: 100%;
-		max-width: 480px;
-		padding: var(--spacing-sm);
-		background: var(--color-bg);
-		border: 1px solid var(--color-separator);
-		border-radius: var(--radius-md);
-		cursor: pointer;
-		transition: border-color 0.15s ease, box-shadow 0.15s ease;
-	}
-
-	.stage-node:hover {
-		border-color: var(--color-accent);
-	}
-
-	.stage-node.selected {
-		border-color: var(--color-accent);
-		box-shadow: 0 0 0 1px var(--color-accent);
-	}
-
-	.node-header {
+		max-width: 440px;
 		display: flex;
-		align-items: center;
-		gap: var(--spacing-xs);
-		margin-bottom: var(--spacing-xs);
+		align-items: flex-start;
+		gap: 12px;
+		padding: 14px 16px;
+		background: #fff;
+		border: 1px solid rgba(0, 0, 0, 0.08);
+		border-radius: 12px;
+		cursor: pointer;
+		transition: all 0.15s;
+		position: relative;
+	}
+	.node:hover { border-color: rgba(0, 0, 0, 0.15); }
+	.node.selected {
+		border-color: #FF6900;
+		box-shadow: 0 0 0 3px rgba(255, 105, 0, 0.1);
+	}
+	.node.drag-over {
+		border-color: #FF6900;
+		background: #fff8f0;
 	}
 
-	.node-index {
-		width: 22px;
-		height: 22px;
-		border-radius: 50%;
-		background: var(--color-accent);
-		color: #fff;
+	.start-node, .end-node {
+		cursor: default;
+		background: #f9f9f9;
+	}
+	.start-node:hover, .end-node:hover { border-color: rgba(0, 0, 0, 0.08); }
+
+	.node-status {
+		position: absolute;
+		left: 0;
+		top: 12px;
+		bottom: 12px;
+		width: 3px;
+		border-radius: 0 2px 2px 0;
+	}
+
+	.node-icon {
+		width: 36px;
+		height: 36px;
+		border-radius: 10px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: var(--text-caption2);
-		font-weight: 600;
 		flex-shrink: 0;
 	}
+	.node-icon.start { background: #f0f0f0; color: #6b6b6b; }
+	.node-icon.end { background: #f0f0f0; color: #6b6b6b; }
+	.node-icon.stage { background: #FF6900; color: #fff; }
 
-	.node-name {
-		font-size: var(--text-subheadline);
-		font-weight: 600;
-		color: var(--color-fg);
+	.stage-num {
+		font-size: 14px;
+		font-weight: 700;
+	}
+
+	.node-info {
 		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
 	}
 
-	.node-remove {
-		border: none;
-		background: none;
-		color: var(--color-fg-tertiary);
-		cursor: pointer;
-		font-size: 16px;
-		padding: 2px 6px;
-		border-radius: var(--radius-sm);
-		line-height: 1;
+	.node-title {
+		font-size: 14px;
+		font-weight: 600;
+		color: #171717;
 	}
 
-	.node-remove:hover {
-		color: var(--color-red);
-		background: var(--color-bg-secondary);
+	.node-sub {
+		font-size: 12px;
+		color: #a0a0a0;
 	}
 
-	.node-body {
+	.node-tags {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--spacing-xs);
+		gap: 4px;
 	}
 
-	.node-role,
-	.node-agent,
-	.node-tools,
-	.node-iter {
-		font-size: var(--text-caption2);
-		padding: 2px 8px;
-		border-radius: var(--radius-full);
-		background: var(--color-bg-secondary);
-		color: var(--color-fg-secondary);
+	.tag {
+		padding: 2px 7px;
+		border-radius: 5px;
+		font-size: 11px;
+		font-weight: 500;
+		background: #f0f0f0;
+		color: #6b6b6b;
 	}
+	.tag.accent { background: #fff0e6; color: #FF6900; }
+	.tag.muted { background: transparent; color: #a0a0a0; }
 
-	.node-prompt {
-		margin-top: var(--spacing-xs);
-		font-size: var(--text-caption1);
-		color: var(--color-fg-tertiary);
+	.node-preview {
+		font-size: 12px;
+		color: #a0a0a0;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		margin-top: 2px;
 	}
 
-	.flow-arrow {
-		color: var(--color-fg-tertiary);
-		padding: var(--spacing-xs) 0;
+	.node-delete {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		width: 24px;
+		height: 24px;
+		border-radius: 6px;
+		border: none;
+		background: transparent;
+		color: #c0c0c0;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: all 0.12s;
+	}
+	.node:hover .node-delete { opacity: 1; }
+	.node-delete:hover { background: #fee2e2; color: #dc2626; }
+
+	/* ── Connector ────────────────────────────── */
+	.connector {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		position: relative;
+		height: 36px;
 	}
 
-	/* Validation */
-	.validation-bar {
-		padding: var(--spacing-sm);
-		border-radius: var(--radius-md);
-		background: rgba(255, 59, 48, 0.1);
-		color: var(--color-red);
-		font-size: var(--text-caption1);
+	.line {
+		width: 1px;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.12);
 	}
 
-	.validation-bar.ok {
-		background: rgba(52, 199, 89, 0.1);
-		color: var(--color-green);
+	.add-btn {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		background: #fff;
+		color: #a0a0a0;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: all 0.15s;
+		z-index: 1;
+	}
+	.connector:hover .add-btn { opacity: 1; }
+	.add-btn:hover {
+		background: #FF6900;
+		color: #fff;
+		border-color: #FF6900;
 	}
 
-	.validation-bar ul {
-		margin: var(--spacing-xs) 0 0;
-		padding-left: var(--spacing-lg);
+	/* ── Empty ────────────────────────────────── */
+	.empty-canvas {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 12px;
+		padding: 48px 20px;
 	}
+	.empty-canvas p {
+		font-size: 14px;
+		color: #a0a0a0;
+		margin: 0;
+	}
+	.add-first {
+		padding: 8px 16px;
+		border-radius: 8px;
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		background: #fff;
+		color: #171717;
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+	.add-first:hover { background: #f5f5f5; }
 </style>

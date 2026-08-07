@@ -131,24 +131,28 @@ function createTaskStore() {
 		}
 	}
 
-	function addStage() {
+	function addStage(atIndex?: number) {
 		if (!definition) return;
 		const n = definition.stages.length + 1;
-		definition.stages = [
-			...definition.stages,
-			{
-				id: crypto.randomUUID(),
-				name: `步骤 ${n}`,
-				role: 'assistant',
-				agent_id: null,
-				prompt_template: '',
-				tools: [],
-				max_iterations: 5,
-				depends_on: definition.stages.length > 0 ? [definition.stages[definition.stages.length - 1].id] : [],
-				model_hint: null,
-				output_spec: null,
-			},
-		];
+		const newStage = {
+			id: crypto.randomUUID(),
+			name: `Stage ${n}`,
+			role: 'Assistant',
+			agent_id: null,
+			prompt_template: '',
+			tools: [],
+			max_iterations: 5,
+			depends_on: definition.stages.length > 0 ? [definition.stages[definition.stages.length - 1].id] : [],
+			model_hint: null,
+			output_spec: null,
+		};
+		if (atIndex !== undefined && atIndex >= 0 && atIndex < definition.stages.length) {
+			const stages = [...definition.stages];
+			stages.splice(atIndex + 1, 0, newStage);
+			definition.stages = stages;
+		} else {
+			definition.stages = [...definition.stages, newStage];
+		}
 	}
 
 	function removeStage(stageId: string) {

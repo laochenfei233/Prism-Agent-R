@@ -5,9 +5,9 @@
 	import TaskRunPanel from './TaskRunPanel.svelte';
 
 	const TABS = [
-		{ label: '模板', key: 'template' as const },
-		{ label: '设计', key: 'design' as const },
-		{ label: '运行', key: 'run' as const },
+		{ label: 'Templates', key: 'template' as const },
+		{ label: 'Design', key: 'design' as const },
+		{ label: 'Run', key: 'run' as const },
 	];
 
 	let activeTab = $derived(TABS.findIndex((t) => t.key === taskStore.viewMode));
@@ -16,63 +16,83 @@
 		taskStore.viewMode = TABS[index].key;
 	}
 
-	const builtinTemplates: { id: string; name: string; description: string; stage_count: number; input_count: number; definition: any }[] = [
+	const builtinTemplates: { id: string; name: string; description: string; stage_count: number; icon: string; definition: any }[] = [
 		{
-			id: 'builtin-translate',
-			name: '翻译工作流',
-			description: '多阶段翻译：初翻 → 审校 → 终稿',
+			id: 'builtin-research',
+			name: 'Deep Research',
+			description: 'Multi-stage research: search → analyze → synthesize',
 			stage_count: 3,
-			input_count: 2,
+			icon: '🔍',
 			definition: {
-				name: '翻译工作流',
-				description: '多阶段翻译：初翻 → 审校 → 终稿',
+				name: 'Deep Research',
+				description: 'Comprehensive research workflow',
 				inputs: [
-					{ key: 'source_text', label: '原文', kind: 'Textarea' as const, options: null, default: '', required: true },
-					{ key: 'target_lang', label: '目标语言', kind: 'Select' as const, options: ['英文', '日文', '韩文', '法文'], default: '英文', required: true },
+					{ key: 'topic', label: 'Research Topic', kind: 'Text' as const, options: null, default: '', required: true },
+					{ key: 'depth', label: 'Depth', kind: 'Select' as const, options: ['Quick', 'Standard', 'Deep'], default: 'Standard', required: true },
 				],
 				stages: [
-					{ id: '1', name: '初翻', role: 'assistant', agent_id: null, prompt_template: '请将以下文本翻译为{{target_lang}}：\n{{source_text}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '2', name: '审校', role: 'assistant', agent_id: null, prompt_template: '请审校以下翻译，指出问题并给出改进建议：\n{{初翻}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
-					{ id: '3', name: '终稿', role: 'assistant', agent_id: null, prompt_template: '根据审校意见，输出最终翻译：\n原文：{{source_text}}\n初翻：{{初翻}}\n审校意见：{{审校}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
+					{ id: '1', name: 'Search', role: 'Researcher', agent_id: null, prompt_template: 'Search for comprehensive information about: {{topic}}', tools: ['web_search'], max_iterations: 5, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: 'Analyze', role: 'Analyst', agent_id: null, prompt_template: 'Analyze the following research findings:\n{{Search}}', tools: [], max_iterations: 3, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: 'Report', role: 'Writer', agent_id: null, prompt_template: 'Write a comprehensive report based on:\n{{Analyze}}', tools: [], max_iterations: 2, depends_on: ['2'], model_hint: null, output_spec: null },
 				],
 			},
 		},
 		{
-			id: 'builtin-review',
-			name: '内容审核',
-			description: '内容安全检测 + 分类 + 摘要',
+			id: 'builtin-translate',
+			name: 'Translation',
+			description: 'Translate → review → finalize',
 			stage_count: 3,
-			input_count: 1,
+			icon: '🌐',
 			definition: {
-				name: '内容审核',
-				description: '内容安全检测 + 分类 + 摘要',
+				name: 'Translation Pipeline',
+				description: 'Professional translation workflow',
 				inputs: [
-					{ key: 'content', label: '待审核内容', kind: 'Textarea' as const, options: null, default: '', required: true },
+					{ key: 'source_text', label: 'Source Text', kind: 'Textarea' as const, options: null, default: '', required: true },
+					{ key: 'target_lang', label: 'Target Language', kind: 'Select' as const, options: ['English', 'Japanese', 'Korean', 'French', 'German'], default: 'English', required: true },
 				],
 				stages: [
-					{ id: '1', name: '安全检测', role: 'assistant', agent_id: null, prompt_template: '检测以下内容是否包含违规信息：\n{{content}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '2', name: '内容分类', role: 'assistant', agent_id: null, prompt_template: '对以下内容进行分类：\n{{content}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '3', name: '生成摘要', role: 'assistant', agent_id: null, prompt_template: '为以下内容生成摘要：\n{{content}}\n分类结果：{{内容分类}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
+					{ id: '1', name: 'Translate', role: 'Translator', agent_id: null, prompt_template: 'Translate the following to {{target_lang}}:\n{{source_text}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: 'Review', role: 'Reviewer', agent_id: null, prompt_template: 'Review this translation for accuracy and fluency:\n{{Translate}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: 'Finalize', role: 'Editor', agent_id: null, prompt_template: 'Produce the final polished translation:\nSource: {{source_text}}\nDraft: {{Translate}}\nReview: {{Review}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
 				],
 			},
 		},
 		{
 			id: 'builtin-code-review',
-			name: '代码审查',
-			description: '代码分析 → 问题发现 → 改进建议',
+			name: 'Code Review',
+			description: 'Analyze → find issues → suggest improvements',
 			stage_count: 3,
-			input_count: 2,
+			icon: '💻',
 			definition: {
-				name: '代码审查',
-				description: '代码分析 → 问题发现 → 改进建议',
+				name: 'Code Review',
+				description: 'Automated code review workflow',
 				inputs: [
-					{ key: 'code', label: '代码', kind: 'Textarea' as const, options: null, default: '', required: true },
-					{ key: 'language', label: '编程语言', kind: 'Select' as const, options: ['TypeScript', 'Python', 'Rust', 'Go', 'Java'], default: 'TypeScript', required: true },
+					{ key: 'code', label: 'Code', kind: 'Textarea' as const, options: null, default: '', required: true },
+					{ key: 'language', label: 'Language', kind: 'Select' as const, options: ['TypeScript', 'Python', 'Rust', 'Go', 'Java'], default: 'TypeScript', required: true },
 				],
 				stages: [
-					{ id: '1', name: '代码分析', role: 'assistant', agent_id: null, prompt_template: '分析以下{{language}}代码的结构和功能：\n```{{language}}\n{{code}}\n```', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '2', name: '问题发现', role: 'assistant', agent_id: null, prompt_template: '根据代码分析结果，找出潜在问题：\n{{代码分析}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
-					{ id: '3', name: '改进建议', role: 'assistant', agent_id: null, prompt_template: '基于问题发现，给出具体改进建议：\n问题列表：{{问题发现}}\n原始代码：\n```{{language}}\n{{code}}\n```', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
+					{ id: '1', name: 'Analyze', role: 'Analyst', agent_id: null, prompt_template: 'Analyze this {{language}} code:\n{{code}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: 'Find Issues', role: 'Reviewer', agent_id: null, prompt_template: 'Find bugs and issues in this analysis:\n{{Analyze}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: 'Suggest', role: 'Advisor', agent_id: null, prompt_template: 'Suggest improvements for:\n{{Find Issues}}\nOriginal code:\n{{code}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
+				],
+			},
+		},
+		{
+			id: 'builtin-brainstorm',
+			name: 'Brainstorm',
+			description: 'Generate ideas → evaluate → select best',
+			stage_count: 3,
+			icon: '💡',
+			definition: {
+				name: 'Brainstorm',
+				description: 'Structured brainstorming workflow',
+				inputs: [
+					{ key: 'topic', label: 'Topic', kind: 'Text' as const, options: null, default: '', required: true },
+				],
+				stages: [
+					{ id: '1', name: 'Generate', role: 'Creative', agent_id: null, prompt_template: 'Generate diverse ideas for: {{topic}}', tools: [], max_iterations: 3, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: 'Evaluate', role: 'Critic', agent_id: null, prompt_template: 'Evaluate these ideas on feasibility and impact:\n{{Generate}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: 'Select', role: 'Strategist', agent_id: null, prompt_template: 'Select and refine the best ideas:\n{{Evaluate}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
 				],
 			},
 		},
@@ -101,31 +121,18 @@
 	<div class="designer-content">
 		{#if taskStore.viewMode === 'template'}
 			<div class="template-panel">
-				<div class="panel-header">
-					<h3>选择模板</h3>
-					<button class="btn-sm btn-primary" onclick={taskStore.newDefinition}>从零开始</button>
-				</div>
-
 				<div class="template-grid">
 					{#each builtinTemplates as tpl}
-						{@const def = tpl.definition}
-						<TaskTemplateCard template={tpl} onSelect={() => taskStore.loadTemplate(def)} />
+						<TaskTemplateCard template={tpl} onSelect={() => taskStore.loadTemplate(tpl.definition)} />
 					{/each}
-
 					{#each taskStore.templates as tpl (tpl.id)}
 						<TaskTemplateCard template={tpl} onSelect={(t) => taskStore.loadTemplate(t)} />
 					{/each}
 				</div>
-
-				{#if taskStore.templatesLoading}
-					<div class="loading-text">加载中...</div>
-				{/if}
-
-				{#if !builtinTemplates.length && !taskStore.templates.length && !taskStore.templatesLoading}
-					<div class="empty-templates">
-						<p>暂无模板，点击"从零开始"创建</p>
-					</div>
-				{/if}
+				<button class="start-blank" onclick={taskStore.newDefinition}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+					Start from scratch
+				</button>
 			</div>
 
 		{:else if taskStore.viewMode === 'design'}
@@ -139,98 +146,83 @@
 
 <style>
 	.task-designer {
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-md);
+		background: #fff;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 12px;
 		display: flex;
 		flex-direction: column;
-		height: 100%;
+		height: 480px;
 		overflow: hidden;
 	}
 
 	.designer-tabs {
 		display: flex;
 		gap: 0;
-		border-bottom: 1px solid var(--color-separator);
-		padding: 0 var(--spacing-md);
+		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		padding: 0 4px;
 	}
 
 	.tab {
-		padding: var(--spacing-sm) var(--spacing-md);
+		padding: 10px 16px;
 		border: none;
 		background: none;
 		cursor: pointer;
-		font-size: var(--text-subheadline);
+		font-size: 13px;
 		font-weight: 500;
-		color: var(--color-fg-secondary);
+		color: #a0a0a0;
 		border-bottom: 2px solid transparent;
-		transition: color 0.15s ease, border-color 0.15s ease;
+		transition: color 0.15s, border-color 0.15s;
 	}
-
-	.tab:hover {
-		color: var(--color-fg);
-	}
-
+	.tab:hover { color: #171717; }
 	.tab.active {
-		color: var(--color-accent);
-		border-bottom-color: var(--color-accent);
+		color: #171717;
+		border-bottom-color: #171717;
 	}
 
 	.designer-content {
 		flex: 1;
-		overflow-y: auto;
-	}
-
-	.template-panel {
-		padding: var(--spacing-md);
+		overflow: hidden;
 		display: flex;
 		flex-direction: column;
-		gap: var(--spacing-md);
 	}
 
-	.panel-header {
+	/* ── Template Panel ───────────────────────── */
+	.template-panel {
+		padding: 20px;
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.panel-header h3 {
-		font-size: var(--text-headline);
-		font-weight: 600;
-		color: var(--color-fg);
-		margin: 0;
-	}
-
-	.btn-sm {
-		padding: 6px 12px;
-		border-radius: var(--radius-full);
-		border: none;
-		cursor: pointer;
-		font-size: var(--text-caption1);
-		font-weight: 500;
-	}
-
-	.btn-primary {
-		background: var(--color-accent);
-		color: #fff;
+		flex-direction: column;
+		gap: 16px;
+		overflow-y: auto;
 	}
 
 	.template-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-		gap: var(--spacing-sm);
+		grid-template-columns: repeat(2, 1fr);
+		gap: 10px;
 	}
 
-	.loading-text {
-		text-align: center;
-		color: var(--color-fg-tertiary);
-		font-size: var(--text-subheadline);
-		padding: var(--spacing-md);
+	.start-blank {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		padding: 10px;
+		border: 1px dashed rgba(0, 0, 0, 0.12);
+		border-radius: 10px;
+		background: transparent;
+		color: #6b6b6b;
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+	.start-blank:hover {
+		border-color: #FF6900;
+		color: #FF6900;
+		background: #fff8f0;
 	}
 
-	.empty-templates {
-		text-align: center;
-		color: var(--color-fg-tertiary);
-		font-size: var(--text-subheadline);
-		padding: var(--spacing-xxl);
+	@media (max-width: 600px) {
+		.template-grid { grid-template-columns: 1fr; }
 	}
 </style>
