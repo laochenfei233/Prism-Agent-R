@@ -38,3 +38,13 @@ pub async fn session_delete(state: State<'_, crate::AppState>, id: String) -> Re
     let svc = SessionService::new(state.db.pool.clone());
     svc.delete(&id).await
 }
+
+#[tauri::command]
+pub async fn session_search(
+    state: State<'_, crate::AppState>,
+    query: String,
+    limit: Option<i64>,
+) -> Result<Vec<SessionDto>, AppError> {
+    let svc = SessionService::new(state.db.pool.clone());
+    svc.search(&query, limit.unwrap_or(20)).await
+}

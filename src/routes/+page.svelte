@@ -4,82 +4,63 @@
 	import { agentApi } from '$lib/api';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
+	import { dashboardStore } from '$lib/stores/dashboard.svelte';
+
+	import DashboardHeader from '$lib/components/dashboard/DashboardHeader.svelte';
+	import UsageStatsCard from '$lib/components/dashboard/UsageStatsCard.svelte';
+	import UsageTrendChart from '$lib/components/dashboard/UsageTrendChart.svelte';
+	import AgentLauncher from '$lib/components/dashboard/AgentLauncher.svelte';
+	import SkillOverviewCard from '$lib/components/dashboard/SkillOverviewCard.svelte';
+	import McpOverviewCard from '$lib/components/dashboard/McpOverviewCard.svelte';
+	import RecentSessionsCard from '$lib/components/dashboard/RecentSessionsCard.svelte';
+	import TaskDesigner from '$lib/components/task/TaskDesigner.svelte';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
-	let msg = $state('');
-
-	// Setup form
-	let pName = $state('');
-	let pKind = $state('openai');
-	let pUrl = $state('');
-	let pKey = $state('');
-	let mProvider = $state('');
-	let mModelId = $state('');
-	let availableModels = $state<string[]>([]);
-	let loadingModels = $state(false);
 
 	// Chat
 	let input = $state('');
-
-	async function fetchModels() {
-		if (!mProvider) return;
-		loadingModels = true;
-		availableModels = [];
-		try {
-			const result = await invoke<{models: string[]}>('model_fetch_available', { providerId: mProvider });
-			availableModels = result.models || [];
-		} catch (e) {
-			msg = '拉取失败: ' + String(e);
-		} finally {
-			loadingModels = false;
-		}
-	}
 
 	async function load() {
 		providers = await invoke<any[]>('model_providers');
 		models = await invoke<any[]>('model_list');
 	}
 
-	async function saveProvider() {
-		if (!pName.trim()) { msg = '请输入名称'; return; }
-		try {
-			await invoke('settings_add_provider', {
-				name: pName.trim(), kind: pKind,
-				baseUrl: pUrl.trim() || null, apiKey: pKey.trim() || null
-			});
-			pName = ''; pUrl = ''; pKey = '';
-			await load();
-			msg = '✓ Provider 已添加';
-		} catch (e) {
-			msg = '错误: ' + String(e);
-		}
-	}
-
-	async function saveModel() {
-		if (!mProvider || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
-		try {
-			await invoke('settings_add_model', {
-				providerId: mProvider, modelId: mModelId.trim(),
-				displayName: null, isDefault: true
-			});
-			mModelId = '';
-			await load();
-			msg = '✓ 模型已添加';
-		} catch (e) {
-			msg = '错误: ' + String(e);
-		}
-	}
-
 	async function createAgent() {
 		try {
 			await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
-			msg = '✓ Agent 已创建';
-			await load();
 			agentStore.loadAgents();
+			dashboardStore.loadOverview();
 		} catch (e) {
-			msg = '错误: ' + String(e);
+			console.error('Failed to create agent:', e);
 		}
+	}
+
+	async function handleStartChat(agentId: string) {
+		const agent = agentStore.agents.find((a) => a.id === agentId);
+		if (!agent) return;
+		try {
+			agentStore.selectAgent(agent);
+			const session = await agentStore.createSession(agent.id, '新会话');
+			if (agentStore.currentSession) {
+				chatStore.loadHistory(agentStore.currentSession.id);
+			}
+		} catch (e) {
+			console.error('Failed to start chat:', e);
+		}
+	}
+
+	function handleOpenSession(sessionId: string) {
+		const session = agentStore.sessions.find((s) => s.id === sessionId);
+		if (session) {
+			agentStore.selectSession(session);
+			chatStore.loadHistory(session.id);
+		}
+	}
+
+	function goToDashboard() {
+		agentStore.currentSession = null;
+		chatStore.messages = [];
 	}
 
 	async function handleSend() {
@@ -96,127 +77,80 @@
 		}
 	}
 
-	$effect(() => { load(); });
+	$effect(() => {
+		load();
+		dashboardStore.loadOverview();
+	});
 </script>
 
 {#if !agentStore.currentSession}
-	<!-- 无会话：设置向导或欢迎页 -->
-	{#if providers.length > 0 && models.length > 0}
-		<div class="welcome">
-			<div class="welcome-content">
-				<img src="/icon.svg" alt="" width="64" height="64" />
-				<h1>Prism Agent</h1>
-				<p>选择左侧 Agent，点击 + 创建会话开始对话</p>
-			</div>
-		</div>
-	{:else}
-		<div class="page">
-			<div class="header">
-				<h1>Prism Agent</h1>
-				<p>开始使用前，请先配置模型</p>
+	<!-- 无会话：Dashboard（始终显示） -->
+	<div class="dashboard">
+		<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? agentStore.agents.length} />
+
+		<div class="dashboard-body">
+			<!-- Row 1: Task Designer（核心功能前置） -->
+			<div class="section-row">
+				<TaskDesigner />
 			</div>
 
-			{#if msg}
-				<div class="toast" class:error={msg.startsWith('错误')}>{msg}</div>
-			{/if}
-
-			<!-- Step 1: Provider -->
-			<div class="card">
-				<div class="card-header">
-					<span class="step-num">1</span>
-					<span class="step-title">添加 Provider</span>
+			<!-- Row 2: Agent Launcher + Usage Trend -->
+			<div class="section-row two-col">
+				<div class="col-main">
+					<AgentLauncher
+						agents={dashboardStore.overview?.agents ?? agentStore.agents.map(a => ({
+							id: a.id, name: a.name, description: a.description ?? '',
+							avatar: null, model_name: null, skill_count: 0, mcp_count: 0,
+							last_used: null, order_key: a.order_key ?? 0
+						}))}
+						onStartChat={handleStartChat}
+						onCreateAgent={createAgent}
+					/>
 				</div>
-				<div class="form">
-					<div class="input-group">
-						<label for="p-kind">类型</label>
-						<select id="p-kind" bind:value={pKind}>
-							<option value="openai">OpenAI 兼容</option>
-							<option value="ollama">Ollama（本地）</option>
-						</select>
-					</div>
-					<div class="input-group">
-						<label for="p-name">名称</label>
-						<input id="p-name" bind:value={pName} placeholder="如 OpenAI、通义千问" />
-					</div>
-					<div class="input-group">
-						<label for="p-url">Base URL</label>
-						<input id="p-url" bind:value={pUrl} placeholder={pKind === 'ollama' ? 'http://localhost:11434/v1' : 'https://api.openai.com/v1'} />
-					</div>
-					<div class="input-group">
-						<label for="p-key">API Key</label>
-						<input id="p-key" bind:value={pKey} type="password" placeholder="sk-..." />
-					</div>
-					<button class="btn-primary" onclick={saveProvider}>保存 Provider</button>
+				<div class="col-side">
+					<UsageTrendChart data={dashboardStore.overview?.usage_trend ?? []} />
 				</div>
-				{#if providers.length > 0}
-					<div class="done-badge">✓ 已添加：{providers.map(p => p.name).join(', ')}</div>
-				{/if}
 			</div>
 
-			<!-- Step 2: Model -->
-			<div class="card" class:disabled={providers.length === 0}>
-				<div class="card-header">
-					<span class="step-num">2</span>
-					<span class="step-title">添加模型</span>
-				</div>
-				{#if providers.length === 0}
-					<p class="hint">请先完成步骤 1</p>
-				{:else}
-					<div class="form">
-						<div class="input-group">
-							<label for="m-provider">Provider</label>
-							<select id="m-provider" bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
-								<option value="">选择 Provider</option>
-								{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
-							</select>
+			<!-- Row 3: Stats + Skill + MCP（三列紧凑布局） -->
+			<div class="section-row three-col">
+				<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
+				<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
+				<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
+			</div>
+
+			<!-- Row 4: Recent Sessions -->
+			<RecentSessionsCard
+				sessions={dashboardStore.overview?.recent_sessions ?? []}
+				onOpenSession={handleOpenSession}
+			/>
+
+			<!-- Quick Setup Banner -->
+			{#if providers.length === 0 || models.length === 0}
+				<div class="setup-banner">
+					<div class="setup-banner-content">
+						<span class="setup-icon">⚡</span>
+						<div class="setup-text">
+							<strong>快速开始</strong>
+							<span>配置 Provider 和模型后即可开始对话</span>
 						</div>
-						{#if mProvider}
-							<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
-								{loadingModels ? '拉取中...' : '拉取可用模型'}
-							</button>
-						{/if}
-						{#if availableModels.length > 0}
-							<div class="input-group">
-								<label for="m-model">选择模型</label>
-								<select id="m-model" bind:value={mModelId}>
-									<option value="">-- 选择模型 --</option>
-									{#each availableModels as m}<option value={m}>{m}</option>{/each}
-								</select>
-							</div>
-						{:else}
-							<div class="input-group">
-								<label for="m-model-id">模型 ID</label>
-								<input id="m-model-id" bind:value={mModelId} placeholder="如 gpt-4o、qwen2.5" />
-							</div>
-						{/if}
-						<button class="btn-primary" onclick={saveModel}>保存模型</button>
+						<button class="setup-btn" onclick={() => goto('/settings')}>去设置</button>
 					</div>
-				{/if}
-				{#if models.length > 0}
-					<div class="done-badge">✓ 已添加：{models.map(m => m.display_name || m.model_id).join(', ')}</div>
-				{/if}
-			</div>
-
-			<!-- Step 3: Agent -->
-			<div class="card" class:disabled={models.length === 0}>
-				<div class="card-header">
-					<span class="step-num">3</span>
-					<span class="step-title">创建 Agent</span>
 				</div>
-				{#if models.length === 0}
-					<p class="hint">请先完成步骤 2</p>
-				{:else}
-					<button class="btn-green" onclick={createAgent}>创建默认 Agent</button>
-				{/if}
-			</div>
+			{/if}
 		</div>
-	{/if}
+	</div>
 {:else}
 	<!-- 有会话：对话界面 -->
 	<div class="chat">
 		<div class="chat-header">
-			<h2>{agentStore.currentAgent?.name || 'Agent'}</h2>
-			<span class="session-name">{agentStore.currentSession.title || '新会话'}</span>
+			<button class="back-btn" onclick={goToDashboard} title="返回面板">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+			</button>
+			<div class="header-info">
+				<h2>{agentStore.currentAgent?.name || 'Agent'}</h2>
+				<span class="session-name">{agentStore.currentSession.title || '新会话'}</span>
+			</div>
 		</div>
 
 		<div class="messages">
@@ -261,163 +195,100 @@
 {/if}
 
 <style>
-	/* ── Welcome ────────────────────────────────── */
-	.welcome {
-		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-	.welcome-content {
-		text-align: center;
+	/* ── Dashboard (OpenAI-style) ──────────────── */
+	.dashboard {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		gap: 12px;
-	}
-	.welcome-content h1 {
-		font-size: 28px;
-		font-weight: 700;
-		color: var(--color-fg);
-		margin: 0;
-	}
-	.welcome-content p {
-		font-size: 15px;
-		color: var(--color-fg-secondary);
-		margin: 0;
-	}
-
-	/* ── Setup Page ─────────────────────────────── */
-	.page {
-		padding: 24px;
-		max-width: 480px;
+		height: 100%;
 		overflow-y: auto;
+		background: #ffffff;
 	}
 
-	.header { margin-bottom: 20px; }
-	.header h1 {
-		font-size: 28px;
-		font-weight: 700;
-		color: var(--color-fg);
-		margin: 0 0 4px;
-	}
-	.header p {
-		font-size: 15px;
-		color: var(--color-fg-secondary);
-		margin: 0;
+	.dashboard-body {
+		max-width: 960px;
+		width: 100%;
+		margin: 0 auto;
+		padding: 20px 32px 48px;
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
 	}
 
-	.toast {
-		padding: 10px 16px;
-		border-radius: 10px;
-		background: #34C759;
-		color: #fff;
-		font-size: 15px;
-		margin-bottom: 16px;
+	.section-row {
+		width: 100%;
 	}
-	.toast.error { background: #FF3B30; }
 
-	.card {
-		background: var(--color-bg-secondary);
-		border-radius: 14px;
-		padding: 16px;
-		margin-bottom: 12px;
+	.section-row.two-col {
+		display: grid;
+		grid-template-columns: 1.6fr 1fr;
+		gap: 16px;
 	}
-	.card.disabled { opacity: 0.5; pointer-events: none; }
 
-	.card-header {
+	.section-row.three-col {
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr;
+		gap: 16px;
+	}
+
+	.col-main, .col-side {
+		min-width: 0;
+	}
+
+	/* ── Setup Banner ─────────────────────────── */
+	.setup-banner {
+		width: 100%;
+	}
+	.setup-banner-content {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		margin-bottom: 14px;
+		gap: 14px;
+		padding: 16px 20px;
+		background: #f7f7f8;
+		border: 1px solid rgba(0, 0, 0, 0.06);
+		border-radius: 12px;
 	}
-	.step-num {
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		background: var(--color-accent);
-		color: #fff;
+	.setup-icon {
+		font-size: 20px;
+		flex-shrink: 0;
+	}
+	.setup-text {
+		flex: 1;
 		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 13px;
-		font-weight: 600;
+		flex-direction: column;
+		gap: 1px;
 	}
-	.step-title {
-		font-size: 17px;
-		font-weight: 600;
-		color: var(--color-fg);
-	}
-
-	.form { display: flex; flex-direction: column; gap: 12px; }
-	.input-group { display: flex; flex-direction: column; gap: 4px; }
-	.input-group label {
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--color-fg-secondary);
-	}
-	.input-group input,
-	.input-group select {
-		padding: 10px 12px;
-		border-radius: 10px;
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
-		color: var(--color-fg);
-		font-size: 15px;
-		outline: none;
-	}
-	.input-group input:focus,
-	.input-group select:focus { border-color: var(--color-accent); }
-
-	.hint { font-size: 14px; color: var(--color-fg-tertiary); margin: 0; }
-
-	.done-badge {
-		margin-top: 12px;
-		padding: 8px 12px;
-		border-radius: 8px;
-		background: rgba(52, 199, 89, 0.12);
-		color: #34C759;
+	.setup-text strong {
 		font-size: 14px;
-	}
-
-	.btn-primary {
-		padding: 12px 20px;
-		border-radius: 12px;
-		border: none;
-		background: #007AFF;
-		color: #fff;
-		font-size: 17px;
 		font-weight: 600;
-		cursor: pointer;
+		color: #171717;
 	}
-	.btn-primary:hover { background: #0066D6; }
-	.btn-primary:active { transform: scale(0.98); }
-
-	.btn-secondary {
-		padding: 10px 16px;
-		border-radius: 10px;
-		border: 1px solid #007AFF;
-		background: transparent;
-		color: #007AFF;
-		font-size: 15px;
+	.setup-text span {
+		font-size: 13px;
+		color: #6b6b6b;
+	}
+	.setup-btn {
+		padding: 7px 14px;
+		border-radius: 8px;
+		border: none;
+		background: #171717;
+		color: #fff;
+		font-size: 13px;
 		font-weight: 500;
 		cursor: pointer;
+		white-space: nowrap;
+		transition: background 0.15s;
 	}
-	.btn-secondary:hover { background: rgba(0, 122, 255, 0.08); }
-	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+	.setup-btn:hover { background: #404040; }
 
-	.btn-green {
-		padding: 12px 20px;
-		border-radius: 12px;
-		border: none;
-		background: #34C759;
-		color: #fff;
-		font-size: 17px;
-		font-weight: 600;
-		cursor: pointer;
+	@media (max-width: 900px) {
+		.section-row.two-col,
+		.section-row.three-col {
+			grid-template-columns: 1fr;
+		}
+		.dashboard-body {
+			padding: 16px;
+		}
 	}
-	.btn-green:hover { background: #2DB84E; }
-	.btn-green:active { transform: scale(0.98); }
 
 	/* ── Chat ───────────────────────────────────── */
 	.chat {
@@ -427,20 +298,51 @@
 	}
 
 	.chat-header {
-		padding: 12px 20px;
-		border-bottom: 1px solid var(--color-separator);
-		background: var(--color-glass);
-		backdrop-filter: saturate(180%) blur(20px);
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 16px;
+		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		background: #fff;
 	}
-	.chat-header h2 {
-		font-size: 17px;
+
+	.back-btn {
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		border: 1px solid rgba(0, 0, 0, 0.08);
+		background: #fff;
+		color: #525252;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		transition: all 0.12s;
+	}
+	.back-btn:hover {
+		background: #f5f5f5;
+		color: #171717;
+		border-color: rgba(0, 0, 0, 0.12);
+	}
+
+	.header-info {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
+	.header-info h2 {
+		font-size: 15px;
 		font-weight: 600;
-		color: var(--color-fg);
+		color: #171717;
 		margin: 0;
 	}
+
 	.session-name {
-		font-size: 13px;
-		color: var(--color-fg-secondary);
+		font-size: 12px;
+		color: #a0a0a0;
 	}
 
 	.messages {
@@ -468,7 +370,7 @@
 		word-break: break-word;
 	}
 	.message.user .bubble {
-		background: #007AFF;
+		background: #FF6900;
 		color: #fff;
 		border-bottom-right-radius: 4px;
 	}
@@ -477,7 +379,7 @@
 	}
 
 	.streaming { border-bottom-left-radius: 4px; }
-	.cursor { animation: blink 1s infinite; color: #007AFF; }
+	.cursor { animation: blink 1s infinite; color: #FF6900; }
 
 	.composer {
 		padding: 12px 16px;
@@ -503,14 +405,14 @@
 		min-height: 40px;
 		max-height: 120px;
 	}
-	textarea:focus { border-color: #007AFF; }
+	textarea:focus { border-color: #FF6900; }
 
 	.send-btn {
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
 		border: none;
-		background: #007AFF;
+		background: #FF6900;
 		color: #fff;
 		cursor: pointer;
 		display: flex;
@@ -518,7 +420,7 @@
 		justify-content: center;
 		flex-shrink: 0;
 	}
-	.send-btn:hover { background: #0066D6; }
+	.send-btn:hover { background: #E85D00; }
 	.send-btn:active { transform: scale(0.95); }
 	.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 

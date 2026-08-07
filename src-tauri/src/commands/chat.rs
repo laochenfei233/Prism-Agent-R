@@ -3,7 +3,7 @@ use tauri::{Emitter, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::core::adk::model::GenerationRequest;
-use crate::core::adk::tool::ToolRegistry;
+use crate::core::adk::tool::{ToolApprovalResponse, ToolRegistry};
 use crate::core::rig::agent::RigAgent;
 use crate::core::rig::provider::OpenAiProvider;
 use crate::data::models::{MessageDto, ProviderRow};
@@ -138,6 +138,8 @@ pub async fn chat_send(
     let app_clone = app.clone();
     let pool = state.db.pool.clone();
     let model_id = model_row.model_id.clone();
+    let _approval_store = state.approval_store.clone();
+    let _agent_id = session_row.agent_id.clone();
 
     // Spawn task
     tokio::spawn(async move {
@@ -193,4 +195,17 @@ pub async fn chat_abort(
         token.cancel();
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn tool_approval_respond(
+    state: State<'_, crate::AppState>,
+    call_id: String,
+    response: ToolApprovalResponse,
+) -> Result<bool, AppError> {
+    // If always-approve was chosen, persist it
+    if let ToolApprovalResponse::AlwaysApprove(ref tool_name) = response {
+        state.approval_store.add_always_approve(tool_name).await;
+    }
+    Ok(state.approval_store.respond(&call_id, response).await)
 }

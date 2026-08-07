@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invoke } from '$lib/api/client';
 	import { agentApi, mcpApi, skillApi } from '$lib/api';
+	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
@@ -306,6 +307,14 @@
 			{/if}
 		</div>
 	</div>
+
+	<!-- Skill Market -->
+	<div class="group">
+		<div class="group-header">Market</div>
+		<div class="group-body">
+			<SkillMarket />
+		</div>
+	</div>
 </div>
 
 <style>
@@ -337,7 +346,7 @@
 		padding: 4px 8px;
 		border: none;
 		background: transparent;
-		color: #007AFF;
+		color: #FF6900;
 		font-size: 17px;
 		cursor: pointer;
 		border-radius: 8px;
@@ -398,7 +407,7 @@
 		outline: none;
 	}
 	.form-row input:focus,
-	.form-row select:focus { border-color: #007AFF; }
+	.form-row select:focus { border-color: #FF6900; }
 
 	.hint {
 		font-size: 14px;
@@ -438,7 +447,7 @@
 	}
 	.config-badge.default {
 		background: rgba(0, 122, 255, 0.12);
-		color: #007AFF;
+		color: #FF6900;
 	}
 	.config-url {
 		font-size: 13px;
@@ -451,23 +460,23 @@
 		padding: 12px;
 		border-radius: 12px;
 		border: none;
-		background: #007AFF;
+		background: #FF6900;
 		color: #fff;
 		font-size: 17px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
-	.btn-primary:hover { background: #0066D6; }
+	.btn-primary:hover { background: #E85D00; }
 	.btn-primary:active { transform: scale(0.98); }
 
 	.btn-secondary {
 		width: 100%;
 		padding: 10px;
 		border-radius: 10px;
-		border: 1px solid #007AFF;
+		border: 1px solid #FF6900;
 		background: transparent;
-		color: #007AFF;
+		color: #FF6900;
 		font-size: 15px;
 		font-weight: 500;
 		cursor: pointer;

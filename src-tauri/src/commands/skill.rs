@@ -59,11 +59,11 @@ pub async fn skill_toggle(
 
 #[tauri::command]
 pub async fn skill_search_market(
-    _state: State<'_, crate::AppState>,
-    _query: String,
+    state: State<'_, crate::AppState>,
+    query: String,
 ) -> Result<Vec<SkillSearchHit>, AppError> {
-    // MVP 阶段返回空列表，Phase 2 实现三源搜索
-    Ok(Vec::new())
+    let svc = SkillService::new(state.db.clone());
+    svc.search_market(&query).await
 }
 
 #[tauri::command]

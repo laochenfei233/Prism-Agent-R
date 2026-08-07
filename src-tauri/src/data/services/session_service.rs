@@ -74,6 +74,24 @@ impl SessionService {
             .bind(id).execute(&self.pool).await?;
         Ok(())
     }
+
+    pub async fn search(&self, query: &str, limit: i64) -> Result<Vec<SessionDto>, AppError> {
+        let rows: Vec<SessionRow> = sqlx::query_as(
+            r#"
+            SELECT s.*
+            FROM sessions_fts f
+            JOIN sessions s ON s.id = f.session_id
+            WHERE sessions_fts MATCH ?
+            ORDER BY f.rank, s.updated_at DESC
+            LIMIT ?
+            "#
+        )
+        .bind(query)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(SessionDto::from).collect())
+    }
 }
 
 impl From<SessionRow> for SessionDto {

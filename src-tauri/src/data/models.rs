@@ -211,3 +211,162 @@ pub struct WorkflowDto {
     pub description: Option<String>,
     pub definition: serde_json::Value,
 }
+
+// ── Sidebar types ──
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AgentContext {
+    pub agent: AgentDto,
+    pub session_usage: SessionUsage,
+    pub workspace: WorkspaceInfo,
+    pub instructions: Vec<InstructionFile>,
+    pub mcp: Vec<McpServerStatus>,
+    pub lsp: Vec<LspServerInfo>,
+    pub tree: DirTree,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SessionUsage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub context_used: u64,
+    pub context_limit: u64,
+    pub tool_calls: u64,
+    pub cost_est: f64,
+    pub today_calls: u64,
+    pub today_tokens: u64,
+    pub today_cost: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct WorkspaceInfo {
+    pub current_dir: String,
+    pub recent_dirs: Vec<String>,
+    pub bound_agent_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct InstructionFile {
+    pub path: String,
+    pub name: String,
+    pub lines: usize,
+    pub injected: bool,
+    pub priority: u8,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LspServerInfo {
+    pub id: String,
+    pub cmd: String,
+    pub status: String,
+    pub langs: Vec<String>,
+    pub index_file_count: Option<u64>,
+    pub last_error: Option<String>,
+    pub install_hint: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DirTree {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub children: Option<Vec<DirTree>>,
+    pub language: Option<String>,
+    pub line_count: Option<u64>,
+}
+
+// ── Dashboard types ──
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UsageStats {
+    pub today_tokens: u64,
+    pub week_tokens: u64,
+    pub month_tokens: u64,
+    pub month_cost: f64,
+    pub today_calls: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UsagePoint {
+    pub date: String,
+    pub tokens: u64,
+    pub cost: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SkillOverview {
+    pub enabled: usize,
+    pub total: usize,
+    pub popular: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct McpServerStatus {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+    pub tools_count: usize,
+    pub last_error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SessionSummary {
+    pub id: String,
+    pub title: String,
+    pub agent_name: String,
+    pub updated_at: String,
+    pub message_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ModelStatus {
+    pub provider_name: String,
+    pub model_id: String,
+    pub display_name: String,
+    pub status: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct WorkflowSummary {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub stage_count: usize,
+    pub source: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TaskRunSummary {
+    pub run_id: String,
+    pub workflow_name: String,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub source: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AgentSummary {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub avatar: Option<String>,
+    pub model_name: Option<String>,
+    pub skill_count: usize,
+    pub mcp_count: usize,
+    pub last_used: Option<String>,
+    pub order_key: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DashboardOverview {
+    pub agents: Vec<AgentSummary>,
+    pub usage: UsageStats,
+    pub usage_trend: Vec<UsagePoint>,
+    pub skills: SkillOverview,
+    pub mcp_servers: Vec<McpServerStatus>,
+    pub recent_sessions: Vec<SessionSummary>,
+    pub models: Vec<ModelStatus>,
+    pub workflows: Vec<WorkflowSummary>,
+    pub task_runs: Vec<TaskRunSummary>,
+}

@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod chat;
+pub mod dashboard;
 pub mod mcp;
 pub mod model;
 pub mod session;
