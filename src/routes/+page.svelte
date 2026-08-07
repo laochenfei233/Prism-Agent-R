@@ -58,6 +58,11 @@
 		}
 	}
 
+	function goToDashboard() {
+		agentStore.currentSession = null;
+		chatStore.messages = [];
+	}
+
 	async function handleSend() {
 		if (!input.trim() || !agentStore.currentSession) return;
 		const content = input.trim();
@@ -139,8 +144,13 @@
 	<!-- 有会话：对话界面 -->
 	<div class="chat">
 		<div class="chat-header">
-			<h2>{agentStore.currentAgent?.name || 'Agent'}</h2>
-			<span class="session-name">{agentStore.currentSession.title || '新会话'}</span>
+			<button class="back-btn" onclick={goToDashboard} title="返回面板">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+			</button>
+			<div class="header-info">
+				<h2>{agentStore.currentAgent?.name || 'Agent'}</h2>
+				<span class="session-name">{agentStore.currentSession.title || '新会话'}</span>
+			</div>
 		</div>
 
 		<div class="messages">
@@ -288,20 +298,51 @@
 	}
 
 	.chat-header {
-		padding: 12px 20px;
-		border-bottom: 1px solid var(--color-separator);
-		background: var(--color-glass);
-		backdrop-filter: saturate(180%) blur(20px);
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 16px;
+		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		background: #fff;
 	}
-	.chat-header h2 {
-		font-size: 17px;
+
+	.back-btn {
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		border: 1px solid rgba(0, 0, 0, 0.08);
+		background: #fff;
+		color: #525252;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		transition: all 0.12s;
+	}
+	.back-btn:hover {
+		background: #f5f5f5;
+		color: #171717;
+		border-color: rgba(0, 0, 0, 0.12);
+	}
+
+	.header-info {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
+	.header-info h2 {
+		font-size: 15px;
 		font-weight: 600;
-		color: var(--color-fg);
+		color: #171717;
 		margin: 0;
 	}
+
 	.session-name {
-		font-size: 13px;
-		color: var(--color-fg-secondary);
+		font-size: 12px;
+		color: #a0a0a0;
 	}
 
 	.messages {
