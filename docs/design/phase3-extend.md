@@ -2174,3 +2174,47 @@ CREATE VIRTUAL TABLE translate_fts USING fts5(
 **要点**：
 - 翻译历史页搜索走 `translate_fts`，支持按原文/译文检索，命中高亮用 `snippet()`
 - 同步触发器模式同 `phase1-core.md` §5.7.2（INSERT/DELETE/UPDATE 三触发器）
+
+---
+
+## 附：Phase 3 实现状态与待办清单（2026-08-07 更新）
+
+> 本文档为实现进度的跟踪记录，供后续会话继续完成时查阅。
+> 分支：`feat/phase3-extend` · 工作树：`.worktrees/phase3-extend`
+> 构建依赖：`LIBCLANG_PATH` 已写入 `src-tauri/.cargo/config.toml`（VS Build Tools x64 LLVM，sherpa-rs bindgen 需要）；`sherpa-rs` 需 `download-binaries` feature。
+
+### ✅ 已完整实现（编译零错误零警告 · cargo test 41 passed · svelte-check 0 errors）
+
+| 章节 | 功能 | 要点 |
+|------|------|------|
+| §10.1 | Wiki 知识库 | CRUD + write_ai（LLM 生成 WikiWritePlan + 重试 1 次）+ apply_plan（5 操作/路径安全校验/.trash/.bak/log.md）+ 分类树 UI |
+| §10.2 | RAG 引擎 | 分块/真实嵌入（OpenAI 兼容 API + 本地特征哈希）/混合检索/Contextual Retrieval/五维评测命令 |
+| §10.2.3 | PDF 视觉层 | DocumentParser trait + pdf-extract 分页文本层 + pdfium 可选视觉渲染 + 页码 meta 入 chunk |
+| §10.2.2 | Reranker | Reranker trait + LlmReranker + Noop 降级 + 初检 top-150 重排 + rag.rerank 开关 |
+| §10.2.1 | 项目级自动索引 | 轮询快照（复用 fs.rs）+ 白名单扩展名 + 指纹（mtime:size）+ debounce 5s + `__project__` 隔离命名空间 + 全量重建（rag:progress）+ 侧边栏状态条（开关/重索引） |
+| §10.2.5 | 五维评测完整化 | table_acc 结构化逐格比对 / ocr_completeness 字符召回率（编辑距离）/ chart_acc LLM-as-Judge（复用 AgentJudge）；报告落库 `rag_eval_reports` + `rag:eval-report` 趋势 |
+| §10.3 | 会议系统 | ASR 可插拔 8 后端 + sherpa-rs 真实推理 + 录音 + 摘要 map-reduce + 导出 MD/TXT/翻译稿 + QA + 推送 + 离线二次转写 |
+| §10.3.1 | 说话人分离 | DashScope `speaker_diarization_enabled` → speaker_id 全链路（落库/`meeting:transcript` 事件/导出 MD 前缀 `[说话人 N]`） |
+| §10.5 | 翻译/OCR | 翻译真实 LLM + 术语表 + 缓存 + FTS 历史；OCR 多模态 LLM + tesseract 降级 |
+| §10.9/10.11/10.12/10.13 | 反思/目标/护栏/评估 | 全部接入 Agent 运行时；GoalMonitor；AgentJudge + agent_stats |
+| §10.14 | Skill/MCP Router | BM25 路由 + 接入 RigAgent + router:route 调试命令 |
+| §11A | 无障碍 | reduced-motion/transparency/contrast + 触屏目标 |
+| §13.1 | 上下文压缩 | TokenBudget + 压力等级 + 软裁剪（接入运行时） |
+
+### 🔶 Reranker（§10.2.2）—— ✅ 已复验（2026-08-07）
+
+- `cargo check` 零警告 + `cargo test` 41 passed（含 rerank 4 测试）+ `svelte-check` 0 errors
+- 链路确认：初检 top-150 → LlmReranker 重排 → top-k；`rag_rerank_config`/`rag_rerank_status` 命令可用；无模型时无感降级
+
+### 📋 未完成（仅剩 design 明确暂缓/后续迭代项）
+
+| 项 | 章节 | 说明 |
+|----|------|------|
+| **CI 回归门槛** | §10.2.5 | `rag:eval` 纳入 CI，page_acc/table_acc/ocr_completeness 低于基线时阻止合并（需先建基线，[S5] 🔸 低） |
+| **TTS 播报** | §10.3.9 | 会议待办语音播报；Web Speech API 优先；`Speaker.svelte` 组件；`tts:speak/stop/voices` 命令（[S3] 本次不做） |
+| **Azure 流式** | §10.3.3 | 当前为 REST 上传式；WebSocket 流式（Speech SDK）可选升级 |
+
+### 🔧 迁移与命令补记
+
+- 迁移：`015_rag_context.sql` / `016_agent_traces.sql` / `017_translate_fts.sql` / `018_asr_config_ext.sql` / `019_rag_eval_reports.sql` / `020_meeting_speaker.sql` / `021_project_index.sql`
+- 新命令速查：`wiki_write_ai` / `wiki_apply_plan` / `rag_eval` / `rag_eval_add` / `rag_eval_report` / `rag_contextual_config` / `rag_rerank_config` / `meeting_retranscribe` / `meeting_export_translation` / `agent_judge_evaluate` / `agent_judge_compare` / `agent_stats` / `goal_evaluate` / `trace_list` / `router_route` / `router_index_status` / `project_index_status` / `project_index_toggle` / `project_index_reindex`

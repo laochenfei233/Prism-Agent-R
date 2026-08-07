@@ -17,6 +17,9 @@ pub enum AgentError {
     #[error("Stream error: {0}")]
     Stream(String),
 
+    #[error("Guardrail blocked: {0}")]
+    Guardrail(String),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 

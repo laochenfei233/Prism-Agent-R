@@ -69,10 +69,12 @@ impl GenericActor {
         system_prompt: String,
         tools: ToolRegistry,
     ) -> Self {
+        let agent = RigAgent::new(model_provider, system_prompt, tools)
+            .with_guardrails(crate::core::rig::guardrails::GuardrailPipeline::default_input());
         Self {
             id,
             role,
-            agent: RigAgent::new(model_provider, system_prompt, tools),
+            agent,
         }
     }
 }

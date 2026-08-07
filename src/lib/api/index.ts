@@ -279,3 +279,410 @@ export const settingsApi = {
 	saveProviderKey: (providerId: string, apiKey: string) =>
 		invoke<void>('settings_save_provider_key', { providerId, apiKey }),
 };
+
+// ── Wiki API ─────────────────────────────────────────────
+
+export interface WikiDto {
+	id: string;
+	name: string;
+	description: string | null;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface WikiPageDto {
+	path: string;
+	title: string;
+	size: number;
+}
+
+export interface WikiPageHitDto {
+	path: string;
+	title: string;
+	snippet: string;
+	score: number;
+}
+
+export const wikiApi = {
+	create: (name: string, description?: string) =>
+		invoke<WikiDto>('wiki_create', { name, description }),
+	list: () => invoke<WikiDto[]>('wiki_list'),
+	get: (id: string) => invoke<WikiDto>('wiki_get', { id }),
+	delete: (id: string) => invoke<void>('wiki_delete', { id }),
+	readPage: (wikiId: string, path: string) =>
+		invoke<string>('wiki_read_page', { wikiId, path }),
+	writePage: (wikiId: string, path: string, content: string) =>
+		invoke<void>('wiki_write_page', { wikiId, path, content }),
+	listPages: (wikiId: string) => invoke<WikiPageDto[]>('wiki_list_pages', { wikiId }),
+	search: (wikiId: string, query: string) =>
+		invoke<WikiPageHitDto[]>('wiki_search', { wikiId, query }),
+	writeAi: (wikiId: string, info: string, preview = true) =>
+		invoke<{ plan: WikiWritePlan }>('wiki_write_ai', { wikiId, info, preview }),
+	applyPlan: (wikiId: string, plan: WikiWritePlan) =>
+		invoke<WikiWriteResult>('wiki_apply_plan', { wikiId, plan }),
+};
+
+export interface WikiOp {
+	op: 'create_page' | 'update_page' | 'delete_page' | 'update_index' | 'noop';
+	path?: string;
+	title?: string;
+	content?: string;
+	summary?: string;
+	reason?: string;
+	entries?: string[];
+}
+
+export interface WikiWritePlan {
+	operations: WikiOp[];
+}
+
+export interface WikiWriteResult {
+	applied: number;
+	noop: number;
+	summary: string;
+	log_appended: boolean;
+}
+
+// ── RAG API ─────────────────────────────────────────────
+
+export interface RagDocumentDto {
+	id: string;
+	name: string;
+	mime_type: string;
+	size: number;
+	chunk_count: number;
+	status: string;
+}
+
+export interface RagHitDto {
+	chunk_id: string;
+	document_title: string;
+	page_start: number | null;
+	page_end: number | null;
+	section: string | null;
+	quote: string;
+	score: number;
+}
+
+export interface IngestResultDto {
+	document_id: string;
+	chunk_count: number;
+	status: string;
+}
+
+export const ragApi = {
+	ingest: (wikiId: string, filePath: string) =>
+		invoke<IngestResultDto>('rag_ingest', { wikiId, filePath }),
+	search: (wikiId: string, query: string, topK?: number) =>
+		invoke<RagHitDto[]>('rag_search', { wikiId, query, topK }),
+	listDocuments: (wikiId: string) =>
+		invoke<RagDocumentDto[]>('rag_list_documents', { wikiId }),
+	deleteDocument: (docId: string) =>
+		invoke<void>('rag_delete_document', { docId }),
+	embeddingConfig: (mode: 'local' | 'api', providerId?: string, model?: string, dim?: number) =>
+		invoke<EmbeddingStatusDto>('rag_embedding_config', { mode, providerId, model, dim }),
+	embeddingStatus: () =>
+		invoke<EmbeddingStatusDto>('rag_embedding_status'),
+	contextualConfig: (enabled: boolean) =>
+		invoke<{ enabled: boolean }>('rag_contextual_config', { enabled }),
+	contextualStatus: () =>
+		invoke<{ enabled: boolean }>('rag_contextual_status'),
+	rerankConfig: (enabled: boolean) =>
+		invoke<{ enabled: boolean }>('rag_rerank_config', { enabled }),
+	rerankStatus: () =>
+		invoke<{ enabled: boolean }>('rag_rerank_status'),
+	eval: (wikiId?: string, suite?: string, topK?: number) =>
+		invoke<EvalReportDto>('rag_eval', { wikiId, suite, topK }),
+	evalAdd: (case_: Record<string, unknown>) =>
+		invoke<string>('rag_eval_add', { case: case_ }),
+	evalReport: () =>
+		invoke<EvalReportDto[]>('rag_eval_report'),
+};
+
+export interface EvalMetricsDto {
+	recall_at_k: number;
+	page_acc: number;
+	table_acc: number;
+	ocr_completeness: number;
+	chart_acc: number;
+}
+
+export interface EvalReportDto {
+	suite: string;
+	case_count: number;
+	metrics: EvalMetricsDto;
+	cases: Array<{ id: string; question: string; passed: boolean; hit_count: number; detail: string }>;
+	created_at: number;
+}
+
+export interface EmbeddingStatusDto {
+	mode: string;
+	kind: string;
+	provider_id: string | null;
+	model: string | null;
+	dim: number;
+	is_local: boolean;
+	base_dir: string;
+}
+
+// ── Meeting API ──────────────────────────────────────────
+
+export interface MeetingDto {
+	id: string;
+	title: string;
+	date: string;
+	transcript: string;
+	summary: string;
+	participants: string[];
+	recording_duration: number;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface TranscriptSegmentDto {
+	index: number;
+	text: string;
+	is_final: boolean;
+	translated: string | null;
+	speaker_id: number | null;
+}
+
+export interface AsrConfigDto {
+	id: string;
+	name: string;
+	kind: string;
+	base_url: string | null;
+	model: string | null;
+	lang: string | null;
+	is_default: boolean;
+	model_path: string | null;
+	extra: Record<string, unknown> | null;
+}
+
+export interface AsrBackendInfoDto {
+	kind: string;
+	name: string;
+	description: string;
+	languages: string[];
+}
+
+export interface AsrModelInfoDto {
+	id: string;
+	name: string;
+	backend: string;
+	size_mb: number;
+	lang: string[];
+	url: string;
+	requires_vad: boolean;
+	user_placed: boolean;
+}
+
+export interface InstalledAsrModelDto {
+	id: string;
+	path: string;
+	size_mb: number;
+	backend: string;
+	lang: string[];
+}
+
+export const meetingApi = {
+	create: (title: string, participants?: string[]) =>
+		invoke<MeetingDto>('meeting_create', { title, participants }),
+	list: () => invoke<MeetingDto[]>('meeting_list'),
+	get: (id: string) => invoke<MeetingDto>('meeting_get', { id }),
+	delete: (id: string) => invoke<void>('meeting_delete', { id }),
+	updateTranscript: (id: string, segments: TranscriptSegmentDto[]) =>
+		invoke<void>('meeting_update_transcript', { id, segments }),
+	getTranscript: (id: string) =>
+		invoke<TranscriptSegmentDto[]>('meeting_get_transcript', { id }),
+	summary: (id: string) => invoke<string>('meeting_summary', { id }),
+	clean: (id: string) => invoke<string>('meeting_clean', { id }),
+	qa: (id: string, question: string) =>
+		invoke<string>('meeting_qa', { id, question }),
+	pushToAgent: (meetingId: string, agentId: string, sessionId?: string) =>
+		invoke<string>('meeting_push_to_agent', { meetingId, agentId, sessionId }),
+	export: (id: string, format: string, includeSummary = true, includeTranslation = false) =>
+		invoke<string>('meeting_export', { id, format, includeSummary, includeTranslation }),
+	exportTranslation: (id: string, targetLang: string) =>
+		invoke<string>('meeting_export_translation', { id, targetLang }),
+};
+
+export const asrApi = {
+	listConfigs: () => invoke<AsrConfigDto[]>('asr_list_configs'),
+	saveConfig: (config: AsrConfigInputDto) =>
+		invoke<AsrConfigDto>('asr_save_config', { config }),
+	deleteConfig: (id: string) => invoke<void>('asr_delete_config', { id }),
+	backends: () => invoke<AsrBackendInfoDto[]>('asr_backends'),
+	modelCatalog: () => invoke<AsrModelInfoDto[]>('asr_model_catalog'),
+	modelInstalled: () => invoke<InstalledAsrModelDto[]>('asr_model_installed'),
+	modelDownload: (modelId: string) =>
+		invoke<{ model_id: string; path: string; status: string }>('asr_model_download', { modelId }),
+	modelRemove: (modelId: string) => invoke<void>('asr_model_remove', { modelId }),
+	test: (config: AsrConfigInputDto) =>
+		invoke<{ ok: boolean; latency_ms: number; error: string | null }>('asr_test', { config }),
+	startRecording: (id: string, asrConfig?: AsrConfigInputDto) =>
+		invoke<void>('meeting_start_recording', { id, asrConfig }),
+	audioChunk: (meetingId: string, pcmBase64: string) =>
+		invoke<void>('meeting_audio_chunk', { meetingId, pcmBase64 }),
+	stopRecording: (id: string) =>
+		invoke<{ transcript: string }>('meeting_stop_recording', { id }),
+};
+
+export interface AsrConfigInputDto {
+	name: string;
+	kind: string;
+	base_url?: string;
+	api_key?: string;
+	model?: string;
+	lang?: string;
+	is_default: boolean;
+	model_path?: string;
+	extra?: Record<string, unknown>;
+}
+
+// ── Translate API ────────────────────────────────────────
+
+export interface TranslateResultDto {
+	translated: string;
+	source_lang: string;
+	from_cache: boolean;
+}
+
+export interface TranslateHistoryDto {
+	id: string;
+	source_text: string;
+	source_lang: string;
+	target_lang: string;
+	translated: string;
+	created_at: number;
+}
+
+export interface GlossaryTermDto {
+	id: string;
+	source_lang: string;
+	target_lang: string;
+	source_term: string;
+	target_term: string;
+	category: string | null;
+	enabled: boolean;
+}
+
+export interface OcrBlockDto {
+	text: string;
+	bbox: [number, number, number, number];
+	confidence: number;
+	kind: string;
+}
+
+export interface OcrResultDto {
+	text: string;
+	lang: string;
+	provider: string;
+	blocks: OcrBlockDto[];
+}
+
+export const translateApi = {
+	translate: (text: string, target: string, source?: string, modelId?: string) =>
+		invoke<TranslateResultDto>('translate_translate', { text, target, source, modelId }),
+	batch: (texts: string[], target: string, source?: string) =>
+		invoke<TranslateResultDto[]>('translate_batch', { texts, target, source }),
+	file: (path: string, target: string, source?: string) =>
+		invoke<string>('translate_file', { path, target, source }),
+	history: (query?: string, limit?: number, offset?: number) =>
+		invoke<{ items: TranslateHistoryDto[]; total: number }>('translate_history', { query, limit, offset }),
+	detect: (text: string) =>
+		invoke<{ lang: string; confidence: number }>('translate_detect', { text }),
+	modelConfig: (modelId?: string) =>
+		invoke<{ model_id: string | null }>('translate_model_config', { modelId }),
+	modelStatus: () =>
+		invoke<{ model_id: string | null }>('translate_model_status'),
+};
+
+export const glossaryApi = {
+	list: (langPair?: string) =>
+		invoke<GlossaryTermDto[]>('glossary_list', { langPair }),
+	add: (term: Omit<GlossaryTermDto, 'id' | 'enabled'>) =>
+		invoke<void>('glossary_add', { term }),
+	remove: (id: string) => invoke<void>('glossary_remove', { id }),
+	importCsv: (path: string) =>
+		invoke<{ imported: number; failed: number }>('glossary_import_csv', { path }),
+};
+
+export const ocrApi = {
+	recognize: (imagePath: string, lang?: string) =>
+		invoke<OcrResultDto>('ocr_recognize', { imagePath, lang }),
+	providers: () =>
+		invoke<{ name: string; kind: string; available: boolean }[]>('ocr_providers'),
+};
+
+// ── Trace API（Agent 执行轨迹） ────────────────────────────
+
+export interface TraceStepDto {
+	step_index: number;
+	kind: string;
+	input_summary: string;
+	output_summary: string;
+	latency_ms: number;
+	tool_name: string | null;
+	error: string | null;
+}
+
+export interface AgentTraceDto {
+	id: string;
+	session_id: string;
+	agent_id: string;
+	trace_id: string;
+	started_at: number;
+	finished_at: number | null;
+	steps: TraceStepDto[];
+	total_prompt_tokens: number;
+	total_completion_tokens: number;
+	total_cost: number;
+	outcome: string;
+}
+
+export const traceApi = {
+	list: (sessionId: string, limit?: number) =>
+		invoke<AgentTraceDto[]>('trace_list', { sessionId, limit }),
+};
+
+// ── Router API（Skill/MCP 路由调试） ──────────────────────
+
+export interface RouteItemDto {
+	id: string;
+	kind: 'Skill' | 'McpTool';
+	name: string;
+	description: string;
+	keywords: string[];
+	server_id: string | null;
+}
+
+export interface RouteResultDto {
+	skills: RouteItemDto[];
+	tools: RouteItemDto[];
+	semantic_used: boolean;
+}
+
+export const routerApi = {
+	route: (query: string, topK?: number) =>
+		invoke<RouteResultDto>('router_route', { query, topK }),
+	indexStatus: () =>
+		invoke<{ skills: number; mcp_tools: number; updated_at: number }>('router_index_status'),
+};
+
+// ── 项目级自动索引 API（§10.2.1） ─────────────────────────
+
+export interface ProjectIndexStatusDto {
+	enabled: boolean;
+	workdir: string | null;
+	indexed_files: number;
+	in_progress: boolean;
+	last_indexed_at: number | null;
+}
+
+export const projectIndexApi = {
+	status: () => invoke<ProjectIndexStatusDto>('project_index_status'),
+	toggle: (enabled: boolean) =>
+		invoke<ProjectIndexStatusDto>('project_index_toggle', { enabled }),
+	reindex: () => invoke<ProjectIndexStatusDto>('project_index_reindex'),
+};

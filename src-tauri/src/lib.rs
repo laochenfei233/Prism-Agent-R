@@ -12,12 +12,14 @@ use tokio_util::sync::CancellationToken;
 
 use mcp::McpRuntime;
 use core::adk::tool::ToolApprovalStore;
+use data::services::meeting::AudioStreamManager;
 
 pub struct AppState {
     pub db: Database,
     pub active_cancels: Mutex<HashMap<String, CancellationToken>>,
     pub mcp_runtime: std::sync::Arc<McpRuntime>,
     pub approval_store: std::sync::Arc<ToolApprovalStore>,
+    pub audio_streams: std::sync::Arc<AudioStreamManager>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,6 +34,18 @@ pub fn run() {
             let db = rt.block_on(Database::new(&app_data_dir)).expect("failed to init database");
 
             let mcp_runtime = McpRuntime::new();
+
+            // 注册内置 ASR 后端（动态注册表，后续自定义后端可追加）
+            data::services::asr::backends::builtin_register();
+
+            // §10.2.1 项目级自动索引：启用状态下启动监听（工作目录从 preferences 读取）
+            {
+                let db_clone = db.clone();
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    data::services::project_index::start_if_enabled(db_clone, app_handle);
+                });
+            }
 
             // 启动时加载并连接所有 active 的 MCP 服务器
             {
@@ -50,6 +64,7 @@ pub fn run() {
                 active_cancels: Mutex::new(HashMap::new()),
                 mcp_runtime,
                 approval_store: std::sync::Arc::new(ToolApprovalStore::new()),
+                audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
             });
             Ok(())
         })
@@ -105,6 +120,7 @@ pub fn run() {
             commands::workflow::task_run,
             commands::workflow::task_validate,
             commands::workflow::task_rerun,
+            commands::workflow::goal_evaluate,
             commands::workspace::workspace_get,
             commands::workspace::workspace_set,
             commands::workspace::workspace_tree,
@@ -121,6 +137,76 @@ pub fn run() {
             commands::memory::memory_write,
             commands::memory::memory_context_dump,
             commands::memory::memory_reconcile,
+            commands::rag::rag_ingest,
+            commands::rag::rag_search,
+            commands::rag::rag_list_documents,
+            commands::rag::rag_delete_document,
+            commands::rag::rag_embedding_config,
+            commands::rag::rag_embedding_status,
+            commands::rag::rag_contextual_config,
+            commands::rag::rag_contextual_status,
+            commands::rag::rag_rerank_config,
+            commands::rag::rag_rerank_status,
+            commands::rag::rag_eval,
+            commands::rag::rag_eval_add,
+            commands::rag::rag_eval_report,
+            commands::wiki::wiki_create,
+            commands::wiki::wiki_list,
+            commands::wiki::wiki_get,
+            commands::wiki::wiki_delete,
+            commands::wiki::wiki_read_page,
+            commands::wiki::wiki_write_page,
+            commands::wiki::wiki_list_pages,
+            commands::wiki::wiki_search,
+            commands::wiki::wiki_write_ai,
+            commands::wiki::wiki_apply_plan,
+            commands::translate::translate_translate,
+            commands::translate::translate_batch,
+            commands::translate::translate_file,
+            commands::translate::translate_history,
+            commands::translate::translate_detect,
+            commands::translate::translate_model_config,
+            commands::translate::translate_model_status,
+            commands::glossary::glossary_list,
+            commands::glossary::glossary_add,
+            commands::glossary::glossary_remove,
+            commands::glossary::glossary_import_csv,
+            commands::ocr::ocr_recognize,
+            commands::ocr::ocr_providers,
+            commands::meeting::meeting_create,
+            commands::meeting::meeting_list,
+            commands::meeting::meeting_get,
+            commands::meeting::meeting_delete,
+            commands::meeting::meeting_update_transcript,
+            commands::meeting::meeting_get_transcript,
+            commands::meeting::meeting_summary,
+            commands::meeting::meeting_export,
+            commands::meeting::meeting_export_translation,
+            commands::meeting::meeting_clean,
+            commands::meeting::meeting_qa,
+            commands::meeting::meeting_push_to_agent,
+            commands::meeting::meeting_retranscribe,
+            commands::asr::asr_list_configs,
+            commands::asr::asr_save_config,
+            commands::asr::asr_delete_config,
+            commands::asr::asr_backends,
+            commands::asr::asr_model_catalog,
+            commands::asr::asr_model_installed,
+            commands::asr::asr_model_download,
+            commands::asr::asr_model_remove,
+            commands::asr::asr_test,
+            commands::asr::meeting_start_recording,
+            commands::asr::meeting_audio_chunk,
+            commands::asr::meeting_stop_recording,
+            commands::trace::trace_list,
+            commands::router::router_route,
+            commands::router::router_index_status,
+            commands::agent_eval::agent_judge_evaluate,
+            commands::agent_eval::agent_judge_compare,
+            commands::agent_eval::agent_stats,
+            commands::project_index::project_index_status,
+            commands::project_index::project_index_toggle,
+            commands::project_index::project_index_reindex,
             commands::dashboard::dashboard_overview,
         ])
         .run(tauri::generate_context!())

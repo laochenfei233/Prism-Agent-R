@@ -67,6 +67,24 @@
 			action: () => goto('/settings')
 		},
 		{
+			id: 'open-wiki',
+			title: '知识库 (Wiki)',
+			icon: 'chat',
+			action: () => goto('/wiki')
+		},
+		{
+			id: 'open-meetings',
+			title: '会议纪要',
+			icon: 'chat',
+			action: () => goto('/meetings')
+		},
+		{
+			id: 'open-translate',
+			title: '翻译工具',
+			icon: 'chat',
+			action: () => goto('/translate')
+		},
+		{
 			id: 'back-home',
 			title: '返回面板',
 			icon: 'back',
@@ -251,6 +269,27 @@
 				</div>
 			</div>
 		{/if}
+
+		<!-- Quick Navigation -->
+		<div class="section nav-section">
+			<div class="section-header">
+				<span class="section-title">工具</span>
+			</div>
+			<div class="list">
+				<a href="/wiki" class="list-item nav-link">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+					<div class="item-content"><div class="item-title">知识库</div></div>
+				</a>
+				<a href="/meetings" class="list-item nav-link">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+					<div class="item-content"><div class="item-title">会议纪要</div></div>
+				</a>
+				<a href="/translate" class="list-item nav-link">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/></svg>
+					<div class="item-content"><div class="item-title">翻译工具</div></div>
+				</a>
+			</div>
+		</div>
 	</aside>
 
 	<!-- Main Content -->
@@ -501,5 +540,15 @@
 		display: flex;
 		flex-direction: column;
 		overflow-y: auto;
+	}
+
+	/* ── Navigation Links ──────────────────────── */
+	.nav-section {
+		margin-top: auto;
+		border-top: 1px solid var(--color-separator);
+	}
+	.nav-link {
+		text-decoration: none;
+		color: inherit;
 	}
 </style>

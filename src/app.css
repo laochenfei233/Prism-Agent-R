@@ -54,3 +54,73 @@ body {
 ::-webkit-scrollbar-thumb:hover {
 	background: var(--color-border-strong);
 }
+
+/* ══ §11A 无障碍（Accessibility） ═══════════════════════════ */
+
+/* Apple Design: reduced motion ≠ 无反馈，而是更温和的等价替代 */
+@media (prefers-reduced-motion: reduce) {
+	/* 用 opacity cross-fade 替代 slide/spring */
+	.sheet {
+		transition: opacity 200ms ease;
+		transform: none !important;
+	}
+	.modal {
+		animation: none;
+		opacity: 1;
+	}
+	/* 禁用弹性/回弹 */
+	* {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* Apple Design: reduced transparency — 材质变实心 */
+@media (prefers-reduced-transparency: reduce) {
+	.toolbar,
+	.sidebar,
+	.sheet {
+		background: var(--color-bg) !important;
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+	}
+	.glass {
+		background: var(--color-bg-secondary) !important;
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+	}
+}
+
+/* Apple Design: high contrast — 实心背景 + 明确边框 */
+@media (prefers-contrast: more) {
+	.list-item,
+	.card,
+	.input,
+	textarea,
+	select,
+	.btn-ghost {
+		border: 1px solid var(--color-label, var(--color-fg)) !important;
+	}
+	body {
+		background: var(--color-bg);
+	}
+	:root {
+		--color-separator: var(--color-fg-secondary);
+		--color-border-strong: var(--color-fg);
+	}
+}
+
+/* 触屏目标最小 44×44pt（iOS 18 标准） */
+@media (pointer: coarse) {
+	button,
+	.icon-btn,
+	.icon-btn-sm,
+	.tab-btn,
+	.list-item,
+	a.nav-link {
+		min-height: 44px;
+		min-width: 44px;
+	}
+}

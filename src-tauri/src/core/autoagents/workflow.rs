@@ -53,6 +53,8 @@ pub struct WorkflowResult {
     pub run_id: String,
     pub outputs: HashMap<String, String>,
     pub stage_results: Vec<StageResult>,
+    /// 目标监控结果（工作流配置了 goal 时存在）
+    pub goal_status: Option<super::goal::GoalStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +89,8 @@ impl StageStatus {
 pub struct WorkflowEngine {
     coordinator: Arc<Coordinator>,
     on_stage: Option<Arc<dyn Fn(&str, &str, &StageStatus) + Send + Sync>>,
+    /// 目标监控（可选）：运行结束后评估目标达成度
+    goal: Option<super::goal::GoalMonitor>,
 }
 
 impl WorkflowEngine {
@@ -94,7 +98,14 @@ impl WorkflowEngine {
         Self {
             coordinator,
             on_stage: None,
+            goal: None,
         }
+    }
+
+    /// 配置目标监控
+    pub fn with_goal<F>(mut self, goals: Vec<super::goal::TaskGoal>) -> Self {
+        self.goal = Some(super::goal::GoalMonitor::new(goals));
+        self
     }
 
     /// 注册阶段事件回调 (run_id, stage_id, status)
@@ -181,20 +192,35 @@ impl WorkflowEngine {
                         error: Some(e.to_string()),
                     });
                     self.emit_stage(run_id, &stage.id, &StageStatus::Failed);
+                    let goal_status = self.evaluate_goal(&outputs);
                     return Ok(WorkflowResult {
                         run_id: run_id.to_string(),
                         outputs,
                         stage_results,
+                        goal_status,
                     });
                 }
             }
         }
 
+        let goal_status = self.evaluate_goal(&outputs);
         Ok(WorkflowResult {
             run_id: run_id.to_string(),
             outputs,
             stage_results,
+            goal_status,
         })
+    }
+
+    /// 汇总各阶段输出并评估目标
+    fn evaluate_goal(&self, outputs: &HashMap<String, String>) -> Option<super::goal::GoalStatus> {
+        let goal = self.goal.as_ref()?;
+        let accumulated = outputs.values().cloned().collect::<Vec<_>>().join("\n\n");
+        let state = super::goal::WorkflowState {
+            stage_outputs: outputs.clone(),
+            accumulated_text: accumulated,
+        };
+        Some(goal.evaluate(&state))
     }
 }
 

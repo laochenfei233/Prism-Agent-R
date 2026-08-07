@@ -5,9 +5,11 @@ use tokio_util::sync::CancellationToken;
 use crate::core::adk::model::GenerationRequest;
 use crate::core::adk::tool::{ToolApprovalResponse, ToolRegistry};
 use crate::core::rig::agent::{McpToolExecutor, RigAgent};
+use crate::core::rig::guardrails::GuardrailPipeline;
 use crate::core::rig::provider::OpenAiProvider;
-use crate::commands::file::read_attachment_text;
 use crate::data::models::{MessageDto, ProviderRow};
+use crate::data::services::trace_service::{AgentTrace, TraceService};
+use crate::commands::file::read_attachment_text;
 use crate::data::services::ChatService;
 use crate::utils::error::AppError;
 
@@ -188,14 +190,40 @@ pub async fn chat_send(
         }
     }
 
-    let agent = RigAgent::new(provider, system_prompt, registry)
+    // ── 构建 Agent 运行时（护栏 + 路由 + 反思 + 轨迹） ──
+    let mut agent = RigAgent::new(provider, system_prompt, registry)
         .with_approval_store(state.approval_store.clone())
         .with_app_handle(app.clone())
         .with_agent_id(session_row.agent_id.clone())
+        .with_session_id(session_id.clone())
         .with_cancel_token(cancel.clone())
         .with_on_delta(on_delta)
         .with_on_tool_call(on_tool_call)
         .with_mcp_runtime(state.mcp_runtime.clone());
+
+    // 护栏：默认启用注入检测 + 长度限制
+    agent = agent.with_guardrails(GuardrailPipeline::default_input());
+
+    // 工具路由：按用户消息 BM25 注入 top-N 工具
+    let router = agent.build_router(8);
+    agent = agent.with_router(router);
+
+    // Token 预算：工具输出裁剪阈值（约 100K tokens）
+    agent = agent.with_token_budget(100_000);
+
+    // 轨迹记录：完成后写入 agent_traces
+    {
+        let db = state.db.clone();
+        agent = agent.with_on_trace(move |trace: AgentTrace| {
+            let db = db.clone();
+            tokio::spawn(async move {
+                let svc = TraceService::new(db);
+                if let Err(e) = svc.record_trace(&trace).await {
+                    tracing::warn!("trace record failed: {e}");
+                }
+            });
+        });
+    }
 
     let request = GenerationRequest { messages, ..Default::default() };
 

@@ -468,3 +468,40 @@ async fn build_coordinator(
     }
     Ok(coordinator)
 }
+
+// ── 目标监控（§10.11） ────────────────────────────────────
+
+/// 用给定输出快照评估目标达成度（工作流运行面板 /goal-monitor）
+#[tauri::command]
+pub async fn goal_evaluate(
+    description: String,
+    criteria: Vec<serde_json::Value>,
+    outputs: HashMap<String, String>,
+) -> Result<crate::core::autoagents::goal::GoalStatus, AppError> {
+    use crate::core::autoagents::goal::{CriterionOp, GoalCriterion, GoalMonitor, TaskGoal};
+
+    let mut parsed = Vec::new();
+    for c in criteria {
+        let metric = c["metric"].as_str().unwrap_or("").to_string();
+        let weight = c["weight"].as_f64().unwrap_or(0.0) as f32;
+        let value = c["value"].clone();
+        let operator = match c["operator"].as_str().unwrap_or("contains") {
+            "gt" => CriterionOp::Gt,
+            "lt" => CriterionOp::Lt,
+            "eq" => CriterionOp::Eq,
+            "not_contains" | "notcontains" => CriterionOp::NotContains,
+            "regex" | "regex_match" => CriterionOp::RegexMatch,
+            "llm_judge" | "llm" => CriterionOp::LlmJudge,
+            _ => CriterionOp::Contains,
+        };
+        parsed.push(GoalCriterion { metric, operator, value, weight });
+    }
+
+    let goals = vec![TaskGoal { description, criteria: parsed, timeout_secs: None }];
+    let monitor = GoalMonitor::new(goals);
+    let state = crate::core::autoagents::goal::WorkflowState {
+        stage_outputs: outputs.clone(),
+        accumulated_text: outputs.values().cloned().collect::<Vec<_>>().join("\n\n"),
+    };
+    Ok(monitor.evaluate(&state))
+}

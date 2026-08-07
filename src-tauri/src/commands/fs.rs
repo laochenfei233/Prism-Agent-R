@@ -13,11 +13,7 @@ use crate::utils::error::AppError;
 
 const WATCH_INTERVAL_SECS: u64 = 2;
 
-const IGNORED: &[&str] = &[
-    ".git", "node_modules", "target", "dist", "build", "__pycache__", ".venv", "vendor", ".svn",
-];
-
-type Snapshot = HashMap<String, (i64, u64)>;
+pub(crate) type Snapshot = HashMap<String, (i64, u64)>;
 
 struct Watcher {
     handle: tokio::task::JoinHandle<()>,
@@ -73,8 +69,13 @@ pub async fn fs_watch(
 }
 
 // ── 快照与差异 ────────────────────────────────────────────
+// pub(crate)：§10.2.1 项目级自动索引复用（project_index.rs）
 
-fn snapshot_dir(root: &Path) -> Snapshot {
+pub(crate) const IGNORED: &[&str] = &[
+    ".git", "node_modules", "target", "dist", "build", "__pycache__", ".venv", "vendor", ".svn",
+];
+
+pub(crate) fn snapshot_dir(root: &Path) -> Snapshot {
     let mut map = Snapshot::new();
     walk_snapshot(root, root, &mut map);
     map
@@ -111,7 +112,7 @@ fn walk_snapshot(root: &Path, dir: &Path, map: &mut Snapshot) {
     }
 }
 
-fn diff_snapshots(old: &Snapshot, new: &Snapshot) -> Vec<String> {
+pub(crate) fn diff_snapshots(old: &Snapshot, new: &Snapshot) -> Vec<String> {
     let mut changed: Vec<String> = new
         .iter()
         .filter(|(p, sig)| old.get(p.as_str()) != Some(sig))

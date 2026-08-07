@@ -150,6 +150,24 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Return specs only for the given tool names (router-filtered injection).
+    /// Order follows `names`, not registration order.
+    pub fn specs_filtered(&self, names: &std::collections::HashSet<String>) -> Vec<ToolSpec> {
+        names
+            .iter()
+            .filter_map(|name| self.get(name).map(|t| ToolSpec {
+                name: t.name().to_string(),
+                description: t.description().to_string(),
+                parameters: t.schema(),
+            }))
+            .collect()
+    }
+
+    /// All registered tool names (used to seed the ToolRouter index).
+    pub fn tool_names(&self) -> Vec<String> {
+        self.tools.iter().map(|t| t.name().to_string()).collect()
+    }
+
     pub fn names(&self) -> Vec<&str> {
         self.tools.iter().map(|t| t.name()).collect()
     }

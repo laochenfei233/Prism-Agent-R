@@ -24,6 +24,9 @@ logs/
 src-tauri/target/
 src-tauri/gen/
 
+# Local build env (LIBCLANG_PATH 等机器特定配置)
+src-tauri/.cargo/
+
 # Worktrees
 .worktrees/
 

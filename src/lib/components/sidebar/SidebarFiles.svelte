@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { invoke } from '$lib/api/client';
+	import { onMount, onDestroy } from 'svelte';
+	import { invoke, listen } from '$lib/api/client';
+	import { projectIndexApi, type ProjectIndexStatusDto } from '$lib/api';
 	import type { AgentContext, DirTree } from '$lib/stores/context.svelte';
 
 	let { data }: { data: AgentContext } = $props();
@@ -17,6 +19,47 @@
 
 	let lastClickPath: string | null = null;
 	let lastClickTime = 0;
+
+	// 项目级自动索引状态（§10.2.1）
+	let indexStatus = $state<ProjectIndexStatusDto | null>(null);
+	let unlistenStatus: (() => void) | null = null;
+
+	onMount(() => {
+		void refreshIndexStatus();
+		listen<ProjectIndexStatusDto>('project_index:status', (s) => {
+			indexStatus = s;
+		}).then((un) => {
+			unlistenStatus = un;
+		});
+	});
+	onDestroy(() => {
+		unlistenStatus?.();
+	});
+
+	async function refreshIndexStatus() {
+		try {
+			indexStatus = await projectIndexApi.status();
+		} catch {
+			indexStatus = null;
+		}
+	}
+
+	async function toggleIndex() {
+		if (!indexStatus) return;
+		try {
+			indexStatus = await projectIndexApi.toggle(!indexStatus.enabled);
+		} catch (e) {
+			console.error('toggle project index failed:', e);
+		}
+	}
+
+	async function reindexProject() {
+		try {
+			indexStatus = await projectIndexApi.reindex();
+		} catch (e) {
+			console.error('reindex project failed:', e);
+		}
+	}
 
 	function childrenOf(path: string): DirTree[] | null {
 		const cached = treeCache[path];
@@ -219,6 +262,53 @@
 {/snippet}
 
 <div class="files-panel">
+	{#if indexStatus}
+		<div class="index-bar" class:disabled={!indexStatus.enabled}>
+			<div class="index-info">
+				<span class="index-dot" class:on={indexStatus.enabled && !indexStatus.in_progress} class:busy={indexStatus.in_progress}></span>
+				<span class="index-text">
+					{#if indexStatus.in_progress}
+						索引中…
+					{:else if indexStatus.enabled}
+						项目索引 · {indexStatus.indexed_files} 文件
+					{:else}
+						项目索引已关闭
+					{/if}
+				</span>
+			</div>
+			<div class="index-actions">
+				{#if indexStatus.enabled}
+					<button
+						type="button"
+						class="index-btn"
+						title="重新全量索引"
+						onclick={() => void reindexProject()}
+					>
+						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+							<path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+							<polyline points="21 3 21 9 15 9"/>
+						</svg>
+					</button>
+				{/if}
+				<button
+					type="button"
+					class="index-btn"
+					title={indexStatus.enabled ? '关闭项目索引' : '开启项目索引'}
+					onclick={() => void toggleIndex()}
+				>
+					{#if indexStatus.enabled}
+						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+							<circle cx="12" cy="12" r="9"/><line x1="5" y1="5" x2="19" y2="19"/>
+						</svg>
+					{:else}
+						<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+							<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+						</svg>
+					{/if}
+				</button>
+			</div>
+		</div>
+	{/if}
 	<div class="search-bar">
 		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 			<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -416,5 +506,72 @@
 		padding: 32px 0;
 		font-size: 13px;
 		color: var(--color-fg-secondary);
+	}
+
+	.index-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 5px 8px;
+		border-radius: 6px;
+		background: var(--color-bg);
+		border: 1px solid var(--color-separator);
+		font-size: 11px;
+	}
+	.index-bar.disabled {
+		opacity: 0.6;
+	}
+	.index-info {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+	.index-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--color-fg-tertiary, #999);
+		flex-shrink: 0;
+	}
+	.index-dot.on {
+		background: var(--color-green, #34c759);
+	}
+	.index-dot.busy {
+		background: var(--color-orange, #ff9f0a);
+		animation: index-pulse 1s ease-in-out infinite;
+	}
+	@keyframes index-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.35; }
+	}
+	.index-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--color-fg-secondary);
+	}
+	.index-actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		flex-shrink: 0;
+	}
+	.index-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border: none;
+		border-radius: 4px;
+		background: none;
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+	}
+	.index-btn:hover {
+		background: var(--color-bg-tertiary);
+		color: var(--color-fg);
 	}
 </style>

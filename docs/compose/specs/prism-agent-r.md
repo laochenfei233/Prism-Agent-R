@@ -39,27 +39,27 @@ platform: windows | macos | linux
 |------|------|-----|---------|------|
 | 001_init | 核心表 | providers/models/agents/sessions/messages/skills/mcp_servers + 关联表 | phase1 §5.2 | 🟦 |
 | 002_rag | RAG 表 | wikis/rag_documents/rag_chunks | phase1 §5.3 | 🟩 |
-| 003_meeting | 会议表 | meetings/meeting_transcripts | phase1 §5.4 | 🟩 |
+| 003_meeting | 会议表 | meetings/meeting_transcripts + asr_configs | phase1 §5.4 | 🟩 |
 | 004_workflow | 工作流/翻译/偏好 | workflows/workflow_runs/translate_history/preferences | phase1 §5.5 | 🟦 |
-| 005_glossary | 术语表 | glossary_terms | phase3 §10.5.2 | 🟩 |
-| 006_memory | 记忆 FTS | memory_fts | phase1 §10.7.2 | 🟧 |
-| 007_workflow_templates | 阶段模板 | stage_templates | phase1 §10.6.4 | 🟧 |
-| 008_agent_traces | 评估轨迹 | agent_traces | phase3 §10.13.1 | 🟩 |
+| 005_glossary_memory | 术语表 + 记忆 | glossary_terms / memory_fts | phase3 §10.5.2 + phase1 §10.7.2 | 🟩 |
+| 006-008/011/013 | 编号占位 noop | —（早期阶段拆分占用编号） | — | ⬜ |
 | 009_message_search | 消息 FTS | messages_fts | phase1 §5.7.2 | 🟦 |
 | 010_indexes | 性能索引 | idx_messages_id 等 | phase1 §5.7.7 | 🟦 |
-| 011_asr | ASR 配置 | asr_configs + meetings 扩展 | phase3 §10.3.8 | 🟩 |
 | 012_session_fts | 会话标题 FTS | sessions_fts | phase2 §5.7.4 | 🟧 |
-| 013_translate_fts | 翻译历史 FTS | translate_fts | phase3 §5.7.5 | 🟩 |
-| 014_session_archive | 会话归档 | sessions.archived_at 列 | phase1 §9.5.1 | 后续 |
-| 015_prompt_templates | 提示词模板 | prompt_templates | phase1 §9.8.2 | 后续 |
-| 016_workflow_versions | 工作流版本 | workflow_versions | phase1 §10.6.4.1 | 后续 |
-| 017_rag_context | RAG 上下文增强 | rag_chunks 扩展 + rag_eval_cases | phase3 §10.2.5 | 🟩 |
+| 014_memory_fts_trigram | 记忆 FTS trigram | memory_fts | phase1 §10.7.2 | 🟧 |
+| 015_rag_context | RAG 上下文增强 | rag_chunks 扩展 + rag_eval_cases | phase3 §10.2.5 | 🟩 |
+| 016_agent_traces | 评估轨迹 | agent_traces | phase3 §10.13.1 | 🟩 |
+| 017_translate_fts | 翻译历史 FTS | translate_fts | phase3 §5.7.5 | 🟩 |
+| 018_asr_config_ext | ASR 配置扩展 | asr_configs 增 model_path/extra | phase3 §10.3.8 | 🟩 |
+| 019_rag_eval_reports | 评测报告落库 | rag_eval_reports | phase3 §10.2.5 | 🟩 |
+| 020_meeting_speaker | 说话人分离 | meeting_transcripts 增 speaker_id | phase3 §10.3.1 | 🟩 |
+| 021_project_index | 项目索引命名空间 + 指纹 | wikis `__project__` 行 + rag_documents 增 file_path/fingerprint | phase3 §10.2.1 | 🟩 |
 
 > ⚠️ **本文档由原单文件 `docs/compose/specs/prism-agent-r.md` 按阶段拆分而来**，章节编号与设计内容保持不变。
 
 ## Report
 
-**当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16，见本文件「MVP Phase 1 完成报告」）；Phase 2（面板功能）与 Phase 3（扩展功能）进行中。
+**当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16，见本文件「MVP Phase 1 完成报告」）；Phase 2（面板功能）已完成并合并；Phase 3（扩展功能）已完成（T12-T14/T17/T20-T24，见本文件「Phase 3 完成报告」）；T18（测试与验证，三平台打包 + CI 回归门槛）为跨阶段收尾项，部分延后。
 
 ## [S0] 设计模式参考
 
@@ -763,16 +763,16 @@ Tauri tray-icon + menu:
 
 **Phase 3 — 扩展功能**
 
-- [ ] T12: Wiki + RAG — WikiService + write_ai 计划执行（结构化操作/校验回滚/工具接入）+ 分块/嵌入/混合检索 + 摄取后台任务 + 前端知识库页 (covers: phase3 §10.1-10.2; depends: T3, T5)
-- [ ] T13: 翻译 + OCR — TranslateService（多 Provider/批量/文件翻译/术语表/缓存）+ OcrService 多后端 + 前端翻译页 (covers: phase3 §10.5; depends: T5)
-- [ ] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + 前端 (covers: phase3 §10.3; depends: T5, T6)
-- [ ] T17: 安全与设置 — Key 加密存储 + capabilities 权限 + 设置页 (covers: phase1 §12; depends: T6)
-- [ ] T20: **反思模式（Reflection）** — ReflectionConfig + run_reflection_loop + 评审者 Agent 配置 + StageTemplate 反思字段 + 前端反思循环展示 (covers: phase3 §10.9; depends: T5, T15)
-- [ ] T21: **安全护栏（Guardrails）** — GuardrailPipeline + InjectionDetector + ToxicityFilter + 输入/输出过滤器接口 + 前端护栏配置 (covers: phase3 §10.12; depends: T5, T6)
-- [ ] T22: **目标设定与监控** — TaskGoal/GoalCriterion 数据结构 + GoalMonitor 运行时评估 + 前端目标进度条 (covers: phase3 §10.11; depends: T15, T7)
-- [ ] T23: **评估与监控** — AgentTrace 轨迹记录 + agent_traces 表 + AgentJudge LLM-as-Judge + 性能仪表盘（agent:stats）+ 前端评估 Tab (covers: phase3 §10.13; depends: T6, T10)
-- [ ] T24: **上下文压缩** — CompactionAgent + ContextWindow + 压力等级 + 工具输出裁剪（soft trim/hard prune）+ Head/Tail 选择 + 溢出检测与恢复 + 微压缩 + TokenBudget 统一配置 (covers: phase3 §13.1; depends: T5, T16)
-- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+rpm+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: phase1 §11/§13/§14, phase3 §13.1; depends: T6, T8, T12, T15)
+- [x] T12: Wiki + RAG — WikiService + write_ai 计划执行（结构化操作/校验回滚/工具接入）+ 分块/嵌入/混合检索 + Contextual Retrieval + Reranker + 五维评测（含报告落库/趋势）+ 项目级自动索引（§10.2.1）+ 摄取后台任务 + 前端知识库页 (covers: phase3 §10.1-10.2; depends: T3, T5)
+- [x] T13: 翻译 + OCR — TranslateService（多 Provider/批量/文件翻译/术语表/缓存）+ OcrService 多后端 + 前端翻译页 (covers: phase3 §10.5; depends: T5)
+- [x] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 说话人分离 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + 前端 (covers: phase3 §10.3; depends: T5, T6)
+- [x] T17: 安全与设置 — Key 加密存储 + capabilities 权限 + 设置页 (covers: phase1 §12; depends: T6)
+- [x] T20: **反思模式（Reflection）** — ReflectionConfig + run_reflection_loop + 评审者 Agent 配置 + StageTemplate 反思字段 + 前端反思循环展示 (covers: phase3 §10.9; depends: T5, T15)
+- [x] T21: **安全护栏（Guardrails）** — GuardrailPipeline + InjectionDetector + ToxicityFilter + 输入/输出过滤器接口 + 前端护栏配置 (covers: phase3 §10.12; depends: T5, T6)
+- [x] T22: **目标设定与监控** — TaskGoal/GoalCriterion 数据结构 + GoalMonitor 运行时评估 + 前端目标进度条 (covers: phase3 §10.11; depends: T15, T7)
+- [x] T23: **评估与监控** — AgentTrace 轨迹记录 + agent_traces 表 + AgentJudge LLM-as-Judge + 性能仪表盘（agent:stats）+ 前端评估 Tab (covers: phase3 §10.13; depends: T6, T10)
+- [x] T24: **上下文压缩** — CompactionAgent + ContextWindow + 压力等级 + 工具输出裁剪（soft trim/hard prune）+ Head/Tail 选择 + 溢出检测与恢复 + 微压缩 + TokenBudget 统一配置 (covers: phase3 §13.1; depends: T5, T16)
+- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+rpm+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理；CI 回归门槛（[S5] 🔸 低，需先建基线） (covers: phase1 §11/§13/§14, phase3 §13.1; depends: T6, T8, T12, T15)
 
 ---
 
@@ -815,6 +815,32 @@ Tauri tray-icon + menu:
 
 ### 后续工作（Phase 2 & 3）
 
-- T7: 主页面板 + 任务设计区
-- T10: Agent 侧边栏
-- T12-T14: Wiki/RAG、翻译/OCR、会议系统
+- T7: 主页面板 + 任务设计区 → ✅ 已完成（Phase 2 合并）
+- T10: Agent 侧边栏 → ✅ 已完成（Phase 2 合并）
+- T12-T14: Wiki/RAG、翻译/OCR、会议系统 → ✅ 已完成（见下）
+
+---
+
+## Phase 3 完成报告
+
+### 已完成任务
+
+| 任务 | 状态 | 内容 |
+|------|------|------|
+| T12 | ✅ 完成 | Wiki + RAG — WikiService + write_ai 计划执行（校验/回滚/.trash/.bak/log.md）+ 分块/嵌入/混合检索 + Contextual Retrieval + Reranker + **五维评测完整化**（table_acc 结构化比对 / ocr_completeness 字符召回率 / chart_acc LLM-as-Judge + 报告落库 `rag:eval-report` 趋势）+ **项目级自动索引**（§10.2.1：指纹/白名单/debounce 5s/`__project__` 隔离/全量重建/侧边栏状态条）+ 前端知识库页 |
+| T13 | ✅ 完成 | 翻译 + OCR — TranslateService（多 Provider/批量/文件/术语表/缓存/FTS 历史）+ OcrService 多后端 + 前端翻译页 |
+| T14 | ✅ 完成 | 会议系统 — AsrBackend 可插拔 8 后端 + sherpa-rs 本地推理 + 模型下载管理 + AudioStreamManager 时序规避 + 增量落库 + 离线二次转写 + 清洗/摘要(map-reduce)/问答/推送 Agent/导出 + **说话人分离链路**（DashScope speaker_id → 落库/事件/导出前缀）+ 前端；TTS 播报按 [S3] 暂缓 |
+| T17 | ✅ 完成 | 安全与设置 — API Key AES-GCM 加密存储 + 设置向导（provider/model 配置） |
+| T20 | ✅ 完成 | 反思模式 — ReflectionConfig + run_reflection_loop + 评审者配置 + StageTemplate 反思字段 + 接入 Agent 运行时 |
+| T21 | ✅ 完成 | 安全护栏 — GuardrailPipeline + InjectionDetector（注入模式规则引擎）+ ToxicityFilter + 输入/输出过滤器接口 |
+| T22 | ✅ 完成 | 目标监控 — TaskGoal/GoalCriterion + GoalMonitor 运行时评估 + goal_evaluate 命令 |
+| T23 | ✅ 完成 | 评估监控 — AgentTrace 轨迹（agent_traces 表）+ AgentJudge LLM-as-Judge + agent_stats 聚合 + trace_list 命令 |
+| T24 | ✅ 完成 | 上下文压缩 — TokenBudget 统一配置 + 压力等级 + 工具输出软裁剪/硬裁剪 + Head/Tail 选择 + 溢出恢复 + 微压缩 |
+| T18 | ⏳ 部分 | 单元/集成测试已覆盖（cargo test 41 passed）；**三平台打包验证（NSIS/dmg/deb+rpm/AppImage）与 CI 回归门槛（[S5] 🔸 低）延后** |
+
+### 关键实现要点
+
+- **迁移**：015_rag_context / 016_agent_traces / 017_translate_fts / 018_asr_config_ext / 019_rag_eval_reports / 020_meeting_speaker / 021_project_index（编号与迁移总表一致）
+- **验证**：`cargo check` 零警告 · `cargo test` 41 passed · `svelte-check` 0 errors
+- **S5/S3 暂缓项**（design 明确后续迭代/本次不做）：TTS 播报（§10.3.9 [S3]）、CI 回归门槛（§10.2.5 [S5]）、Azure WebSocket 流式（§10.3.3 可选升级）
+- **实现状态与待办追踪**：见 `docs/design/phase3-extend.md` 附录
