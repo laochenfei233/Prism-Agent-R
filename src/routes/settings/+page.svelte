@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invoke } from '$lib/api/client';
-	import { agentApi, asrApi, mcpApi, memoryApi, projectIndexApi, ragApi, settingsApi, skillApi, translateApi, ttsApi } from '$lib/api';
+	import { agentApi, asrApi, mcpApi, memoryApi, projectIndexApi, ragApi, settingsApi, skillApi, translateApi, workspaceApi } from '$lib/api';
 	import type { SettingSpecDto } from '$lib/api';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
 	import Switch from '$lib/components/base/Switch.svelte';
@@ -295,6 +295,30 @@
 	let projectIndex = $state({ enabled: true, workdir: null as string | null, indexed_files: 0, in_progress: false, last_indexed_at: null as number | null });
 	let reconciling = $state(false);
 
+	// ── 工作区 ──────────────────────────────────────────
+	let wsPath = $state('');
+	let wsCurrent = $state('');
+	let wsSaving = $state(false);
+
+	async function loadWorkspace() {
+		try {
+			const info = await workspaceApi.get();
+			wsCurrent = info.current_dir || '';
+			wsPath = wsCurrent;
+		} catch (e) {}
+	}
+
+	async function saveWorkspace() {
+		if (!wsPath.trim()) { msg = '请输入工作区路径'; return; }
+		wsSaving = true;
+		try {
+			const info = await workspaceApi.set(wsPath.trim());
+			wsCurrent = info.current_dir;
+			msg = '✓ 工作区已更新';
+		} catch (e) { msg = '错误: ' + String(e); }
+		finally { wsSaving = false; }
+	}
+
 	async function loadProjectIndex() {
 		try { projectIndex = await projectIndexApi.status(); } catch (e) {}
 	}
@@ -329,6 +353,7 @@
 		loadRagStatus();
 		loadProjectIndex();
 		loadTranslateModel();
+		loadWorkspace();
 	});
 
 	// ── 图标 ─────────────────────────────────────────────
@@ -684,6 +709,23 @@
 					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
 				{/each}
 			{:else if activeGroup === 'advanced'}
+				<!-- 工作区 -->
+				<div class="group">
+					<div class="group-header">工作区</div>
+					<div class="group-body">
+						<p class="hint">当前工作区目录（用于项目索引与上下文注入）。</p>
+						<div class="form-row">
+							<input bind:value={wsPath} placeholder="工作区目录路径" />
+						</div>
+						<button class="btn-primary" onclick={saveWorkspace} disabled={wsSaving}>
+							{wsSaving ? '保存中…' : '设置工作区'}
+						</button>
+						{#if wsCurrent}
+							<p class="hint current-ws">当前：{wsCurrent}</p>
+						{/if}
+					</div>
+				</div>
+
 				<!-- 项目索引 -->
 				<div class="group">
 					<div class="group-header">项目自动索引</div>
@@ -735,9 +777,11 @@
 							min={spec.min ?? undefined}
 							max={spec.max ?? undefined}
 							step={spec.step ?? (spec.kind === 'int' ? 1 : 0.1)}
-							onchange={(e) => onsave(Number((e.currentTarget as HTMLInputElement).value))}
+							onchange={(e) => {
+							const v = Number((e.currentTarget as HTMLInputElement).value);
+							if (!Number.isNaN(v)) onsave(v);
+						}}
 						/>
-						<button class="btn-sm" onclick={() => onsave(spec.value)}>应用</button>
 					</div>
 				{:else}
 					<input

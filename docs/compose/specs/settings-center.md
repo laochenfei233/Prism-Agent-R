@@ -77,9 +77,9 @@ pub async fn remove(db, key) -> Result<(), AppError>       // DELETE
 | `meeting.audio_buffer_secs` | Advanced | Int (10–120) | 30 | 会议音频缓冲保留时长（秒） |
 | `tts.lang` | Meeting | String | zh-CN | TTS 播报语言 |
 | `tts.rate` | Meeting | Float (0.5–2, step 0.1) | 1.0 | TTS 播报语速 |
-| `translate.model_id` | ModelService | String（空=默认模型） | "" | 翻译专用模型 ID |
-| `workspace.current_dir` | Advanced | String | （进程目录） | 当前工作区目录 |
-| `project_index.enabled` | Advanced | Bool | true | 项目自动索引开关 |
+| `translate.model_id` | ModelService | String（空=默认模型） | "" | 翻译专用模型 ID（前端调 translate_model_config，不入注册表） |
+| `workspace.current_dir` | Advanced | String | （进程目录） | 当前工作区目录（前端调 workspace_get/set，含 recent_dirs 维护，不入注册表） |
+| `project_index.enabled` | Advanced | Bool | true | 项目自动索引开关（前端调 project_index_toggle，不入注册表） |
 
 已有专有命令的设置项（`rag.embedding.*`、`rag.contextual`、`rag.rerank`）保留专用命令不迁移，注册表仅登记展示项由前端调用既有命令（见 T2.3）。
 

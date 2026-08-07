@@ -705,6 +705,20 @@ export const projectIndexApi = {
 	reindex: () => invoke<ProjectIndexStatusDto>('project_index_reindex'),
 };
 
+// ── Workspace API（工作区） ───────────────────────────────
+
+export interface WorkspaceInfoDto {
+	current_dir: string;
+	recent_dirs: string[];
+	bound_agent_id: string | null;
+}
+
+export const workspaceApi = {
+	get: () => invoke<WorkspaceInfoDto>('workspace_get'),
+	set: (path: string, agentId?: string) =>
+		invoke<WorkspaceInfoDto>('workspace_set', { path, agentId }),
+};
+
 // ── TTS 播报 API（§10.3.9） ───────────────────────────────
 
 export interface TtsSpeakResultDto {

@@ -4,7 +4,6 @@ use async_trait::async_trait;
 
 use crate::core::adk::error::AgentError;
 use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
-use crate::data::rag::chunker::chunk_text;
 
 /// 上下文生成器 trait（§10.2.2 Contextual Retrieval）
 /// 摄取时为每个 chunk 生成 50-150 token 的中文上下文说明，prepend 到原文前
@@ -73,13 +72,6 @@ impl Contextualizer for HeuristicContextualizer {
         let summary: String = document.chars().take(120).collect();
         Ok(format!("文档开篇背景：{summary}…"))
     }
-}
-
-/// 对长文档做局部 contextualize（超窗口时用标题+摘要+相邻 chunk 替代整篇）
-/// 简化实现：直接传全文（调用方负责控制文档长度）
-pub fn contextualize_document(text: &str, chunk_size: usize) -> (String, Vec<String>) {
-    let chunks = chunk_text(text, chunk_size, 200);
-    (text.to_string(), chunks)
 }
 
 #[cfg(test)]
