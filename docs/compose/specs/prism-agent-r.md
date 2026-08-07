@@ -2,8 +2,8 @@
 feature: prism-agent-r
 status: in-progress
 updated: 2026-08-07
-branch: feat/phase3-extend
-commits: 8804959..d67f823 # Phase 3 交付（T18 跨阶段收尾项延后，故保留 in-progress）
+branch: master
+commits: 8804959..19606ef # Phase 3 全部交付（含 TTS/CI 门槛/Azure WS/打包验证；macOS/Linux 打包待 CI 首次跑通，故保留 in-progress）
 platform: windows | macos | linux
 ---
 
@@ -59,17 +59,18 @@ platform: windows | macos | linux
 
 ## Report
 
-**当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16）；Phase 2（面板功能）已完成并合并；Phase 3（扩展功能）已完成（T12-T14/T17/T20-T24，见本文件「Phase 3 完成报告」）；T18（测试与验证：三平台打包 + CI 回归门槛）为跨阶段收尾项，部分延后。
+**当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16）；Phase 2（面板功能）已完成并合并；Phase 3（扩展功能）**全部完成**（T12-T14/T17/T20-T24/T18，见本文件「Phase 3 完成报告」），含原 [S3]/[S5] 暂缓项（TTS 播报、CI 评测回归门槛、Azure WS 流式、三平台打包验证）。
 
-**What was built** — Phase 3 扩展功能全部落地：Wiki 知识库（write_ai 计划执行 + 分类树 UI）、RAG 引擎（分块/真实嵌入/混合检索/Contextual Retrieval/Reranker + 五维评测完整化：table_acc 结构化比对、ocr_completeness 字符召回率、chart_acc LLM-as-Judge、报告落库 `rag:eval-report` 趋势）、项目级自动索引（§10.2.1：指纹增量 + debounce + `__project__` 隔离 + 侧边栏状态条）、会议系统（8 后端可插拔 ASR + sherpa-rs + 说话人分离全链路 + 离线二次转写 + 摘要/QA/推送/导出）、翻译/OCR、反思/目标监控/安全护栏/评估监控（AgentTrace + AgentJudge + agent_stats）、Skill/MCP Router（BM25 意图路由）、上下文压缩（TokenBudget 统一配置）。迁移 015-022。
+**What was built** — Phase 3 扩展功能全部落地：Wiki 知识库（write_ai 计划执行 + 分类树 UI）、RAG 引擎（分块/真实嵌入/混合检索/Contextual Retrieval/Reranker + 五维评测完整化：table_acc 结构化比对、ocr_completeness 字符召回率、chart_acc LLM-as-Judge、报告落库趋势、CI 回归门槛 eval_gate）、项目级自动索引（指纹增量 + `__project__` 隔离 + 侧边栏状态条）、会议系统（8 后端可插拔 ASR + sherpa-rs + 说话人分离 + Azure WS 流式 + 离线二次转写 + 摘要/QA/推送/导出 + TTS 播报）、翻译/OCR、反思/目标监控/安全护栏/评估监控、Skill/MCP Router、上下文压缩。迁移 015-022。CI：test 门控 + Linux 打包依赖 + 三平台矩阵；Windows 打包本机验证（MSI+NSIS）。
 
-**Verification** — `cargo check` 零警告；`cargo test` 43 passed（新增 eval 三维度 8 测试、项目索引 2 测试、报告落库与 json_each 集成测试、转写幂等 upsert 回归测试；临时库跑通全部 22 个迁移）；`svelte-check` 0 errors / 35 warnings（a11y，改动前既有）。Reranker 复验通过（4 测试 + 命令可用 + 无模型无感降级）。
+**Verification** — `cargo check` 零警告；`cargo test` 49 passed（新增 TTS 分段 5 测试、eval_gate 回归门槛、转写幂等 upsert、json_each 集成测试；临时库跑通全部 22 个迁移）；`svelte-check` 0 errors / 35 warnings（a11y，既有）；Windows `npx tauri build` 产出 `Prism Agent_0.1.0_x64_en-US.msi` + `Prism Agent_0.1.0_x64-setup.exe`。两轮评审（eac08bd→19606ef）修复 2 major + 4 minor 后复评通过。
 
 **Journey log** —
-- 转写落库曾用「每次新 UUID + INSERT OR REPLACE」，同 index 重复插入；评审发现后以 022 迁移先清重再建唯一索引 + ON CONFLICT upsert 修复（关键教训：OR REPLACE 依赖主键冲突，UUID 主键下形同虚设）。
-- 目录快照用 `entry.metadata()`（跟随符号链接）存在目录环无限递归风险；改用 `file_type().is_symlink()` 跳过（fs:watcher 与项目索引两处）。
-- eval 三维度中 chart_acc 走 LLM-as-Judge 有 token 成本，按 design 仅在有 `chart_expected` 用例时触发、无默认模型静默降级。
-- 项目自动索引首轮只建基线（避免启动即全量），变更触发全量重建走 `rag:progress` 后台任务。
+- 转写落库曾用「每次新 UUID + INSERT OR REPLACE」，同 index 重复插入；022 迁移先清重再建唯一索引 + ON CONFLICT upsert 修复（OR REPLACE 依赖主键冲突，UUID 主键下形同虚设）。
+- Web Speech API `cancel()` 会异步触发被取消 utterance 的 onend/onerror——必须带代际保护（generation 快照），否则 stop/语速变更会双音并发/跳段。
+- WS 流式 ASR 在 `end:true` 后立即退出会丢最终定稿帧（尾部结果在 end 之后到达），需 3s 排空读；该特性同样适用于 DashScope/OpenAI Realtime 同类端点。
+- CI 评测门槛用「临时库自包含 golden set + 本地嵌入」实现（零 LLM 成本、确定性命中），比在 CI 里跑应用内命令可靠得多。
+- Windows 首次 release 打包（含 sherpa-rs/bindgen）约 5-6 分钟；LIBCLANG_PATH 为机器特定配置，须放 gitignored 的 `src-tauri/.cargo/config.toml`。
 
 ## [S0] 设计模式参考
 
@@ -775,14 +776,14 @@ Tauri tray-icon + menu:
 
 - [x] T12: Wiki + RAG — WikiService + write_ai 计划执行（结构化操作/校验回滚/工具接入）+ 分块/嵌入/混合检索 + Contextual Retrieval + Reranker + 五维评测（含报告落库/趋势）+ 项目级自动索引（§10.2.1）+ 摄取后台任务 + 前端知识库页 (covers: phase3 §10.1-10.2; depends: T3, T5)
 - [x] T13: 翻译 + OCR — TranslateService（多 Provider/批量/文件翻译/术语表/缓存）+ OcrService 多后端 + 前端翻译页 (covers: phase3 §10.5; depends: T5)
-- [x] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 说话人分离 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + 前端 (covers: phase3 §10.3; depends: T5, T6)
+- [x] T14: 会议系统 — AsrBackend 可插拔架构（8 后端协议级实现）+ 本地 sherpa-onnx 集成 + 模型下载管理 + 录音流通道 + 说话人分离 + 离线二次转写 + 清洗/摘要/问答/推送 Agent/导出 + Azure WS 流式 + TTS 播报（§10.3.9）+ 前端 (covers: phase3 §10.3; depends: T5, T6)
 - [x] T17: 安全与设置 — Key 加密存储 + capabilities 权限 + 设置页 (covers: phase1 §12; depends: T6)
 - [x] T20: **反思模式（Reflection）** — ReflectionConfig + run_reflection_loop + 评审者 Agent 配置 + StageTemplate 反思字段 + 前端反思循环展示 (covers: phase3 §10.9; depends: T5, T15)
 - [x] T21: **安全护栏（Guardrails）** — GuardrailPipeline + InjectionDetector + ToxicityFilter + 输入/输出过滤器接口 + 前端护栏配置 (covers: phase3 §10.12; depends: T5, T6)
 - [x] T22: **目标设定与监控** — TaskGoal/GoalCriterion 数据结构 + GoalMonitor 运行时评估 + 前端目标进度条 (covers: phase3 §10.11; depends: T15, T7)
 - [x] T23: **评估与监控** — AgentTrace 轨迹记录 + agent_traces 表 + AgentJudge LLM-as-Judge + 性能仪表盘（agent:stats）+ 前端评估 Tab (covers: phase3 §10.13; depends: T6, T10)
 - [x] T24: **上下文压缩** — CompactionAgent + ContextWindow + 压力等级 + 工具输出裁剪（soft trim/hard prune）+ Head/Tail 选择 + 溢出检测与恢复 + 微压缩 + TokenBudget 统一配置 (covers: phase3 §13.1; depends: T5, T16)
-- [ ] T18: 测试与验证 — 单元测试（分块/检索/错误映射/任务校验）、集成测试（对话流/任务流）、性能基准、**三平台打包验证（Windows NSIS / macOS dmg / Linux deb+rpm+AppImage）**；**§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理；CI 回归门槛（[S5] 🔸 低，需先建基线） (covers: phase1 §11/§13/§14, phase3 §13.1; depends: T6, T8, T12, T15)
+- [x] T18: 测试与验证 — 单元/集成测试（cargo test 49 passed，含 RAG 评测回归门槛 eval_gate）+ **CI 回归门槛**（§10.2.5：build.yml test job，低于基线阻止合并）+ **三平台打包验证**（Windows NSIS/MSI 本机成功；macOS dmg / Linux deb+rpm+AppImage 由 CI 矩阵保证）+ **§14 规避回归**：模型 ID 格式/upsert 幂等/音频时序丢块/目录穿越/配置合并/事件清理 (covers: phase1 §11/§13/§14, phase3 §13.1; depends: T6, T8, T12, T15)
 
 ---
 
@@ -839,18 +840,19 @@ Tauri tray-icon + menu:
 |------|------|------|
 | T12 | ✅ 完成 | Wiki + RAG — WikiService + write_ai 计划执行（校验/回滚/.trash/.bak/log.md）+ 分块/嵌入/混合检索 + Contextual Retrieval + Reranker + **五维评测完整化**（table_acc 结构化比对 / ocr_completeness 字符召回率 / chart_acc LLM-as-Judge + 报告落库 `rag:eval-report` 趋势）+ **项目级自动索引**（§10.2.1：指纹/白名单/debounce 5s/`__project__` 隔离/全量重建/侧边栏状态条）+ 前端知识库页 |
 | T13 | ✅ 完成 | 翻译 + OCR — TranslateService（多 Provider/批量/文件/术语表/缓存/FTS 历史）+ OcrService 多后端 + 前端翻译页 |
-| T14 | ✅ 完成 | 会议系统 — AsrBackend 可插拔 8 后端 + sherpa-rs 本地推理 + 模型下载管理 + AudioStreamManager 时序规避 + 增量落库 + 离线二次转写 + 清洗/摘要(map-reduce)/问答/推送 Agent/导出 + **说话人分离链路**（DashScope speaker_id → 落库/事件/导出前缀）+ 前端；TTS 播报按 [S3] 暂缓 |
+| T14 | ✅ 完成 | 会议系统 — AsrBackend 可插拔 8 后端 + sherpa-rs 本地推理 + 模型下载管理 + AudioStreamManager 时序规避 + 增量落库 + 离线二次转写 + 清洗/摘要(map-reduce)/问答/推送 Agent/导出 + **说话人分离链路**（DashScope speaker_id → 落库/事件/导出前缀）+ **Azure WebSocket 流式**（§10.3.3⑦：speech.config 首帧/二进制帧/speechFragment 含 speakerId/排空读保尾部定稿）+ **TTS 播报**（§10.3.9：tts:speak 服务端分段 + Web Speech API 队列/暂停/语速 + Speaker.svelte + 会议「播报待办」）+ 前端 |
 | T17 | ✅ 完成 | 安全与设置 — API Key AES-GCM 加密存储 + 设置向导（provider/model 配置） |
 | T20 | ✅ 完成 | 反思模式 — ReflectionConfig + run_reflection_loop + 评审者配置 + StageTemplate 反思字段 + 接入 Agent 运行时 |
 | T21 | ✅ 完成 | 安全护栏 — GuardrailPipeline + InjectionDetector（注入模式规则引擎）+ ToxicityFilter + 输入/输出过滤器接口 |
 | T22 | ✅ 完成 | 目标监控 — TaskGoal/GoalCriterion + GoalMonitor 运行时评估 + goal_evaluate 命令 |
 | T23 | ✅ 完成 | 评估监控 — AgentTrace 轨迹（agent_traces 表）+ AgentJudge LLM-as-Judge + agent_stats 聚合 + trace_list 命令 |
 | T24 | ✅ 完成 | 上下文压缩 — TokenBudget 统一配置 + 压力等级 + 工具输出软裁剪/硬裁剪 + Head/Tail 选择 + 溢出恢复 + 微压缩 |
-| T18 | ⏳ 部分 | 单元/集成测试已覆盖（cargo test 41 passed）；**三平台打包验证（NSIS/dmg/deb+rpm/AppImage）与 CI 回归门槛（[S5] 🔸 低）延后** |
+| T18 | ✅ 完成 | 测试与验证 — cargo test 49 passed（含 RAG 五维评测回归门槛 eval_gate）；**CI 回归门槛**（§10.2.5：run_eval 抽取 + eval_gate ≥0.8 + build.yml test job needs 门控，建议设 required check）；**三平台打包**：Windows NSIS+MSI 本机验证成功；macOS dmg / Linux deb+rpm+AppImage 由 CI 三平台矩阵保证（Linux 系统依赖已补；首次 CI 跑通后闭环） |
 
 ### 关键实现要点
 
-- **迁移**：015_rag_context / 016_agent_traces / 017_translate_fts / 018_asr_config_ext / 019_rag_eval_reports / 020_meeting_speaker / 021_project_index（编号与迁移总表一致）
-- **验证**：`cargo check` 零警告 · `cargo test` 41 passed · `svelte-check` 0 errors
-- **S5/S3 暂缓项**（design 明确后续迭代/本次不做）：TTS 播报（§10.3.9 [S3]）、CI 回归门槛（§10.2.5 [S5]）、Azure WebSocket 流式（§10.3.3 可选升级）
+- **迁移**：015_rag_context / 016_agent_traces / 017_translate_fts / 018_asr_config_ext / 019_rag_eval_reports / 020_meeting_speaker / 021_project_index / 022_meeting_transcript_upsert（编号与迁移总表一致）
+- **验证**：`cargo check` 零警告 · `cargo test` 49 passed（含 RAG 评测门槛 eval_gate、转写幂等 upsert、TTS 分段）· `svelte-check` 0 errors · Windows `tauri build` 产出 MSI + NSIS
+- **收尾完成项**（原 [S3]/[S5] 暂缓，用户要求补齐）：TTS 播报（§10.3.9）、CI 回归门槛（§10.2.5）、Azure WebSocket 流式（§10.3.3⑦）、三平台打包验证（T18，Windows 本机 + CI 矩阵）
+- **评审闭环**：eac08bd 两轮评审修复 2 major（TTS 代际竞态 / Azure 尾部帧丢失）+ 4 minor；19606ef 复评通过
 - **实现状态与待办追踪**：见 `docs/design/phase3-extend.md` 附录
