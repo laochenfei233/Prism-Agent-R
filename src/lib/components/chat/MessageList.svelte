@@ -43,10 +43,12 @@
 			<MessageBubble message={msg} />
 		{/each}
 
-		{#if streaming && streamingText}
+		{#if streaming}
 			<div class="bubble-wrap">
 				<div class="bubble streaming">
-					<MarkdownViewer content={streamingText} />
+					{#if streamingText}
+						<MarkdownViewer content={streamingText} streaming={true} />
+					{/if}
 					<span class="cursor">|</span>
 				</div>
 			</div>

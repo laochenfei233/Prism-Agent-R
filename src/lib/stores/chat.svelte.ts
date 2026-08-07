@@ -7,6 +7,40 @@ class ChatStore {
 	streamingText = $state('');
 	isGenerating = $state(false);
 	private unsubs: (() => void)[] = [];
+	// Throttle: deltas accumulate here and flush to streamingText at most once
+	// per ~30ms so the markdown renderer isn't re-run on every token.
+	private pendingDelta = '';
+	private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+	private scheduleFlush() {
+		if (this.flushTimer) return;
+		this.flushTimer = setTimeout(() => {
+			this.flushTimer = null;
+			if (this.pendingDelta) {
+				this.streamingText += this.pendingDelta;
+				this.pendingDelta = '';
+			}
+		}, 30);
+	}
+
+	private flushNow() {
+		if (this.flushTimer) {
+			clearTimeout(this.flushTimer);
+			this.flushTimer = null;
+		}
+		if (this.pendingDelta) {
+			this.streamingText += this.pendingDelta;
+			this.pendingDelta = '';
+		}
+	}
+
+	private discardPending() {
+		if (this.flushTimer) {
+			clearTimeout(this.flushTimer);
+			this.flushTimer = null;
+		}
+		this.pendingDelta = '';
+	}
 
 	async loadHistory(sessionId: string) {
 		try {
@@ -34,12 +68,15 @@ class ChatStore {
 
 		const unsubs = await Promise.all([
 			streamEvents.onDelta(sessionId, (delta) => {
-				this.streamingText += delta;
+				this.pendingDelta += delta;
+				this.scheduleFlush();
 			}),
 			streamEvents.onToolCall(sessionId, (call) => {
 				console.log('Tool call:', call);
 			}),
 			streamEvents.onDone(sessionId, () => {
+				// Flush buffered deltas so the final chunk renders before reset.
+				this.flushNow();
 				// Reload history to get the assistant message from server
 				this.loadHistory(sessionId);
 				this.streaming = false;
@@ -49,6 +86,7 @@ class ChatStore {
 			}),
 			streamEvents.onError(sessionId, (message) => {
 				console.error('Stream error:', message);
+				this.flushNow();
 				this.streaming = false;
 				this.isGenerating = false;
 				this.streamingText = '';
@@ -62,6 +100,7 @@ class ChatStore {
 	cleanup() {
 		this.unsubs.forEach((u) => u());
 		this.unsubs = [];
+		this.discardPending();
 	}
 
 	async abort(sessionId: string) {

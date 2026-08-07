@@ -6,12 +6,96 @@
 	import { contextStore } from '$lib/stores/context.svelte';
 	import AgentSidebar from '$lib/components/sidebar/AgentSidebar.svelte';
 	import ToolApprovalDialog from '$lib/components/dialogs/ToolApprovalDialog.svelte';
+	import CommandPalette, { type CommandItem } from '$lib/components/base/CommandPalette.svelte';
+	import { useKeyboard } from '$lib/hooks/useKeyboard.svelte';
 	import type { AgentDto, SessionDto } from '$lib/api';
 
 	let { children } = $props();
 
 	let newAgentName = $state('');
 	let showNewAgent = $state(false);
+	let paletteOpen = $state(false);
+
+	const keyboard = useKeyboard();
+
+	$effect(() => {
+		keyboard.register('cmd+k', () => {
+			paletteOpen = !paletteOpen;
+		});
+		keyboard.register('cmd+n', () => {
+			const agent = agentStore.currentAgent;
+			if (agent) {
+				handleNewSession(agent);
+			} else {
+				showNewAgent = true;
+			}
+		});
+		keyboard.register('cmd+\\', () => {
+			if (agentStore.currentAgent) contextStore.toggleCollapse();
+		});
+		keyboard.register('cmd+1', () => {
+			if (agentStore.currentAgent) contextStore.activeTab = 'usage';
+		});
+		keyboard.register('cmd+2', () => {
+			if (agentStore.currentAgent) contextStore.activeTab = 'mcp';
+		});
+		keyboard.register('cmd+3', () => {
+			if (agentStore.currentAgent) contextStore.activeTab = 'files';
+		});
+	});
+
+	const paletteCommands = $derived.by<CommandItem[]>(() => [
+		{
+			id: 'new-session',
+			title: '新建会话',
+			shortcut: '⌘N',
+			icon: 'plus',
+			action: () => {
+				const agent = agentStore.currentAgent;
+				if (agent) {
+					handleNewSession(agent);
+				} else {
+					showNewAgent = true;
+				}
+			}
+		},
+		{
+			id: 'open-settings',
+			title: '打开设置',
+			icon: 'settings',
+			action: () => goto('/settings')
+		},
+		{
+			id: 'back-home',
+			title: '返回面板',
+			icon: 'back',
+			action: () => {
+				agentStore.currentSession = null;
+				chatStore.messages = [];
+			}
+		},
+		...agentStore.agents.map((agent) => ({
+			id: `chat-${agent.id}`,
+			title: `与 ${agent.name} 对话`,
+			icon: 'chat' as const,
+			action: async () => {
+				agentStore.selectAgent(agent);
+				const session = await agentStore.createSession(agent.id, '新会话');
+				if (agentStore.currentSession) {
+					chatStore.loadHistory(agentStore.currentSession.id);
+				}
+			}
+		})),
+		...agentStore.sessions.map((session) => ({
+			id: `session-${session.id}`,
+			title: `打开会话：${session.title || '新会话'}`,
+			icon: 'back' as const,
+			action: () => {
+				agentStore.selectSession(session);
+				chatStore.loadHistory(session.id);
+			}
+		}))
+	]);
 
 	$effect(() => {
 		agentStore.loadAgents();
@@ -170,6 +254,9 @@
 
 <!-- Global Tool Approval Dialog -->
 <ToolApprovalDialog />
+
+<!-- Global Command Palette -->
+<CommandPalette bind:open={paletteOpen} items={paletteCommands} />
 
 <style>
 	.app {

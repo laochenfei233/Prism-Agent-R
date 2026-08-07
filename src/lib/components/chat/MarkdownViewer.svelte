@@ -6,7 +6,10 @@
 		lang?: string;
 	}
 
-	let { content = '' }: { content?: string } = $props();
+	let {
+		content = '',
+		streaming = false
+	}: { content?: string; streaming?: boolean } = $props();
 
 	let copiedIndex = $state<number | null>(null);
 
@@ -100,7 +103,17 @@
 	}
 
 	function parseMarkdown(src: string): Block[] {
-		const lines = src.replace(/\r\n/g, '\n').split('\n');
+		// In streaming mode an odd fence count means the closing fence hasn't
+		// arrived yet: pseudo-close it so the completed part still renders as a
+		// code block instead of swallowing the rest of the stream as raw text.
+		let text = src.replace(/\r\n/g, '\n');
+		if (streaming) {
+			const fenceCount = text
+				.split('\n')
+				.filter((line) => /^```([\w+-]*)\s*$/.test(line)).length;
+			if (fenceCount % 2 === 1) text += '\n```';
+		}
+		const lines = text.split('\n');
 		const blocks: Block[] = [];
 		let i = 0;
 		while (i < lines.length) {
@@ -119,7 +132,11 @@
 			}
 
 			const textLines: string[] = [];
-			while (i < lines.length && !/^```/.test(lines[i])) {
+			while (i < lines.length) {
+				// A complete fence starts a new code block; a partial one (e.g.
+				// "```pyt" cut mid-stream) falls through as plain text so the
+				// renderer never spins on it.
+				if (/^```([\w+-]*)\s*$/.test(lines[i])) break;
 				if (lines[i].trim() === '') {
 					if (textLines.length > 0) break;
 					i++;
@@ -161,7 +178,8 @@
 </script>
 
 <div class="markdown-viewer">
-	{#each blocks as block, i}
+	{#if !(streaming && content.trim() === '')}
+		{#each blocks as block, i}
 		{#if block.type === 'code'}
 			<div class="code-block">
 				<div class="code-header">
@@ -175,7 +193,8 @@
 		{:else}
 			{@html block.html}
 		{/if}
-	{/each}
+		{/each}
+	{/if}
 </div>
 
 <style>

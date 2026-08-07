@@ -31,31 +31,8 @@ impl Database {
             .connect(&url)
             .await?;
 
-        // Run migrations
-        sqlx::query(include_str!("migrations/001_init.sql"))
-            .execute(&pool)
-            .await?;
-        sqlx::query(include_str!("migrations/002_rag.sql"))
-            .execute(&pool)
-            .await?;
-        sqlx::query(include_str!("migrations/003_meeting.sql"))
-            .execute(&pool)
-            .await?;
-        sqlx::query(include_str!("migrations/004_workflow.sql"))
-            .execute(&pool)
-            .await?;
-        sqlx::query(include_str!("migrations/005_glossary_memory.sql"))
-            .execute(&pool)
-            .await?;
-        sqlx::query(include_str!("migrations/009_message_search.sql"))
-            .execute(&pool)
-            .await?;
-        sqlx::query(include_str!("migrations/010_indexes.sql"))
-            .execute(&pool)
-            .await?;
-        sqlx::query(include_str!("migrations/012_session_fts.sql"))
-            .execute(&pool)
-            .await?;
+        // Run migrations (embedded at compile time; tracked by _sqlx_migrations)
+        sqlx::migrate!("src/data/migrations").run(&pool).await?;
 
         Ok(Self { pool })
     }

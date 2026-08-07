@@ -62,11 +62,16 @@ impl MemoryService {
     }
 
     /// 搜索记忆：优先走 memory_fts（FTS5/BM25），查询为空返回空，
-    /// FTS 出错或结果为空时回退到朴素文件扫描。
+    /// 查询过短或 FTS 出错/结果为空时回退到朴素文件扫描。
     pub async fn search(&self, query: &str) -> Result<Vec<MemorySearchHit>, AppError> {
         let Some(fts_query) = sanitize_fts_query(query) else {
             return Ok(Vec::new());
         };
+        // trigram 分词要求查询 token ≥ 3 字符（3 个汉字），短查询会触发
+        // "fts5: syntax error"，直接跳过 FTS 走朴素文件扫描回退
+        if fts_query_too_short(&fts_query) {
+            return self.search_files(query).await;
+        }
         let fts_hits = match self.search_fts(&fts_query, query).await {
             Ok(hits) => hits,
             Err(_) => Vec::new(),
@@ -433,6 +438,15 @@ fn sanitize_fts_query(query: &str) -> Option<String> {
         out.push('"');
     }
     Some(out)
+}
+
+/// trigram 分词要求查询 token 至少 3 字符（3 个汉字）。
+/// 解析 sanitize 后带引号的短语查询，任一生效 token 不足 3 字符即返回 true。
+fn fts_query_too_short(fts_query: &str) -> bool {
+    fts_query
+        .split('"')
+        .filter(|t| !t.trim().is_empty())
+        .any(|t| t.chars().count() < 3)
 }
 
 /// 由相对路径首段推断 memory_fts.scope 列的值
