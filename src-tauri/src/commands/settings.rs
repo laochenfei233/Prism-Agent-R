@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::data::models::ProviderRow;
+use crate::utils::crypto::{decrypt_key, encrypt_key};
 use crate::utils::error::AppError;
 
 #[tauri::command]
@@ -10,14 +11,24 @@ pub async fn settings_save_provider_key(
     provider_id: String,
     api_key: String,
 ) -> Result<(), AppError> {
-    // TODO: Encrypt with AES-GCM before storing
+    // 非空 key 用 AES-GCM 加密后存储；空 key 保持原逻辑（清空）
+    let stored = if api_key.is_empty() {
+        api_key
+    } else {
+        encrypt_key(&api_key)?
+    };
     sqlx::query("UPDATE providers SET api_key_enc = ?, updated_at = ? WHERE id = ?")
-        .bind(&api_key)
+        .bind(&stored)
         .bind(chrono::Utc::now().timestamp_millis())
         .bind(&provider_id)
         .execute(&state.db.pool)
         .await?;
     Ok(())
+}
+
+/// 解密已加密的 key；失败（如旧明文数据）则原样返回，保持向后兼容
+pub fn decrypt_provider_key(encoded: &str) -> String {
+    decrypt_key(encoded).unwrap_or_else(|_| encoded.to_string())
 }
 
 #[tauri::command]
@@ -98,7 +109,11 @@ pub async fn model_fetch_available(
         }
     });
 
-    let api_key = provider.api_key_enc.unwrap_or_default();
+    let api_key = provider
+        .api_key_enc
+        .as_deref()
+        .map(decrypt_provider_key)
+        .unwrap_or_default();
     let url = format!("{}/models", base_url);
 
     let client = reqwest::Client::new();

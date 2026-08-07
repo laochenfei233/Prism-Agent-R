@@ -230,7 +230,7 @@ impl McpService {
         self.runtime.all_status().await
     }
 
-    /// 启动时加载所有服务器配置
+    /// 启动时加载所有服务器配置，并尽力连接 active 服务器
     pub async fn load_all(&self) -> Result<(), AppError> {
         let rows = sqlx::query_as::<_, McpServerRow>(
             "SELECT id, name, type, command, args, env, base_url, headers, is_active, timeout_ms, created_at, updated_at FROM mcp_servers WHERE is_active = 1"
@@ -239,7 +239,12 @@ impl McpService {
         .await?;
 
         for row in rows {
+            let server_id = row.id.clone();
             self.runtime.register_server(row).await;
+            // 连接失败不阻塞整体加载；未连接的工具会在调用时按需重试
+            if let Err(e) = self.runtime.connect(&server_id).await {
+                tracing::warn!("MCP 服务器 {server_id} 连接失败: {e}");
+            }
         }
         Ok(())
     }

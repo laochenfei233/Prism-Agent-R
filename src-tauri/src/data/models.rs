@@ -275,6 +275,26 @@ pub struct DirTree {
     pub line_count: Option<u64>,
 }
 
+// ── File types ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileEntry {
+    pub path: String,
+    pub name: String,
+    pub is_dir: bool,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParsedFile {
+    pub path: String,
+    pub kind: String,
+    pub content: Option<String>,
+    pub json: Option<serde_json::Value>,
+    pub size: u64,
+    pub mime: Option<String>,
+}
+
 // ── Dashboard types ──
 
 #[derive(Serialize, Deserialize, Clone)]

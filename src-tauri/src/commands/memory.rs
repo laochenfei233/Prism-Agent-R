@@ -30,6 +30,13 @@ pub async fn memory_search(
 }
 
 #[tauri::command]
+pub async fn memory_reconcile(state: State<'_, crate::AppState>) -> Result<u64, AppError> {
+    let base_dir = crate::utils::paths::memory_dir();
+    let svc = MemoryService::new(state.db.clone(), base_dir);
+    svc.reconcile().await
+}
+
+#[tauri::command]
 pub async fn memory_read(
     state: State<'_, crate::AppState>,
     path: String,

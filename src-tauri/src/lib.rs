@@ -33,6 +33,18 @@ pub fn run() {
 
             let mcp_runtime = McpRuntime::new();
 
+            // 启动时加载并连接所有 active 的 MCP 服务器
+            {
+                let db_clone = db.clone();
+                let runtime_clone = mcp_runtime.clone();
+                let _ = rt.spawn(async move {
+                    let svc = data::services::McpService::new(db_clone, runtime_clone);
+                    if let Err(e) = svc.load_all().await {
+                        tracing::warn!("MCP load_all failed: {e}");
+                    }
+                });
+            }
+
             app.manage(AppState {
                 db,
                 active_cancels: Mutex::new(HashMap::new()),
@@ -71,6 +83,12 @@ pub fn run() {
             commands::mcp::mcp_test,
             commands::mcp::mcp_tools,
             commands::mcp::mcp_status_all,
+            commands::mcp::mcp_call_tool,
+            commands::file::file_pick,
+            commands::file::file_read_text,
+            commands::file::file_write,
+            commands::file::file_list,
+            commands::file::file_parse,
             commands::skill::skill_list,
             commands::skill::skill_install,
             commands::skill::skill_uninstall,
@@ -102,6 +120,7 @@ pub fn run() {
             commands::memory::memory_read,
             commands::memory::memory_write,
             commands::memory::memory_context_dump,
+            commands::memory::memory_reconcile,
             commands::dashboard::dashboard_overview,
         ])
         .run(tauri::generate_context!())

@@ -4,8 +4,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::core::adk::model::GenerationRequest;
 use crate::core::adk::tool::{ToolApprovalResponse, ToolRegistry};
-use crate::core::rig::agent::RigAgent;
+use crate::core::rig::agent::{McpToolExecutor, RigAgent};
 use crate::core::rig::provider::OpenAiProvider;
+use crate::commands::file::read_attachment_text;
 use crate::data::models::{MessageDto, ProviderRow};
 use crate::data::services::ChatService;
 use crate::utils::error::AppError;
@@ -26,8 +27,12 @@ pub async fn chat_send(
     state: State<'_, crate::AppState>,
     session_id: String,
     content: String,
+    attachments: Option<Vec<String>>, // 附件文件路径列表；缺省时为 None
 ) -> Result<MessageDto, AppError> {
     let svc = ChatService::new(state.db.pool.clone());
+
+    // 0. 附件文本拼接到用户消息前
+    let content = with_attachments(content, attachments).await;
 
     // 1. Save user message
     let user_msg = svc.save_message(&session_id, "user", &content, None, None, None, None).await?;
@@ -95,7 +100,11 @@ pub async fn chat_send(
         }
     });
 
-    let api_key = provider_row.api_key_enc.unwrap_or_default();
+    let api_key = provider_row
+        .api_key_enc
+        .as_deref()
+        .map(crate::commands::settings::decrypt_provider_key)
+        .unwrap_or_default();
 
     // 5. Build history
     let history = svc.history(&session_id, Some(50)).await?;
@@ -159,13 +168,34 @@ pub async fn chat_send(
         }));
     };
 
-    let agent = RigAgent::new(provider, system_prompt, ToolRegistry::new())
+    // Register MCP tools bound to this agent
+    let mut registry = ToolRegistry::new();
+    let mcp_links: Vec<(String,)> = sqlx::query_as(
+        "SELECT mcp_server_id FROM agent_mcp_servers WHERE agent_id = ?"
+    )
+    .bind(&session_row.agent_id)
+    .fetch_all(&state.db.pool)
+    .await?;
+    for (server_id,) in mcp_links {
+        for tool in state.mcp_runtime.get_tools(&server_id).await {
+            registry.register(Box::new(McpToolExecutor::new(
+                server_id.clone(),
+                tool.name.clone(),
+                tool.description.clone(),
+                tool.input_schema.clone(),
+                state.mcp_runtime.clone(),
+            )));
+        }
+    }
+
+    let agent = RigAgent::new(provider, system_prompt, registry)
         .with_approval_store(state.approval_store.clone())
         .with_app_handle(app.clone())
         .with_agent_id(session_row.agent_id.clone())
         .with_cancel_token(cancel.clone())
         .with_on_delta(on_delta)
-        .with_on_tool_call(on_tool_call);
+        .with_on_tool_call(on_tool_call)
+        .with_mcp_runtime(state.mcp_runtime.clone());
 
     let request = GenerationRequest { messages, ..Default::default() };
 
@@ -199,6 +229,7 @@ pub async fn chat_send(
                     "prompt_tokens": u.prompt_tokens,
                     "completion_tokens": u.completion_tokens,
                     "total_tokens": u.total_tokens,
+                    "cost": 0,
                 }).to_string());
 
                 let _ = sqlx::query(
@@ -289,4 +320,23 @@ pub async fn tool_approval_respond(
         }
     }
     Ok(state.approval_store.respond(&call_id, parsed).await)
+}
+
+/// 将附件文本拼接到用户消息前：[附件: {path}\n{内容}]\n\n{content}
+async fn with_attachments(content: String, attachments: Option<Vec<String>>) -> String {
+    let Some(paths) = attachments else {
+        return content;
+    };
+    if paths.is_empty() {
+        return content;
+    }
+
+    let mut out = String::new();
+    for path in paths {
+        let text = read_attachment_text(&path).await;
+        out.push_str(&format!("[附件: {path}\n{text}]\n"));
+    }
+    out.push('\n');
+    out.push_str(&content);
+    out
 }

@@ -14,12 +14,12 @@
 	import McpOverviewCard from '$lib/components/dashboard/McpOverviewCard.svelte';
 	import RecentSessionsCard from '$lib/components/dashboard/RecentSessionsCard.svelte';
 	import TaskDesigner from '$lib/components/task/TaskDesigner.svelte';
+	import MessageList from '$lib/components/chat/MessageList.svelte';
+	import Composer from '$lib/components/chat/Composer.svelte';
+	import ModelSelector from '$lib/components/chat/ModelSelector.svelte';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
-
-	// Chat
-	let input = $state('');
 
 	async function load() {
 		providers = await invoke<any[]>('model_providers');
@@ -63,17 +63,20 @@
 		chatStore.messages = [];
 	}
 
-	async function handleSend() {
-		if (!input.trim() || !agentStore.currentSession) return;
-		const content = input.trim();
-		input = '';
+	async function handleSend(content: string) {
+		if (!agentStore.currentSession) return;
 		await chatStore.send(agentStore.currentSession.id, content);
 	}
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			handleSend();
+	async function handleSelectModel(modelId: string) {
+		const agent = agentStore.currentAgent;
+		if (!agent) return;
+		try {
+			await agentApi.update(agent.id, { model_id: modelId });
+			await agentStore.loadAgents();
+			agentStore.currentAgent = agentStore.agents.find((a) => a.id === agent.id) ?? agent;
+		} catch (e) {
+			console.error('Failed to update model:', e);
 		}
 	}
 
@@ -151,46 +154,26 @@
 				<h2>{agentStore.currentAgent?.name || 'Agent'}</h2>
 				<span class="session-name">{agentStore.currentSession.title || '新会话'}</span>
 			</div>
+			<div class="header-spacer"></div>
+			<ModelSelector
+				modelId={agentStore.currentAgent?.model_id ?? null}
+				models={models}
+				onSelect={handleSelectModel}
+			/>
 		</div>
 
-		<div class="messages">
-			{#each chatStore.messages as msg}
-				<div class="message" class:user={msg.role === 'user'}>
-					<div class="bubble">
-						{msg.content}
-					</div>
-				</div>
-			{/each}
+		<MessageList
+			messages={chatStore.messages}
+			streaming={chatStore.streaming}
+			streamingText={chatStore.streamingText}
+		/>
 
-			{#if chatStore.streaming && chatStore.streamingText}
-				<div class="message">
-					<div class="bubble streaming">{chatStore.streamingText}<span class="cursor">|</span></div>
-				</div>
-			{/if}
-		</div>
-
-		<div class="composer">
-			<textarea
-				bind:value={input}
-				onkeydown={handleKeydown}
-				placeholder="输入消息..."
-				rows="1"
-				disabled={chatStore.isGenerating}
-			></textarea>
-			<button
-				class="send-btn"
-				onclick={handleSend}
-				disabled={!input.trim() || chatStore.isGenerating}
-			>
-				{#if chatStore.isGenerating}
-					<span class="spinner"></span>
-				{:else}
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-					</svg>
-				{/if}
-			</button>
-		</div>
+		<Composer
+			disabled={chatStore.isGenerating}
+			generating={chatStore.isGenerating}
+			onSend={handleSend}
+			onAbort={() => chatStore.abort(agentStore.currentSession?.id ?? '')}
+		/>
 	</div>
 {/if}
 
@@ -345,94 +328,7 @@
 		color: #a0a0a0;
 	}
 
-	.messages {
+	.header-spacer {
 		flex: 1;
-		overflow-y: auto;
-		padding: 20px;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
 	}
-
-	.message {
-		display: flex;
-		max-width: 80%;
-	}
-	.message.user { justify-content: flex-end; margin-left: auto; }
-
-	.bubble {
-		padding: 10px 14px;
-		border-radius: 18px;
-		font-size: 15px;
-		line-height: 1.5;
-		color: var(--color-fg);
-		background: var(--color-bg-secondary);
-		word-break: break-word;
-	}
-	.message.user .bubble {
-		background: #FF6900;
-		color: #fff;
-		border-bottom-right-radius: 4px;
-	}
-	.bubble:not(.message.user .bubble) {
-		border-bottom-left-radius: 4px;
-	}
-
-	.streaming { border-bottom-left-radius: 4px; }
-	.cursor { animation: blink 1s infinite; color: #FF6900; }
-
-	.composer {
-		padding: 12px 16px;
-		border-top: 1px solid var(--color-separator);
-		background: var(--color-glass);
-		backdrop-filter: saturate(180%) blur(20px);
-		display: flex;
-		gap: 10px;
-		align-items: flex-end;
-	}
-
-	textarea {
-		flex: 1;
-		padding: 10px 14px;
-		border-radius: 20px;
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
-		color: var(--color-fg);
-		font-size: 15px;
-		font-family: var(--font-sans);
-		resize: none;
-		outline: none;
-		min-height: 40px;
-		max-height: 120px;
-	}
-	textarea:focus { border-color: #FF6900; }
-
-	.send-btn {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		border: none;
-		background: #FF6900;
-		color: #fff;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-	}
-	.send-btn:hover { background: #E85D00; }
-	.send-btn:active { transform: scale(0.95); }
-	.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-	.spinner {
-		width: 18px;
-		height: 18px;
-		border: 2px solid rgba(255,255,255,0.3);
-		border-top-color: #fff;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-	@keyframes spin { to { transform: rotate(360deg); } }
 </style>

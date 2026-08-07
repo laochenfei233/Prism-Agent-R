@@ -439,7 +439,7 @@ async fn build_coordinator(
             _ => "https://api.openai.com/v1".to_string(),
         }
     });
-    let api_key = provider_row.api_key_enc.unwrap_or_default();
+    let api_key = provider_row.api_key_enc.as_deref().map(crate::commands::settings::decrypt_provider_key).unwrap_or_default();
 
     let provider: Arc<dyn ModelProvider> = Arc::new(OpenAiProvider::new(
         model_row.provider_id.clone(),

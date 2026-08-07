@@ -2,6 +2,7 @@ use std::future::pending;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use tauri::Emitter;
 use tokio_util::sync::CancellationToken;
 
@@ -12,8 +13,9 @@ use crate::core::adk::model::{
 };
 use crate::core::adk::tool::{
     assess_risk, RiskLevel, ToolApprovalRequest, ToolApprovalResponse, ToolApprovalStore,
-    ToolRegistry,
+    ToolExecutor, ToolRegistry,
 };
+use crate::mcp::McpRuntime;
 
 // ── Rig Agent ─────────────────────────────────────────────
 
@@ -34,6 +36,8 @@ pub struct RigAgent {
     pub on_delta: Option<Arc<dyn Fn(&str) + Send + Sync>>,
     /// Invoked for every streamed tool call.
     pub on_tool_call: Option<Arc<dyn Fn(&ToolCall) + Send + Sync>>,
+    /// Optional MCP runtime; enables MCP tool fallback when a tool is not in the registry.
+    pub mcp_runtime: Option<Arc<McpRuntime>>,
 }
 
 pub struct AgentRunResult {
@@ -61,6 +65,7 @@ impl RigAgent {
             cancel_token: None,
             on_delta: None,
             on_tool_call: None,
+            mcp_runtime: None,
         }
     }
 
@@ -91,6 +96,11 @@ impl RigAgent {
 
     pub fn with_on_tool_call(mut self, cb: impl Fn(&ToolCall) + Send + Sync + 'static) -> Self {
         self.on_tool_call = Some(Arc::new(cb));
+        self
+    }
+
+    pub fn with_mcp_runtime(mut self, runtime: Arc<McpRuntime>) -> Self {
+        self.mcp_runtime = Some(runtime);
         self
     }
 
@@ -255,8 +265,62 @@ impl RigAgent {
                 Ok(output) => output,
                 Err(e) => ToolOutput::error(format!("Tool error: {e}")),
             },
-            None => ToolOutput::error(format!("Unknown tool: {}", call.name)),
+            None => match &self.mcp_runtime {
+                Some(rt) => match rt.find_tool_server(&call.name).await {
+                    Some(server_id) => match rt.call_tool(&server_id, &call.name, call.arguments.clone()).await {
+                        Ok(result) => ToolOutput::text(serde_json::to_string(&result).unwrap_or_default()),
+                        Err(e) => ToolOutput::error(format!("MCP tool error: {e}")),
+                    },
+                    None => ToolOutput::error(format!("Unknown tool: {}", call.name)),
+                },
+                None => ToolOutput::error(format!("Unknown tool: {}", call.name)),
+            },
         }
+    }
+}
+
+/// Tool executor that routes execution to a registered MCP server.
+pub struct McpToolExecutor {
+    server_id: String,
+    tool_name: String,
+    description: String,
+    input_schema: serde_json::Value,
+    runtime: Arc<McpRuntime>,
+}
+
+impl McpToolExecutor {
+    pub fn new(
+        server_id: String,
+        tool_name: String,
+        description: String,
+        input_schema: serde_json::Value,
+        runtime: Arc<McpRuntime>,
+    ) -> Self {
+        Self { server_id, tool_name, description, input_schema, runtime }
+    }
+}
+
+#[async_trait]
+impl ToolExecutor for McpToolExecutor {
+    fn name(&self) -> &str {
+        &self.tool_name
+    }
+
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    fn schema(&self) -> serde_json::Value {
+        self.input_schema.clone()
+    }
+
+    async fn execute(&self, args: serde_json::Value) -> Result<ToolOutput, AgentError> {
+        let result = self
+            .runtime
+            .call_tool(&self.server_id, &self.tool_name, args)
+            .await
+            .map_err(|e| AgentError::Tool(format!("MCP tool error: {e}")))?;
+        Ok(ToolOutput::text(serde_json::to_string(&result).unwrap_or_default()))
     }
 }
 

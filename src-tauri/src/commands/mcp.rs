@@ -88,3 +88,14 @@ pub async fn mcp_status_all(
     let svc = mcp_service(&state);
     Ok(svc.all_status().await)
 }
+
+#[tauri::command]
+pub async fn mcp_call_tool(
+    state: State<'_, crate::AppState>,
+    server_id: String,
+    tool_name: String,
+    arguments: serde_json::Value,
+) -> Result<serde_json::Value, AppError> {
+    let result = state.mcp_runtime.call_tool(&server_id, &tool_name, arguments).await?;
+    Ok(serde_json::json!(result))
+}

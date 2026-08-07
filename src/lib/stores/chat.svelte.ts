@@ -1,4 +1,5 @@
 import { chatApi, streamEvents, type MessageDto } from '$lib/api';
+import { invoke } from '$lib/api/client';
 
 class ChatStore {
 	messages = $state<MessageDto[]>([]);
@@ -61,6 +62,19 @@ class ChatStore {
 	cleanup() {
 		this.unsubs.forEach((u) => u());
 		this.unsubs = [];
+	}
+
+	async abort(sessionId: string) {
+		if (!this.isGenerating) return;
+		try {
+			await invoke<void>('chat_abort', { sessionId });
+		} catch (e) {
+			console.error('Failed to abort generation:', e);
+		}
+		this.cleanup();
+		this.streaming = false;
+		this.isGenerating = false;
+		this.streamingText = '';
 	}
 }
 

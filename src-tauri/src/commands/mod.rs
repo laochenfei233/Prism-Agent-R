@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod chat;
 pub mod dashboard;
+pub mod file;
 pub mod fs;
 pub mod lsp;
 pub mod mcp;
