@@ -210,7 +210,7 @@
 	.overlay {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.4);
+		background: var(--color-overlay);
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;
@@ -222,10 +222,10 @@
 	.palette {
 		width: 560px;
 		max-width: calc(100vw - 32px);
-		background: var(--color-bg);
+		background: var(--color-bg-elevated);
 		border: 1px solid var(--color-separator);
 		border-radius: var(--radius-lg);
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+		box-shadow: var(--shadow-lg);
 		overflow: hidden;
 		animation: dropIn var(--duration-normal) var(--spring);
 	}

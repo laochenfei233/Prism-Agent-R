@@ -274,7 +274,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 6px 12px;
-		background: rgba(127, 127, 127, 0.08);
+		background: var(--color-bg-hover);
 		border-bottom: 1px solid var(--color-separator);
 	}
 
@@ -296,7 +296,7 @@
 		border-radius: 4px;
 	}
 	.copy-btn:hover {
-		background: rgba(127, 127, 127, 0.12);
+		background: var(--color-bg-hover);
 		color: var(--color-fg);
 	}
 

@@ -393,7 +393,7 @@
 	}
 
 	.preview-error {
-		color: var(--color-red, #ef4444);
+		color: var(--color-red);
 		word-break: break-all;
 	}
 

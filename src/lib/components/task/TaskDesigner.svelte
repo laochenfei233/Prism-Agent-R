@@ -22,7 +22,7 @@
 			name: '深度研究',
 			description: '搜索 → 分析 → 综合报告',
 			stage_count: 3,
-			icon: '🔍',
+			icon: 'M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0z',
 			definition: {
 				name: '深度研究',
 				description: '多阶段研究工作流',
@@ -42,7 +42,7 @@
 			name: '翻译校对',
 			description: '翻译 → 审校 → 终稿',
 			stage_count: 3,
-			icon: '🌐',
+			icon: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
 			definition: {
 				name: '翻译校对',
 				description: '专业翻译工作流',
@@ -62,7 +62,7 @@
 			name: '代码审查',
 			description: '代码分析 → 问题发现 → 改进建议',
 			stage_count: 3,
-			icon: '💻',
+			icon: 'M9.75 17 9 20l-1 1h8l-1-1-.75-3M5.6 20.18a9 9 0 1 1 12.8 0M8 14h8M12 8v6',
 			definition: {
 				name: '代码审查',
 				description: '自动化代码审查工作流',
@@ -82,7 +82,7 @@
 			name: '头脑风暴',
 			description: '生成创意 → 评估筛选 → 输出方案',
 			stage_count: 3,
-			icon: '💡',
+			icon: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z',
 			definition: {
 				name: '头脑风暴',
 				description: '结构化创意工作流',
@@ -146,9 +146,10 @@
 
 <style>
 	.task-designer {
-		background: #fff;
-		border: 1px solid rgba(0, 0, 0, 0.06);
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
 		border-radius: 12px;
+		box-shadow: var(--shadow-sm);
 		display: flex;
 		flex-direction: column;
 		height: 480px;
@@ -158,7 +159,7 @@
 	.designer-tabs {
 		display: flex;
 		gap: 0;
-		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		border-bottom: 1px solid var(--color-separator);
 		padding: 0 4px;
 	}
 
@@ -169,14 +170,14 @@
 		cursor: pointer;
 		font-size: 13px;
 		font-weight: 500;
-		color: #a0a0a0;
+		color: var(--color-muted);
 		border-bottom: 2px solid transparent;
 		transition: color 0.15s, border-color 0.15s;
 	}
-	.tab:hover { color: #171717; }
+	.tab:hover { color: var(--color-fg); }
 	.tab.active {
-		color: #171717;
-		border-bottom-color: #171717;
+		color: var(--color-fg);
+		border-bottom-color: var(--color-fg);
 	}
 
 	.designer-content {
@@ -207,19 +208,19 @@
 		justify-content: center;
 		gap: 6px;
 		padding: 10px;
-		border: 1px dashed rgba(0, 0, 0, 0.12);
+		border: 1px dashed var(--color-border-strong);
 		border-radius: 10px;
 		background: transparent;
-		color: #6b6b6b;
+		color: var(--color-fg-secondary);
 		font-size: 13px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.15s;
 	}
 	.start-blank:hover {
-		border-color: #FF6900;
-		color: #FF6900;
-		background: #fff8f0;
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 6%, transparent);
 	}
 
 	@media (max-width: 600px) {

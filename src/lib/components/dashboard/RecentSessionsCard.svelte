@@ -20,7 +20,7 @@
 		return `${d.getMonth() + 1}/${d.getDate()}`;
 	}
 
-	const palette = ['#FF6900', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#5AC8FA', '#5856D6'];
+	const palette = ['var(--color-accent)', 'var(--color-green)', 'var(--color-orange)', 'var(--color-purple)', 'var(--color-red)', 'var(--color-teal)', 'var(--color-indigo)'];
 	const colorMap: Record<string, string> = {};
 	let colorIdx = 0;
 
@@ -56,9 +56,10 @@
 
 <style>
 	.sessions-card {
-		background: #f7f7f8;
-		border: 1px solid rgba(0, 0, 0, 0.06);
-		border-radius: 12px;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
 		padding: 20px;
 	}
 
@@ -69,7 +70,7 @@
 	.card-header h3 {
 		font-size: 15px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 		margin: 0;
 	}
 
@@ -94,7 +95,7 @@
 	}
 
 	.session-row:hover {
-		background: rgba(0, 0, 0, 0.04);
+		background: var(--color-bg-hover);
 	}
 
 	.dot {
@@ -115,7 +116,7 @@
 	.title {
 		font-size: 13px;
 		font-weight: 500;
-		color: #171717;
+		color: var(--color-fg);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -123,13 +124,13 @@
 
 	.meta {
 		font-size: 12px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 	}
 
 	.empty {
 		padding: 20px;
 		text-align: center;
-		color: #a0a0a0;
+		color: var(--color-muted);
 		font-size: 13px;
 	}
 </style>

@@ -34,7 +34,9 @@
 <div class="message-list" bind:this={listEl} onscroll={handleScroll}>
 	{#if messages.length === 0 && !streaming}
 		<div class="empty-state">
-			<div class="empty-icon">💬</div>
+			<div class="empty-icon">
+				<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+			</div>
 			<p>开始对话吧</p>
 			<span>发送一条消息，AI 助手会在这里回复</span>
 		</div>

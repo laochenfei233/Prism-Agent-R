@@ -6,7 +6,13 @@
 </script>
 
 <button class="template-card" onclick={() => onSelect?.(template)}>
-	<span class="card-icon">{template.icon || '⚡'}</span>
+	<span class="card-icon">
+		{#if template.icon && template.icon.length > 3}
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={template.icon}/></svg>
+		{:else}
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+		{/if}
+	</span>
 	<div class="card-body">
 		<h4>{template.name}</h4>
 		<p>{template.description}</p>
@@ -20,8 +26,8 @@
 		align-items: center;
 		gap: 12px;
 		padding: 12px 14px;
-		background: #f7f7f8;
-		border: 1px solid rgba(0, 0, 0, 0.04);
+		background: var(--color-bg-hover);
+		border: 1px solid var(--color-separator);
 		border-radius: 10px;
 		cursor: pointer;
 		text-align: left;
@@ -29,8 +35,8 @@
 		width: 100%;
 	}
 	.template-card:hover {
-		background: #f0f0f0;
-		border-color: rgba(0, 0, 0, 0.08);
+		background: var(--color-bg-elevated);
+		border-color: var(--color-border-strong);
 	}
 
 	.card-icon {
@@ -38,6 +44,10 @@
 		flex-shrink: 0;
 		width: 32px;
 		text-align: center;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--color-accent);
 	}
 
 	.card-body {
@@ -48,13 +58,13 @@
 	.card-body h4 {
 		font-size: 13px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 		margin: 0;
 	}
 
 	.card-body p {
 		font-size: 12px;
-		color: #6b6b6b;
+		color: var(--color-fg-secondary);
 		margin: 2px 0 0;
 		white-space: nowrap;
 		overflow: hidden;
@@ -63,7 +73,7 @@
 
 	.card-stages {
 		font-size: 11px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 		flex-shrink: 0;
 	}
 </style>

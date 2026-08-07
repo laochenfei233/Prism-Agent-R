@@ -256,7 +256,7 @@
 	.attach-error {
 		flex-basis: 100%;
 		font-size: 13px;
-		color: #FF3B30;
+		color: var(--color-red);
 	}
 
 	.attach-btn {

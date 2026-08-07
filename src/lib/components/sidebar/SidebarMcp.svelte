@@ -13,8 +13,8 @@
 	}
 
 	function statusColor(status: string): string {
-		if (status === 'connected' || status === 'running') return 'var(--color-green, #10b981)';
-		if (status === 'error') return 'var(--color-red, #ef4444)';
+		if (status === 'connected' || status === 'running') return 'var(--color-green)';
+		if (status === 'error') return 'var(--color-red)';
 		return 'var(--color-fg-secondary)';
 	}
 
@@ -257,9 +257,9 @@
 
 	.error-msg {
 		font-size: 12px;
-		color: var(--color-red, #ef4444);
+		color: var(--color-red);
 		padding: 6px 8px;
-		background: rgba(239, 68, 68, 0.08);
+		background: color-mix(in srgb, var(--color-red) 8%, transparent);
 		border-radius: 4px;
 		word-break: break-all;
 	}
@@ -337,8 +337,8 @@
 		background: var(--color-bg-tertiary);
 	}
 	.tool-call-btn.active {
-		border-color: var(--color-accent, #ff6900);
-		color: var(--color-accent, #ff6900);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
 	}
 	.tool-call-btn:disabled {
 		opacity: 0.5;
@@ -369,7 +369,7 @@
 		outline: none;
 	}
 	.call-input:focus {
-		border-color: var(--color-accent, #ff6900);
+		border-color: var(--color-accent);
 	}
 
 	.call-result {
@@ -387,7 +387,7 @@
 		overflow-y: auto;
 	}
 	.call-result.error {
-		border-color: var(--color-red, #ef4444);
-		color: var(--color-red, #ef4444);
+		border-color: var(--color-red);
+		color: var(--color-red);
 	}
 </style>

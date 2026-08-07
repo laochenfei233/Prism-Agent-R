@@ -169,8 +169,8 @@
 		flex-shrink: 0;
 	}
 	.inject-status.active {
-		color: var(--color-green, #10b981);
-		background: rgba(16, 185, 129, 0.1);
+		color: var(--color-green);
+		background: color-mix(in srgb, var(--color-green) 10%, transparent);
 	}
 
 	.inject-error {
@@ -179,7 +179,7 @@
 		border-radius: 6px;
 		font-size: 12px;
 		color: var(--color-red);
-		background: rgba(255, 59, 48, 0.1);
+		background: color-mix(in srgb, var(--color-red) 10%, transparent);
 		word-break: break-all;
 	}
 
@@ -214,7 +214,7 @@
 	.inject-btn:hover:not(:disabled) { opacity: 0.9; }
 	.inject-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 	.inject-btn.active {
-		background: rgba(16, 185, 129, 0.15);
-		color: var(--color-green, #10b981);
+		background: color-mix(in srgb, var(--color-green) 15%, transparent);
+		color: var(--color-green);
 	}
 </style>

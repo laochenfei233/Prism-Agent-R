@@ -29,9 +29,10 @@
 
 <style>
 	.skill-card {
-		background: #f7f7f8;
-		border: 1px solid rgba(0, 0, 0, 0.06);
-		border-radius: 12px;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
 		padding: 20px;
 	}
 
@@ -42,7 +43,7 @@
 	.card-header h3 {
 		font-size: 15px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 		margin: 0;
 	}
 
@@ -58,13 +59,13 @@
 
 	.stat-label {
 		font-size: 13px;
-		color: #6b6b6b;
+		color: var(--color-fg-secondary);
 	}
 
 	.stat-value {
 		font-size: 13px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 	}
 
 	.popular {
@@ -76,14 +77,14 @@
 	.tag {
 		padding: 3px 10px;
 		border-radius: 6px;
-		background: rgba(0, 0, 0, 0.04);
-		color: #6b6b6b;
+		background: var(--color-bg-hover);
+		color: var(--color-fg-secondary);
 		font-size: 12px;
 		font-weight: 500;
 	}
 
 	.empty {
 		font-size: 13px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 	}
 </style>

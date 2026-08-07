@@ -432,7 +432,7 @@
 	.timeline-item.active .timeline-dot {
 		background: var(--color-accent);
 		border-color: var(--color-accent);
-		box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+		box-shadow: 0 0 0 3px var(--color-focus-ring);
 	}
 
 	.timeline-content {
@@ -491,7 +491,7 @@
 	.run-error {
 		padding: var(--spacing-sm);
 		border-radius: var(--radius-md);
-		background: rgba(255, 59, 48, 0.1);
+		background: color-mix(in srgb, var(--color-red) 10%, transparent);
 		color: var(--color-red);
 		font-size: var(--text-caption1);
 	}

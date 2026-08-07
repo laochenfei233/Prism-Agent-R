@@ -4,6 +4,7 @@
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { contextStore } from '$lib/stores/context.svelte';
+	import { themeStore } from '$lib/stores/theme.svelte';
 	import AgentSidebar from '$lib/components/sidebar/AgentSidebar.svelte';
 	import ToolApprovalDialog from '$lib/components/dialogs/ToolApprovalDialog.svelte';
 	import CommandPalette, { type CommandItem } from '$lib/components/base/CommandPalette.svelte';
@@ -98,6 +99,10 @@
 	]);
 
 	$effect(() => {
+		themeStore.init();
+	});
+
+	$effect(() => {
 		agentStore.loadAgents();
 	});
 
@@ -145,6 +150,13 @@
 			<button class="logo" onclick={() => { agentStore.currentSession = null; chatStore.messages = []; }} title="返回面板">
 				<img src="/icon.svg" alt="" width="24" height="24" />
 				<span class="logo-text">Prism</span>
+			</button>
+			<button class="icon-btn" onclick={() => themeStore.toggle()} title={themeStore.theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'} aria-label="切换主题">
+				{#if themeStore.theme === 'dark'}
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+				{:else}
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+				{/if}
 			</button>
 			<button class="icon-btn" onclick={() => goto('/settings')} title="设置">
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -354,7 +366,7 @@
 		cursor: pointer;
 		transition: background 0.15s ease;
 	}
-	.icon-btn-sm:hover { background: rgba(255, 105, 0, 0.1); }
+	.icon-btn-sm:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
 
 	/* ── List ───────────────────────────────────── */
 	.list {

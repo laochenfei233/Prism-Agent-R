@@ -91,7 +91,7 @@
 	.inspector-backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.3);
+		background: var(--color-overlay);
 		z-index: 100;
 		display: flex;
 		justify-content: flex-end;
@@ -100,7 +100,7 @@
 	.inspector {
 		width: 380px;
 		max-width: 90vw;
-		background: var(--color-bg);
+		background: var(--color-bg-elevated);
 		border-left: 1px solid var(--color-separator);
 		display: flex;
 		flex-direction: column;
