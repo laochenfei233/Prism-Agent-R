@@ -8,9 +8,9 @@
 
 	function statusDot(status: string): string {
 		switch (status) {
-			case 'connected': return '#22c55e';
-			case 'error': return '#ef4444';
-			default: return '#a0a0a0';
+			case 'connected': return 'var(--color-green)';
+			case 'error': return 'var(--color-red)';
+			default: return 'var(--color-muted)';
 		}
 	}
 </script>
@@ -46,9 +46,10 @@
 
 <style>
 	.mcp-card {
-		background: #f7f7f8;
-		border: 1px solid rgba(0, 0, 0, 0.06);
-		border-radius: 12px;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
 		padding: 20px;
 	}
 
@@ -59,7 +60,7 @@
 	.card-header h3 {
 		font-size: 15px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 		margin: 0;
 	}
 
@@ -78,20 +79,20 @@
 
 	.stat-label {
 		font-size: 13px;
-		color: #6b6b6b;
+		color: var(--color-fg-secondary);
 	}
 
 	.stat-value {
 		font-size: 13px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 	}
 
 	.server-list {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		border-top: 1px solid rgba(0, 0, 0, 0.06);
+		border-top: 1px solid var(--color-separator);
 		padding-top: 12px;
 	}
 
@@ -111,7 +112,7 @@
 
 	.name {
 		flex: 1;
-		color: #171717;
+		color: var(--color-fg);
 		min-width: 0;
 		white-space: nowrap;
 		overflow: hidden;
@@ -119,12 +120,12 @@
 	}
 
 	.tools {
-		color: #a0a0a0;
+		color: var(--color-muted);
 		font-variant-numeric: tabular-nums;
 	}
 
 	.empty {
 		font-size: 13px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 	}
 </style>

@@ -68,7 +68,7 @@
 
 	.agent-card:hover {
 		transform: translateY(-2px);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+		box-shadow: var(--shadow-md);
 	}
 
 	.card-top {
@@ -133,17 +133,17 @@
 	}
 
 	.model-tag {
-		background: rgba(255, 105, 0, 0.1);
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 		color: var(--color-accent);
 	}
 
 	.skill-tag {
-		background: rgba(52, 199, 89, 0.1);
+		background: color-mix(in srgb, var(--color-green) 12%, transparent);
 		color: var(--color-green);
 	}
 
 	.mcp-tag {
-		background: rgba(175, 82, 222, 0.1);
+		background: color-mix(in srgb, var(--color-purple) 12%, transparent);
 		color: var(--color-purple);
 	}
 

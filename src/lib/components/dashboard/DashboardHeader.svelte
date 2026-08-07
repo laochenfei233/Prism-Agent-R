@@ -21,14 +21,14 @@
 	.greeting h1 {
 		font-size: 24px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 		margin: 0;
 		letter-spacing: -0.3px;
 	}
 
 	.greeting p {
 		font-size: 14px;
-		color: #6b6b6b;
+		color: var(--color-fg-secondary);
 		margin: 4px 0 0;
 	}
 </style>

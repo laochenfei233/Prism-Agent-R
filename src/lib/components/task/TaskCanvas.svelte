@@ -59,7 +59,7 @@
 	};
 
 	function getRoleColor(role: string): string {
-		return roleColors[role] || '#6b6b6b';
+		return roleColors[role] || 'var(--color-fg-secondary)';
 	}
 </script>
 
@@ -109,7 +109,7 @@
 		<!-- Start Node -->
 		<div class="node-card start-node">
 			<div class="node-left">
-				<div class="node-icon-circle" style:background="linear-gradient(135deg, #6366f1, #8b5cf6)">
+				<div class="node-icon-circle" style:background="linear-gradient(135deg, var(--color-indigo), var(--color-purple))">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>
 				</div>
 			</div>
@@ -187,7 +187,7 @@
 		{#if !taskStore.definition?.stages.length}
 			<div class="empty-canvas">
 				<div class="empty-icon-wrap">
-					<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c0c0c0" stroke-width="1.5">
+					<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" stroke-width="1.5">
 						<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/>
 					</svg>
 				</div>
@@ -200,7 +200,7 @@
 		{#if taskStore.definition?.stages.length}
 			<div class="node-card end-node">
 				<div class="node-left">
-					<div class="node-icon-circle" style:background="linear-gradient(135deg, #10b981, #34d399)">
+					<div class="node-icon-circle" style:background="linear-gradient(135deg, var(--color-green), var(--color-teal))">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
 					</div>
 				</div>
@@ -232,9 +232,9 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 10px 16px;
-		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+		border-bottom: 1px solid var(--color-separator);
 		gap: 10px;
-		background: #fafafa;
+		background: var(--color-bg-elevated);
 	}
 
 	.toolbar-left { flex: 1; min-width: 0; }
@@ -243,16 +243,16 @@
 	.name-input {
 		width: 100%;
 		padding: 6px 10px;
-		border: 1px solid rgba(0, 0, 0, 0.08);
+		border: 1px solid var(--color-separator);
 		border-radius: 6px;
-		background: #fff;
-		color: #171717;
+		background: var(--color-bg-elevated);
+		color: var(--color-fg);
 		font-size: 13px;
 		font-weight: 500;
 		outline: none;
 	}
-	.name-input:focus { border-color: #FF6900; box-shadow: 0 0 0 2px rgba(255, 105, 0, 0.08); }
-	.name-input::placeholder { color: #c0c0c0; }
+	.name-input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-focus-ring); }
+	.name-input::placeholder { color: var(--color-muted); }
 
 	.tb-btn {
 		display: inline-flex;
@@ -260,21 +260,21 @@
 		gap: 4px;
 		padding: 5px 10px;
 		border-radius: 6px;
-		border: 1px solid rgba(0, 0, 0, 0.08);
-		background: #fff;
-		color: #525252;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-elevated);
+		color: var(--color-fg-secondary);
 		font-size: 12px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.12s;
 	}
-	.tb-btn:hover { background: #f5f5f5; color: #171717; }
+	.tb-btn:hover { background: var(--color-bg-hover); color: var(--color-fg); }
 	.tb-btn.run {
-		background: #171717;
+		background: var(--color-accent);
 		color: #fff;
-		border-color: #171717;
+		border-color: var(--color-accent);
 	}
-	.tb-btn.run:hover { background: #404040; }
+	.tb-btn.run:hover { background: var(--color-accent-hover); }
 
 	/* ── Validation ───────────────────────────── */
 	.validation-bar {
@@ -282,13 +282,13 @@
 		flex-wrap: wrap;
 		gap: 4px;
 		padding: 6px 16px;
-		background: #fef2f2;
-		border-bottom: 1px solid #fecaca;
+		background: color-mix(in srgb, var(--color-red) 6%, transparent);
+		border-bottom: 1px solid color-mix(in srgb, var(--color-red) 25%, transparent);
 	}
 	.err-item {
 		font-size: 11px;
-		color: #dc2626;
-		background: #fff;
+		color: var(--color-red);
+		background: var(--color-bg-elevated);
 		padding: 2px 6px;
 		border-radius: 4px;
 	}
@@ -302,7 +302,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 0;
-		background: #fafafa;
+		background: var(--color-bg-secondary);
 	}
 
 	/* ── Node Card ────────────────────────────── */
@@ -313,32 +313,32 @@
 		align-items: flex-start;
 		gap: 12px;
 		padding: 14px 16px;
-		background: #fff;
-		border: 1px solid rgba(0, 0, 0, 0.06);
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
 		border-radius: 10px;
 		cursor: pointer;
 		transition: all 0.15s;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		box-shadow: var(--shadow-sm);
 	}
 	.node-card:hover {
-		border-color: rgba(0, 0, 0, 0.12);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+		border-color: var(--color-border-strong);
+		box-shadow: var(--shadow-md);
 	}
 	.node-card.selected {
-		border-color: #FF6900;
-		box-shadow: 0 0 0 3px rgba(255, 105, 0, 0.08), 0 2px 8px rgba(255, 105, 0, 0.08);
+		border-color: var(--color-accent);
+		box-shadow: 0 0 0 3px var(--color-focus-ring), var(--shadow-sm);
 	}
 	.node-card.drag-over {
-		border-color: #FF6900;
-		background: #fff8f0;
+		border-color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 6%, transparent);
 	}
 
 	.start-node, .end-node {
 		cursor: default;
-		background: #f9fafb;
+		background: var(--color-bg-elevated);
 	}
 	.start-node:hover, .end-node:hover {
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.node-left {
@@ -383,12 +383,12 @@
 	.node-label {
 		font-size: 14px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 	}
 
 	.node-hint {
 		font-size: 12px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 	}
 
 	.node-chips {
@@ -402,14 +402,17 @@
 		border-radius: 5px;
 		font-size: 11px;
 		font-weight: 500;
-		background: #f0f0f0;
-		color: #6b6b6b;
+		background: var(--color-bg-hover);
+		color: var(--color-fg-secondary);
 	}
-	.chip-accent { background: #fff0e6; color: #FF6900; }
+	.chip-accent {
+		background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+		color: var(--color-accent);
+	}
 
 	.node-prompt {
 		font-size: 12px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -422,7 +425,7 @@
 		border-radius: 5px;
 		border: none;
 		background: transparent;
-		color: #d4d4d4;
+		color: var(--color-fg-tertiary);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -431,7 +434,10 @@
 		transition: all 0.12s;
 	}
 	.node-card:hover .node-del { opacity: 1; }
-	.node-del:hover { background: #fee2e2; color: #dc2626; }
+	.node-del:hover {
+		background: color-mix(in srgb, var(--color-red) 10%, transparent);
+		color: var(--color-red);
+	}
 
 	/* ── Connection ───────────────────────────── */
 	.conn {
@@ -445,7 +451,7 @@
 	.conn-line {
 		width: 1px;
 		height: 100%;
-		background: rgba(0, 0, 0, 0.1);
+		background: var(--color-border-strong);
 	}
 
 	.conn-label {
@@ -454,8 +460,8 @@
 		left: calc(50% + 10px);
 		transform: translateY(-50%);
 		font-size: 10px;
-		color: #a0a0a0;
-		background: #f5f5f5;
+		color: var(--color-muted);
+		background: var(--color-bg-hover);
 		padding: 1px 5px;
 		border-radius: 3px;
 		white-space: nowrap;
@@ -469,9 +475,9 @@
 		width: 20px;
 		height: 20px;
 		border-radius: 50%;
-		border: 1px solid rgba(0, 0, 0, 0.1);
-		background: #fff;
-		color: #c0c0c0;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-elevated);
+		color: var(--color-muted);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -482,9 +488,9 @@
 	}
 	.conn:hover .conn-add { opacity: 1; }
 	.conn-add:hover {
-		background: #171717;
+		background: var(--color-accent);
 		color: #fff;
-		border-color: #171717;
+		border-color: var(--color-accent);
 	}
 
 	/* ── Empty ────────────────────────────────── */
@@ -500,7 +506,7 @@
 		width: 56px;
 		height: 56px;
 		border-radius: 14px;
-		background: #f0f0f0;
+		background: var(--color-bg-hover);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -508,20 +514,20 @@
 
 	.empty-text {
 		font-size: 13px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 		margin: 0;
 	}
 
 	.empty-btn {
 		padding: 7px 14px;
 		border-radius: 8px;
-		border: 1px solid rgba(0, 0, 0, 0.1);
-		background: #fff;
-		color: #171717;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-elevated);
+		color: var(--color-fg);
 		font-size: 12px;
 		font-weight: 500;
 		cursor: pointer;
 		transition: all 0.12s;
 	}
-	.empty-btn:hover { background: #f5f5f5; }
+	.empty-btn:hover { background: var(--color-bg-hover); }
 </style>

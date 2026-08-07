@@ -399,7 +399,7 @@
 		justify-content: space-between;
 		padding: 12px 16px;
 		min-height: 52px;
-		background: rgba(242, 242, 247, 0.94);
+		background: var(--color-glass);
 		backdrop-filter: saturate(180%) blur(20px);
 		border-bottom: 0.5px solid var(--color-separator);
 		z-index: 100;
@@ -411,12 +411,12 @@
 		padding: 4px 8px;
 		border: none;
 		background: transparent;
-		color: #FF6900;
+		color: var(--color-accent);
 		font-size: 17px;
 		cursor: pointer;
 		border-radius: 8px;
 	}
-	.nav-back:hover { background: rgba(0, 122, 255, 0.08); }
+	.nav-back:hover { background: var(--color-bg-hover); }
 	.nav-title {
 		font-size: 17px;
 		font-weight: 600;
@@ -430,11 +430,11 @@
 		padding: 10px 16px;
 		margin: 16px 16px 0;
 		border-radius: 10px;
-		background: #34C759;
+		background: var(--color-green);
 		color: #fff;
 		font-size: 15px;
 	}
-	.toast.error { background: #FF3B30; }
+	.toast.error { background: var(--color-red); }
 
 	/* ── Group ──────────────────────────────────── */
 	.group {
@@ -472,7 +472,7 @@
 		outline: none;
 	}
 	.form-row input:focus,
-	.form-row select:focus { border-color: #FF6900; }
+	.form-row select:focus { border-color: var(--color-accent); }
 
 	.hint {
 		font-size: 14px;
@@ -511,8 +511,8 @@
 		font-size: 12px;
 	}
 	.config-badge.default {
-		background: rgba(0, 122, 255, 0.12);
-		color: #FF6900;
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+		color: var(--color-accent);
 	}
 	.key-input {
 		width: 180px;
@@ -524,7 +524,7 @@
 		font-size: 13px;
 		outline: none;
 	}
-	.key-input:focus { border-color: #FF6900; }
+	.key-input:focus { border-color: var(--color-accent); }
 
 	/* ── Buttons ────────────────────────────────── */
 	.btn-primary {
@@ -532,29 +532,29 @@
 		padding: 12px;
 		border-radius: 12px;
 		border: none;
-		background: #FF6900;
+		background: var(--color-accent);
 		color: #fff;
 		font-size: 17px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
-	.btn-primary:hover { background: #E85D00; }
+	.btn-primary:hover { background: var(--color-accent-hover); }
 	.btn-primary:active { transform: scale(0.98); }
 
 	.btn-secondary {
 		width: 100%;
 		padding: 10px;
 		border-radius: 10px;
-		border: 1px solid #FF6900;
+		border: 1px solid var(--color-accent);
 		background: transparent;
-		color: #FF6900;
+		color: var(--color-accent);
 		font-size: 15px;
 		font-weight: 500;
 		cursor: pointer;
 		margin-bottom: 10px;
 	}
-	.btn-secondary:hover { background: rgba(0, 122, 255, 0.08); }
+	.btn-secondary:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
 	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.btn-green {
@@ -562,13 +562,13 @@
 		padding: 12px;
 		border-radius: 12px;
 		border: none;
-		background: #34C759;
+		background: var(--color-green);
 		color: #fff;
 		font-size: 17px;
 		font-weight: 600;
 		cursor: pointer;
 	}
-	.btn-green:hover { background: #2DB84E; }
+	.btn-green:hover { background: color-mix(in srgb, var(--color-green) 85%, #000); }
 	.btn-green:active { transform: scale(0.98); }
 
 	/* ── Small Buttons ────────────────────────── */
@@ -586,7 +586,7 @@
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
-	.btn-sm:hover { background: var(--color-bg); }
-	.btn-sm.danger { color: #FF3B30; border-color: #FF3B30; }
-	.btn-sm.danger:hover { background: rgba(255, 59, 48, 0.08); }
+	.btn-sm:hover { background: var(--color-bg-hover); }
+	.btn-sm.danger { color: var(--color-red); border-color: var(--color-red); }
+	.btn-sm.danger:hover { background: color-mix(in srgb, var(--color-red) 8%, transparent); }
 </style>

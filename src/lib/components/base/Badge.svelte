@@ -25,8 +25,8 @@
 		line-height: 1.4;
 	}
 	.badge-default { background: var(--color-bg-secondary); color: var(--color-fg-secondary); }
-	.badge-success { background: rgba(52, 199, 89, 0.15); color: var(--color-green); }
-	.badge-warning { background: rgba(255, 149, 0, 0.15); color: var(--color-orange); }
-	.badge-error { background: rgba(255, 59, 48, 0.15); color: var(--color-red); }
-	.badge-accent { background: rgba(0, 113, 227, 0.15); color: var(--color-accent); }
+	.badge-success { background: color-mix(in srgb, var(--color-green) 15%, transparent); color: var(--color-green); }
+	.badge-warning { background: color-mix(in srgb, var(--color-orange) 15%, transparent); color: var(--color-orange); }
+	.badge-error { background: color-mix(in srgb, var(--color-red) 15%, transparent); color: var(--color-red); }
+	.badge-accent { background: color-mix(in srgb, var(--color-accent) 15%, transparent); color: var(--color-accent); }
 </style>

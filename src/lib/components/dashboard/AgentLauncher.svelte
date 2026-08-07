@@ -51,9 +51,10 @@
 
 <style>
 	.agent-launcher {
-		background: #f7f7f8;
-		border: 1px solid rgba(0, 0, 0, 0.06);
-		border-radius: 12px;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
 		padding: 20px;
 		min-height: 200px;
 	}
@@ -68,7 +69,7 @@
 	.launcher-header h2 {
 		font-size: 15px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 		margin: 0;
 	}
 
@@ -83,28 +84,28 @@
 		gap: 5px;
 		padding: 6px 14px;
 		border-radius: 8px;
-		border: 1px solid rgba(0, 0, 0, 0.1);
-		background: #fff;
-		color: #171717;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-elevated);
+		color: var(--color-fg);
 		font-size: 13px;
 		font-weight: 500;
 		cursor: pointer;
-		transition: all 0.15s ease;
+		transition: background 0.15s ease, border-color 0.15s ease;
 	}
 
 	.action-btn:hover {
-		background: #efefef;
-		border-color: rgba(0, 0, 0, 0.15);
+		background: var(--color-bg-hover);
+		border-color: var(--color-border-strong);
 	}
 
 	.action-btn.secondary {
-		border-color: rgba(0, 0, 0, 0.06);
-		color: #6b6b6b;
+		border-color: var(--color-separator);
+		color: var(--color-fg-secondary);
 	}
 
 	.action-btn.secondary:hover {
-		background: #f0f0f0;
-		color: #171717;
+		background: var(--color-bg-hover);
+		color: var(--color-fg);
 	}
 
 	.agent-grid {
@@ -123,12 +124,12 @@
 	}
 
 	.empty-icon {
-		color: #c5c5c5;
+		color: var(--color-muted);
 	}
 
 	.empty-state p {
 		font-size: 14px;
-		color: #6b6b6b;
+		color: var(--color-fg-secondary);
 		margin: 0;
 	}
 
@@ -136,7 +137,7 @@
 		padding: 8px 18px;
 		border-radius: 8px;
 		border: none;
-		background: #171717;
+		background: var(--color-accent);
 		color: #fff;
 		font-size: 13px;
 		font-weight: 500;
@@ -145,6 +146,6 @@
 	}
 
 	.create-btn:hover {
-		background: #404040;
+		background: var(--color-accent-hover);
 	}
 </style>

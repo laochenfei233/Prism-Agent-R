@@ -62,7 +62,7 @@
 	.overlay {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.45);
+		background: var(--color-overlay);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -76,9 +76,9 @@
 		max-width: 520px;
 		padding: var(--space-6);
 		animation: scaleIn var(--duration-normal) var(--spring);
-		background: var(--color-bg);
+		background: var(--color-bg-elevated);
 		border: 1px solid var(--color-separator);
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+		box-shadow: var(--shadow-lg);
 	}
 
 	.title {
@@ -121,18 +121,18 @@
 	}
 
 	.risk-low {
-		background: rgba(52, 199, 89, 0.15);
-		color: #34C759;
+		background: color-mix(in srgb, var(--color-green) 15%, transparent);
+		color: var(--color-green);
 	}
 
 	.risk-medium {
-		background: rgba(255, 149, 0, 0.15);
-		color: #FF9500;
+		background: color-mix(in srgb, var(--color-orange) 15%, transparent);
+		color: var(--color-orange);
 	}
 
 	.risk-high {
-		background: rgba(255, 59, 48, 0.15);
-		color: #FF3B30;
+		background: color-mix(in srgb, var(--color-red) 15%, transparent);
+		color: var(--color-red);
 	}
 
 	.params {
@@ -179,14 +179,14 @@
 		padding: 10px 16px;
 		border-radius: var(--radius-md);
 		border: none;
-		background: #34C759;
+		background: var(--color-green);
 		color: #fff;
 		font-size: 15px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
-	.btn-approve:hover { background: #2DB84E; }
+	.btn-approve:hover { background: color-mix(in srgb, var(--color-green) 85%, #000); }
 	.btn-approve:active { transform: scale(0.97); }
 
 	.btn-reject {
@@ -194,14 +194,14 @@
 		padding: 10px 16px;
 		border-radius: var(--radius-md);
 		border: none;
-		background: #FF3B30;
+		background: var(--color-red);
 		color: #fff;
 		font-size: 15px;
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
-	.btn-reject:hover { background: #E0342B; }
+	.btn-reject:hover { background: color-mix(in srgb, var(--color-red) 85%, #000); }
 	.btn-reject:active { transform: scale(0.97); }
 
 	.btn-always {

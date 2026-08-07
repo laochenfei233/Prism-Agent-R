@@ -74,6 +74,19 @@
 	--color-secondary-label: rgba(0, 0, 0, 0.5);
 	--color-tertiary-label: rgba(0, 0, 0, 0.3);
 
+	/* Surface elevation / interaction */
+	--color-bg-elevated: #FFFFFF;
+	--color-bg-hover: rgba(0, 0, 0, 0.045);
+	--color-border-strong: rgba(0, 0, 0, 0.16);
+	--color-focus-ring: rgba(255, 105, 0, 0.45);
+	--color-overlay: rgba(0, 0, 0, 0.32);
+	--color-muted: rgba(0, 0, 0, 0.38);
+
+	/* Layered shadows (tinted to surface, never pure black) */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+	--shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.14);
+
 	/* Font size aliases */
 	--font-size-title-1: 28px;
 	--font-size-title-2: 22px;
@@ -98,6 +111,12 @@
 	--space-3: 16px;
 	--space-4: 24px;
 	--space-6: 32px;
+	--space-8: 48px;
+	--space-12: 64px;
+
+	/* Duration / easing aliases */
+	--duration-base: 250ms;
+	--ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
 
 	/* Text aliases (for base components) */
 	--text-xs: 11px;
@@ -137,4 +156,17 @@
 	--color-label: rgba(255, 255, 255, 0.95);
 	--color-secondary-label: rgba(235, 235, 245, 0.6);
 	--color-tertiary-label: rgba(235, 235, 245, 0.3);
+
+	/* Dark surface elevation / interaction */
+	--color-bg-elevated: #2C2C2E;
+	--color-bg-hover: rgba(255, 255, 255, 0.08);
+	--color-border-strong: rgba(255, 255, 255, 0.18);
+	--color-focus-ring: rgba(255, 133, 51, 0.55);
+	--color-overlay: rgba(0, 0, 0, 0.6);
+	--color-muted: rgba(235, 235, 245, 0.45);
+
+	/* Dark layered shadows */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+	--shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
 }

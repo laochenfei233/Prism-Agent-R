@@ -51,7 +51,7 @@
 		border-radius: 50%;
 		background: #fff;
 		transition: transform var(--duration-fast) var(--spring);
-		box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+		box-shadow: var(--shadow-sm);
 	}
 	.switch.active .thumb { transform: translateX(18px); }
 </style>

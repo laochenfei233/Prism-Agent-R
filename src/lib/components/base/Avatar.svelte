@@ -13,7 +13,7 @@
 		name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 	);
 
-	let colors = ['#0071E3', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#30B0C7'];
+	let colors = ['var(--color-accent)', 'var(--color-green)', 'var(--color-orange)', 'var(--color-purple)', 'var(--color-red)', 'var(--color-teal)'];
 	let colorIndex = $derived(name.charCodeAt(0) % colors.length);
 </script>
 

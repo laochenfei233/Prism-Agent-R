@@ -82,7 +82,7 @@
 
 	.skill-card:hover {
 		border-color: var(--color-accent);
-		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.card-header {
@@ -163,15 +163,15 @@
 		padding: 8px 16px;
 		font-size: 14px;
 		font-weight: 500;
-		color: #34C759;
+		color: var(--color-green);
 	}
 
 	.install-error {
 		margin: 8px 0 0;
 		padding: 6px 10px;
 		border-radius: var(--radius-sm);
-		background: rgba(239, 68, 68, 0.08);
-		color: #EF4444;
+		background: color-mix(in srgb, var(--color-red) 8%, transparent);
+		color: var(--color-red);
 		font-size: 12px;
 		line-height: 1.4;
 		word-break: break-word;

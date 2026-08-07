@@ -35,12 +35,12 @@
 	.overlay {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.3);
+		background: var(--color-overlay);
 		z-index: 900;
 		animation: fadeIn var(--duration-fast) ease;
 	}
 	.sheet {
-		background: var(--color-bg);
+		background: var(--color-bg-elevated);
 		box-shadow: var(--shadow-lg);
 		overflow: auto;
 		animation: slideIn var(--duration-base) var(--spring);

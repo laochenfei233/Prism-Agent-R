@@ -132,7 +132,9 @@
 			{#if providers.length === 0 || models.length === 0}
 				<div class="setup-banner">
 					<div class="setup-banner-content">
-						<span class="setup-icon">⚡</span>
+						<span class="setup-icon">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+						</span>
 						<div class="setup-text">
 							<strong>快速开始</strong>
 							<span>配置 Provider 和模型后即可开始对话</span>
@@ -178,13 +180,13 @@
 {/if}
 
 <style>
-	/* ── Dashboard (OpenAI-style) ──────────────── */
+	/* ── Dashboard ─────────────────────────────── */
 	.dashboard {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 		overflow-y: auto;
-		background: #ffffff;
+		background: var(--color-bg-secondary);
 	}
 
 	.dashboard-body {
@@ -226,9 +228,10 @@
 		align-items: center;
 		gap: 14px;
 		padding: 16px 20px;
-		background: #f7f7f8;
-		border: 1px solid rgba(0, 0, 0, 0.06);
-		border-radius: 12px;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
 	}
 	.setup-icon {
 		font-size: 20px;
@@ -243,17 +246,17 @@
 	.setup-text strong {
 		font-size: 14px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 	}
 	.setup-text span {
 		font-size: 13px;
-		color: #6b6b6b;
+		color: var(--color-fg-secondary);
 	}
 	.setup-btn {
 		padding: 7px 14px;
 		border-radius: 8px;
 		border: none;
-		background: #171717;
+		background: var(--color-accent);
 		color: #fff;
 		font-size: 13px;
 		font-weight: 500;
@@ -261,7 +264,7 @@
 		white-space: nowrap;
 		transition: background 0.15s;
 	}
-	.setup-btn:hover { background: #404040; }
+	.setup-btn:hover { background: var(--color-accent-hover); }
 
 	@media (max-width: 900px) {
 		.section-row.two-col,
@@ -285,17 +288,17 @@
 		align-items: center;
 		gap: 10px;
 		padding: 10px 16px;
-		border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-		background: #fff;
+		border-bottom: 1px solid var(--color-separator);
+		background: var(--color-bg);
 	}
 
 	.back-btn {
 		width: 32px;
 		height: 32px;
 		border-radius: 8px;
-		border: 1px solid rgba(0, 0, 0, 0.08);
-		background: #fff;
-		color: #525252;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-elevated);
+		color: var(--color-fg-secondary);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -304,9 +307,9 @@
 		transition: all 0.12s;
 	}
 	.back-btn:hover {
-		background: #f5f5f5;
-		color: #171717;
-		border-color: rgba(0, 0, 0, 0.12);
+		background: var(--color-bg-hover);
+		color: var(--color-fg);
+		border-color: var(--color-border-strong);
 	}
 
 	.header-info {
@@ -319,13 +322,13 @@
 	.header-info h2 {
 		font-size: 15px;
 		font-weight: 600;
-		color: #171717;
+		color: var(--color-fg);
 		margin: 0;
 	}
 
 	.session-name {
 		font-size: 12px;
-		color: #a0a0a0;
+		color: var(--color-muted);
 	}
 
 	.header-spacer {

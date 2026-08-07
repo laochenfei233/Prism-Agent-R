@@ -13,8 +13,8 @@
 	let error = $state<string | null>(null);
 
 	function statusColor(status: string): string {
-		if (status === 'running') return 'var(--color-green, #10b981)';
-		if (status === 'error') return 'var(--color-red, #ef4444)';
+		if (status === 'running') return 'var(--color-green)';
+		if (status === 'error') return 'var(--color-red)';
 		return 'var(--color-fg-secondary)';
 	}
 
@@ -277,8 +277,8 @@
 	}
 
 	.btn-stop {
-		background: rgba(239, 68, 68, 0.12);
-		color: var(--color-red, #ef4444);
+		background: color-mix(in srgb, var(--color-red) 12%, transparent);
+		color: var(--color-red);
 	}
 
 	.server-detail {
@@ -321,9 +321,9 @@
 
 	.error-msg {
 		font-size: 12px;
-		color: var(--color-red, #ef4444);
+		color: var(--color-red);
 		padding: 6px 8px;
-		background: rgba(239, 68, 68, 0.08);
+		background: color-mix(in srgb, var(--color-red) 8%, transparent);
 		border-radius: 4px;
 		word-break: break-all;
 	}

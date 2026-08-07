@@ -276,9 +276,9 @@
 	.warn,
 	.error {
 		font-size: 12px;
-		color: var(--color-red, #ef4444);
+		color: var(--color-red);
 		padding: 6px 8px;
-		background: rgba(239, 68, 68, 0.08);
+		background: color-mix(in srgb, var(--color-red) 8%, transparent);
 		border-radius: 4px;
 		word-break: break-all;
 	}
@@ -323,8 +323,8 @@
 	}
 
 	.badge-active {
-		background: rgba(16, 185, 129, 0.1);
-		color: var(--color-green, #10b981);
+		background: color-mix(in srgb, var(--color-green) 10%, transparent);
+		color: var(--color-green);
 	}
 
 	.badge-inactive {

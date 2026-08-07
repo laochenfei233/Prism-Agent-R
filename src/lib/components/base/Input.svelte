@@ -35,7 +35,7 @@
 	}
 	.input:focus {
 		border-color: var(--color-accent);
-		box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+		box-shadow: 0 0 0 3px var(--color-focus-ring);
 	}
 	.input:disabled { opacity: 0.5; cursor: not-allowed; }
 	.input::placeholder { color: var(--color-fg-tertiary); }
