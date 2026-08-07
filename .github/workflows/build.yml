@@ -38,9 +38,11 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install system deps
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=60
+          sudo apt-get install -y -o Acquire::Retries=5 libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-14-dev
 
       - name: Install frontend dependencies
@@ -93,9 +95,11 @@ jobs:
 
       - name: Install system deps (Linux)
         if: matrix.platform == 'ubuntu-22.04'
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=60
+          sudo apt-get install -y -o Acquire::Retries=5 libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-14-dev rpm \
             libfuse2
 
