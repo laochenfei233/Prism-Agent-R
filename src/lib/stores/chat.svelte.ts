@@ -51,11 +51,11 @@ class ChatStore {
 		}
 	}
 
-	async send(sessionId: string, content: string) {
+	async send(sessionId: string, content: string, attachments?: string[]) {
 		if (this.isGenerating || !content.trim()) return;
 
 		// Save user message
-		const userMsg = await chatApi.send(sessionId, content);
+		const userMsg = await chatApi.send(sessionId, content, attachments);
 		this.messages = [...this.messages, userMsg];
 
 		// Start streaming

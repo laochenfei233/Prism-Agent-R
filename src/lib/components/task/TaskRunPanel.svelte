@@ -11,6 +11,10 @@
 	let stagesTotal = $derived(taskStore.definition?.stages.length ?? 0);
 	let currentStageIdx = $derived(taskStore.runStatus?.stages_done ?? 0);
 	let progress = $derived(stagesTotal > 0 ? (currentStageIdx / stagesTotal) * 100 : 0);
+	let isTerminal = $derived(
+		taskStore.runStatus?.status === 'completed' || taskStore.runStatus?.status === 'failed'
+	);
+	let rerunning = $state(false);
 
 	function initInputs() {
 		if (!taskStore.definition) return;
@@ -63,6 +67,23 @@
 		stopTimer();
 		taskStore.viewMode = 'design';
 		taskStore.resetRun();
+	}
+
+	async function handleRerun() {
+		if (!taskStore.runId || rerunning) return;
+		rerunning = true;
+		statusMessage = '重新运行中...';
+		elapsed = 0;
+		startTimer();
+		try {
+			await taskStore.rerun();
+			statusMessage = '运行中';
+		} catch (e) {
+			statusMessage = '重跑失败: ' + (e instanceof Error ? e.message : String(e));
+			stopTimer();
+		} finally {
+			rerunning = false;
+		}
 	}
 
 	onMount(() => {
@@ -126,6 +147,20 @@
 			<div class="progress-detail">
 				阶段 {currentStageIdx} / {stagesTotal}
 			</div>
+			{#if isTerminal}
+				<div class="rerun-bar">
+					<span class="rerun-hint">
+						{taskStore.runStatus?.status === 'completed' ? '运行完成' : '运行失败'}
+					</span>
+					<button class="rerun-btn" onclick={handleRerun} disabled={rerunning}>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<polyline points="23 4 23 10 17 10"></polyline>
+							<path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+						</svg>
+						{rerunning ? '重新运行中...' : '重新运行'}
+					</button>
+				</div>
+			{/if}
 		</div>
 
 		<div class="run-timeline">
@@ -323,6 +358,41 @@
 		font-size: var(--text-caption2);
 		color: var(--color-fg-tertiary);
 	}
+
+	/* Rerun */
+	.rerun-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--spacing-sm);
+		margin-top: var(--spacing-sm);
+		padding: var(--spacing-sm);
+		border-radius: var(--radius-md);
+		background: var(--color-bg-secondary);
+	}
+
+	.rerun-hint {
+		font-size: var(--text-caption1);
+		color: var(--color-fg-secondary);
+	}
+
+	.rerun-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 6px 14px;
+		border-radius: var(--radius-full);
+		border: none;
+		background: var(--color-accent);
+		color: #fff;
+		font-size: var(--text-caption1);
+		font-weight: 600;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.rerun-btn:hover { opacity: 0.9; }
+	.rerun-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	/* Timeline */
 	.run-timeline {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { AgentContext } from '$lib/stores/context.svelte';
+	import { mcpApi, type McpTool } from '$lib/api';
 
 	let { data }: { data: AgentContext } = $props();
 
@@ -8,12 +9,63 @@
 
 	function toggleExpand(id: string) {
 		expandedId = expandedId === id ? null : id;
+		if (expandedId === id) void fetchTools(id);
 	}
 
 	function statusColor(status: string): string {
 		if (status === 'connected' || status === 'running') return 'var(--color-green, #10b981)';
 		if (status === 'error') return 'var(--color-red, #ef4444)';
 		return 'var(--color-fg-secondary)';
+	}
+
+	// 工具列表（按服务器缓存）
+	const toolsByServer = $state<Record<string, McpTool[]>>({});
+	const toolsLoading = $state<Record<string, boolean>>({});
+
+	async function fetchTools(serverId: string) {
+		if (toolsByServer[serverId]) return;
+		toolsLoading[serverId] = true;
+		try {
+			toolsByServer[serverId] = await mcpApi.tools(serverId);
+		} catch (e) {
+			toolsByServer[serverId] = [];
+		} finally {
+			toolsLoading[serverId] = false;
+		}
+	}
+
+	// 工具测试调用
+	let expandedTool = $state<{ serverId: string; toolName: string } | null>(null);
+	let toolArgs = $state('');
+	let calling = $state(false);
+	let callResult = $state<{ serverId: string; toolName: string; ok: boolean; text: string } | null>(null);
+
+	function openCall(serverId: string, toolName: string) {
+		const same = expandedTool?.serverId === serverId && expandedTool.toolName === toolName;
+		expandedTool = same ? null : { serverId, toolName };
+		toolArgs = '';
+		callResult = null;
+	}
+
+	async function runCall(serverId: string, toolName: string) {
+		let parsed: unknown = {};
+		if (toolArgs.trim()) {
+			try {
+				parsed = JSON.parse(toolArgs);
+			} catch (e) {
+				callResult = { serverId, toolName, ok: false, text: 'JSON 解析失败: ' + String(e) };
+				return;
+			}
+		}
+		calling = true;
+		try {
+			const result = await mcpApi.callTool(serverId, toolName, parsed);
+			callResult = { serverId, toolName, ok: true, text: JSON.stringify(result, null, 2) };
+		} catch (e) {
+			callResult = { serverId, toolName, ok: false, text: String(e) };
+		} finally {
+			calling = false;
+		}
 	}
 </script>
 
@@ -54,6 +106,49 @@
 							<div class="detail-row">
 								<span class="detail-label">工具数</span>
 								<span class="detail-value">{server.tools_count}</span>
+							</div>
+
+							<div class="tools-block">
+								<div class="detail-label">工具</div>
+								{#if toolsLoading[server.id]}
+									<div class="tools-hint">加载中…</div>
+								{:else if (toolsByServer[server.id] || []).length === 0}
+									<div class="tools-hint">无工具</div>
+								{:else}
+									{#each toolsByServer[server.id] as tool (tool.name)}
+										<div class="tool-item">
+											<div class="tool-info">
+												<span class="tool-name">{tool.name}</span>
+												{#if tool.description}
+													<span class="tool-desc">{tool.description}</span>
+												{/if}
+											</div>
+											<button
+												class="tool-call-btn"
+												class:active={expandedTool?.serverId === server.id && expandedTool?.toolName === tool.name}
+												onclick={() => openCall(server.id, tool.name)}
+											>
+												{expandedTool?.serverId === server.id && expandedTool?.toolName === tool.name ? '收起' : '调用'}
+											</button>
+										</div>
+										{#if expandedTool?.serverId === server.id && expandedTool?.toolName === tool.name}
+											<div class="call-box">
+												<input
+													class="call-input"
+													bind:value={toolArgs}
+													placeholder='JSON 参数，如 {{"query": "x"}}（留空为 {{}}）'
+													onkeydown={(e) => { if (e.key === 'Enter') runCall(server.id, tool.name); }}
+												/>
+												<button class="tool-call-btn" onclick={() => runCall(server.id, tool.name)} disabled={calling}>
+													{calling ? '执行中…' : '执行'}
+												</button>
+												{#if callResult && callResult.serverId === server.id && callResult.toolName === tool.name}
+													<pre class="call-result" class:error={!callResult.ok}>{callResult.text}</pre>
+												{/if}
+											</div>
+										{/if}
+									{/each}
+								{/if}
 							</div>
 						</div>
 					{/if}
@@ -182,5 +277,117 @@
 	.detail-value {
 		color: var(--color-fg);
 		font-weight: 500;
+	}
+
+	.tools-block {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin-top: 4px;
+	}
+
+	.tools-hint {
+		font-size: 12px;
+		color: var(--color-fg-tertiary);
+		padding: 4px 0;
+	}
+
+	.tool-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 5px 0;
+		border-top: 1px solid var(--color-separator);
+	}
+
+	.tool-info {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+
+	.tool-name {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-fg);
+	}
+
+	.tool-desc {
+		font-size: 11px;
+		color: var(--color-fg-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.tool-call-btn {
+		padding: 3px 8px;
+		border-radius: 4px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-secondary);
+		color: var(--color-fg-secondary);
+		font-size: 11px;
+		flex-shrink: 0;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+	.tool-call-btn:hover {
+		background: var(--color-bg-tertiary);
+	}
+	.tool-call-btn.active {
+		border-color: var(--color-accent, #ff6900);
+		color: var(--color-accent, #ff6900);
+	}
+	.tool-call-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.call-box {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 8px;
+		margin-bottom: 6px;
+		border-radius: 6px;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-separator);
+	}
+
+	.call-input {
+		width: 100%;
+		box-sizing: border-box;
+		padding: 6px 8px;
+		border-radius: 4px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg);
+		color: var(--color-fg);
+		font-size: 12px;
+		font-family: var(--font-mono, monospace);
+		outline: none;
+	}
+	.call-input:focus {
+		border-color: var(--color-accent, #ff6900);
+	}
+
+	.call-result {
+		margin: 0;
+		padding: 6px 8px;
+		border-radius: 4px;
+		background: var(--color-bg);
+		border: 1px solid var(--color-separator);
+		color: var(--color-fg);
+		font-size: 11px;
+		font-family: var(--font-mono, monospace);
+		white-space: pre-wrap;
+		word-break: break-all;
+		max-height: 160px;
+		overflow-y: auto;
+	}
+	.call-result.error {
+		border-color: var(--color-red, #ef4444);
+		color: var(--color-red, #ef4444);
 	}
 </style>

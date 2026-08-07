@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invoke } from '$lib/api/client';
+	import { skillApi, type LocalSkill } from '$lib/api';
 	import SkillCard from './SkillCard.svelte';
 
 	let query = $state('');
@@ -33,9 +34,81 @@
 	let filtered = $derived(
 		sourceFilter === 'all' ? results : results.filter((r) => r.source === sourceFilter)
 	);
+
+	// 本地技能（.claude/skills 等目录）
+	let localSkills = $state<LocalSkill[]>([]);
+	let localLoading = $state(false);
+	let localInstalling = $state<string | null>(null);
+
+	async function loadLocalSkills() {
+		localLoading = true;
+		try {
+			let workdir = '';
+			try {
+				const ws = await invoke<{ current_dir: string }>('workspace_get');
+				workdir = ws.current_dir || '';
+			} catch {
+				// 非 Tauri 环境或未设置工作区：沿用空目录
+			}
+			localSkills = await skillApi.listLocal(workdir);
+		} catch (e) {
+			console.error('Load local skills failed:', e);
+			localSkills = [];
+		} finally {
+			localLoading = false;
+		}
+	}
+
+	async function installLocal(skill: LocalSkill) {
+		localInstalling = skill.path;
+		try {
+			await skillApi.install(skill.path);
+			await loadLocalSkills();
+		} catch (e) {
+			console.error('Install local skill failed:', e);
+		} finally {
+			localInstalling = null;
+		}
+	}
+
+	$effect(() => { loadLocalSkills(); });
 </script>
 
 <div class="skill-market">
+	<div class="local-section">
+		<div class="local-header">本地技能</div>
+		{#if localLoading}
+			<div class="loading">
+				<div class="spinner"></div>
+				<span>加载中...</span>
+			</div>
+		{:else if localSkills.length > 0}
+			<div class="local-list">
+				{#each localSkills as skill (skill.path)}
+					<div class="local-item">
+						<div class="local-info">
+							<span class="local-name">{skill.name}</span>
+							{#if skill.description}
+								<span class="local-desc">{skill.description}</span>
+							{/if}
+						</div>
+						<button
+							class="install-btn"
+							onclick={() => installLocal(skill)}
+							disabled={localInstalling === skill.path}
+						>
+							{localInstalling === skill.path ? '安装中…' : '安装到应用'}
+						</button>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="empty">
+				<p>未发现本地技能（查看 .claude/skills 目录）</p>
+			</div>
+		{/if}
+	</div>
+
 	<div class="market-header">
 		<div class="search-wrapper">
 			<svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -96,6 +169,84 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
+	}
+
+	.local-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-3);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		background: var(--color-bg-secondary);
+	}
+
+	.local-header {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-fg-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.local-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.local-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		padding: 8px 0;
+		border-bottom: 1px solid var(--color-separator);
+	}
+	.local-item:last-child {
+		border-bottom: none;
+	}
+
+	.local-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.local-name {
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--color-fg);
+	}
+
+	.local-desc {
+		font-size: 12px;
+		color: var(--color-fg-secondary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.install-btn {
+		padding: 5px 12px;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-accent);
+		background: transparent;
+		color: var(--color-accent);
+		font-size: 12px;
+		font-weight: 500;
+		flex-shrink: 0;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+	.install-btn:hover {
+		background: var(--color-accent);
+		color: #fff;
+	}
+	.install-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.search-wrapper {

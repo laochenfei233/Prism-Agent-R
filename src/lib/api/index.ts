@@ -59,6 +59,8 @@ export const sessionApi = {
 	delete: (id: string) => invoke<void>('session_delete', { id }),
 	search: (query: string, limit?: number) =>
 		invoke<SessionDto[]>('session_search', { query, limit }),
+	injectFile: (sessionId: string, path: string) =>
+		invoke<void>('session_inject_file', { sessionId, path }),
 };
 
 // ── Chat API ──────────────────────────────────────────────
@@ -66,8 +68,8 @@ export const sessionApi = {
 export const chatApi = {
 	history: (sessionId: string, limit?: number) =>
 		invoke<MessageDto[]>('chat_history', { sessionId, limit }),
-	send: (sessionId: string, content: string) =>
-		invoke<MessageDto>('chat_send', { sessionId, content }),
+	send: (sessionId: string, content: string, attachments?: string[]) =>
+		invoke<MessageDto>('chat_send', { sessionId, content, attachments }),
 };
 
 // ── Stream Events ─────────────────────────────────────────
@@ -168,6 +170,8 @@ export const mcpApi = {
 	test: (id: string) => invoke<McpTestResult>('mcp_test', { id }),
 	tools: (serverId?: string) => invoke<McpTool[]>('mcp_tools', { serverId }),
 	statusAll: () => invoke<ServerStatusInfo[]>('mcp_status_all'),
+	callTool: (serverId: string, toolName: string, args: unknown) =>
+		invoke<unknown>('mcp_call_tool', { serverId, toolName, arguments: args }),
 };
 
 // ── Skill API ───────────────────────────────────────────
@@ -189,6 +193,12 @@ export interface InstalledSkill {
 	is_enabled: boolean;
 }
 
+export interface LocalSkill {
+	name: string;
+	description: string | null;
+	path: string;
+}
+
 export const skillApi = {
 	list: () => invoke<SkillDto[]>('skill_list'),
 	install: (source: string, sourceUrl?: string) =>
@@ -197,6 +207,7 @@ export const skillApi = {
 	toggle: (agentId: string, skillId: string, enabled: boolean) =>
 		invoke<void>('skill_toggle', { agentId, skillId, enabled }),
 	searchMarket: (query: string) => invoke<unknown[]>('skill_search_market', { query }),
+	listLocal: (workdir: string) => invoke<LocalSkill[]>('skill_list_local', { workdir }),
 };
 
 // ── Workflow API ────────────────────────────────────────
@@ -212,6 +223,8 @@ export const workflowApi = {
 	list: () => invoke<WorkflowDto[]>('workflow_list'),
 	run: (workflowId: string, inputs: Record<string, unknown>) =>
 		invoke<{ run_id: string }>('workflow_run', { workflowId, inputs }),
+	rerun: (runId: string, inputs?: Record<string, unknown>) =>
+		invoke<{ run_id: string; status: string }>('task_rerun', { runId, inputs: inputs || null }),
 	stop: (runId: string) => invoke<void>('workflow_stop', { runId }),
 	result: (runId: string) =>
 		invoke<{ run_id: string; status: string; outputs: Record<string, string>; error: string | null }>('workflow_result', { runId }),
@@ -240,4 +253,29 @@ export const memoryApi = {
 	write: (path: string, content: string) =>
 		invoke<void>('memory_write', { path, content }),
 	contextDump: () => invoke<MemoryDump[]>('memory_context_dump'),
+	reconcile: () => invoke<number>('memory_reconcile'),
+};
+
+// ── File API ────────────────────────────────────────────
+
+export interface FileEntry {
+	path: string;
+	name: string;
+	is_dir: boolean;
+	size: number;
+}
+
+export const fileApi = {
+	pick: (path?: string) => invoke<string>('file_pick', { path }),
+	readText: (path: string) => invoke<string>('file_read_text', { path }),
+	write: (path: string, content: string) => invoke<void>('file_write', { path, content }),
+	list: (path: string, depth?: number) => invoke<FileEntry[]>('file_list', { path, depth }),
+	parse: (path: string) => invoke<any>('file_parse', { path }),
+};
+
+// ── Settings API ────────────────────────────────────────
+
+export const settingsApi = {
+	saveProviderKey: (providerId: string, apiKey: string) =>
+		invoke<void>('settings_save_provider_key', { providerId, apiKey }),
 };

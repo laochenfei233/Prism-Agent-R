@@ -1,4 +1,5 @@
 import { invoke, listen } from '$lib/api/client';
+import { workflowApi } from '$lib/api';
 
 export interface TaskInput {
 	key: string;
@@ -187,7 +188,8 @@ function createTaskStore() {
 	async function startRun(inputs?: Record<string, any>) {
 		if (!definition) return;
 		try {
-			const id = await invoke<string>('task_run', { definition, inputs: inputs || null });
+			const result = await invoke<{ run_id: string; status: string }>('task_run', { definition, inputs: inputs || null });
+			const id = result.run_id;
 			runId = id;
 			runStatus = {
 				run_id: id,
@@ -203,6 +205,32 @@ function createTaskStore() {
 			startPolling();
 		} catch (e) {
 			validation = { ok: false, errors: [e instanceof Error ? e.message : String(e)] };
+		}
+	}
+
+	// 用相同定义重跑：task_rerun 由后端按原 run_id 找回定义与原输入，可选覆盖 inputs
+	async function rerun(inputs?: Record<string, any>) {
+		if (!runId) return;
+		const currentId = runId;
+		try {
+			const result = await workflowApi.rerun(currentId, inputs);
+			const id = result.run_id;
+			runId = id;
+			runStatus = {
+				run_id: id,
+				status: 'running',
+				current_stage: null,
+				stages_done: 0,
+				stages_total: definition?.stages.length ?? 0,
+				outputs: null,
+				error: null,
+			};
+			viewMode = 'run';
+			refreshRunStatus();
+			startPolling();
+		} catch (e) {
+			validation = { ok: false, errors: [e instanceof Error ? e.message : String(e)] };
+			throw e;
 		}
 	}
 
@@ -287,6 +315,7 @@ function createTaskStore() {
 		saveTemplate,
 		loadTemplates,
 		startRun,
+		rerun,
 		addStage,
 		removeStage,
 		updateStage,

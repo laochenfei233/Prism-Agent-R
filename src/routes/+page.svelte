@@ -63,9 +63,9 @@
 		chatStore.messages = [];
 	}
 
-	async function handleSend(content: string) {
+	async function handleSend(content: string, attachments?: string[]) {
 		if (!agentStore.currentSession) return;
-		await chatStore.send(agentStore.currentSession.id, content);
+		await chatStore.send(agentStore.currentSession.id, content, attachments);
 	}
 
 	async function handleSelectModel(modelId: string) {

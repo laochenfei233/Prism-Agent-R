@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invoke } from '$lib/api/client';
-	import { agentApi, mcpApi, skillApi } from '$lib/api';
+	import { agentApi, mcpApi, memoryApi, settingsApi, skillApi } from '$lib/api';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
 
 	let providers = $state<any[]>([]);
@@ -14,6 +14,9 @@
 	let pKind = $state('openai');
 	let pUrl = $state('');
 	let pKey = $state('');
+	let editKeyProviderId = $state<string | null>(null);
+	let editKeyValue = $state('');
+	let keySaving = $state(false);
 	let mProvider = $state('');
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
@@ -61,6 +64,27 @@
 			await load();
 			msg = '✓ Provider 已添加';
 		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	function startEditKey(providerId: string) {
+		editKeyProviderId = providerId;
+		editKeyValue = '';
+	}
+
+	function cancelEditKey() {
+		editKeyProviderId = null;
+		editKeyValue = '';
+	}
+
+	async function saveProviderKey(providerId: string) {
+		if (!editKeyValue.trim() || keySaving) return;
+		keySaving = true;
+		try {
+			await settingsApi.saveProviderKey(providerId, editKeyValue.trim());
+			cancelEditKey();
+			msg = '✓ Key 已保存';
+		} catch (e) { msg = '错误: ' + String(e); }
+		finally { keySaving = false; }
 	}
 
 	async function saveModel() {
@@ -134,6 +158,19 @@
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
+	// Memory
+	let reconciling = $state(false);
+
+	async function reconcileMemory() {
+		if (reconciling) return;
+		reconciling = true;
+		try {
+			const count = await memoryApi.reconcile();
+			msg = `已索引 ${count} 个文件`;
+		} catch (e) { msg = '错误: ' + String(e); }
+		finally { reconciling = false; }
+	}
+
 	$effect(() => { load(); });
 </script>
 
@@ -178,7 +215,24 @@
 							<span class="config-name">{p.name}</span>
 							<span class="config-badge">{p.kind}</span>
 						</div>
-						<span class="config-url">{p.base_url || '-'}</span>
+						<div class="config-actions">
+							{#if editKeyProviderId === p.id}
+								<input
+									class="key-input"
+									bind:value={editKeyValue}
+									type="password"
+									placeholder="新 API Key"
+									onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(p.id); }}
+									disabled={keySaving}
+								/>
+								<button class="btn-sm" onclick={() => saveProviderKey(p.id)} disabled={keySaving || !editKeyValue.trim()}>
+									{keySaving ? '保存中…' : '保存'}
+								</button>
+								<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
+							{:else}
+								<button class="btn-sm" onclick={() => startEditKey(p.id)}>编辑 Key</button>
+							{/if}
+						</div>
 					</div>
 				{/each}
 			{/if}
@@ -315,6 +369,17 @@
 			<SkillMarket />
 		</div>
 	</div>
+
+	<!-- Memory -->
+	<div class="group">
+		<div class="group-header">记忆管理</div>
+		<div class="group-body">
+			<p class="hint">记忆存储于 global/projects/sessions 目录的 .md 文件，重建索引可回填全文搜索（memory_fts）。</p>
+			<button class="btn-primary" onclick={reconcileMemory} disabled={reconciling}>
+				{reconciling ? '索引中…' : '重建索引'}
+			</button>
+		</div>
+	</div>
 </div>
 
 <style>
@@ -449,10 +514,17 @@
 		background: rgba(0, 122, 255, 0.12);
 		color: #FF6900;
 	}
-	.config-url {
+	.key-input {
+		width: 180px;
+		padding: 6px 10px;
+		border-radius: 8px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-secondary);
+		color: var(--color-fg);
 		font-size: 13px;
-		color: var(--color-fg-tertiary);
+		outline: none;
 	}
+	.key-input:focus { border-color: #FF6900; }
 
 	/* ── Buttons ────────────────────────────────── */
 	.btn-primary {

@@ -5,13 +5,15 @@
 	import SidebarFiles from './SidebarFiles.svelte';
 	import SidebarWorkdir from './SidebarWorkdir.svelte';
 	import SidebarLsp from './SidebarLsp.svelte';
+	import SidebarInstructions from './SidebarInstructions.svelte';
 
 	const tabs = [
 		{ id: 'usage', label: '用量', icon: 'chart' },
 		{ id: 'workdir', label: '目录', icon: 'folder' },
 		{ id: 'files', label: '文件', icon: 'files' },
 		{ id: 'mcp', label: 'MCP', icon: 'puzzle' },
-		{ id: 'lsp', label: 'LSP', icon: 'server' }
+		{ id: 'lsp', label: 'LSP', icon: 'server' },
+		{ id: 'instructions', label: '指令', icon: 'instructions' }
 	] as const;
 
 	const tabComponents: Record<string, any> = {
@@ -19,7 +21,8 @@
 		workdir: SidebarWorkdir,
 		files: SidebarFiles,
 		mcp: SidebarMcp,
-		lsp: SidebarLsp
+		lsp: SidebarLsp,
+		instructions: SidebarInstructions
 	};
 
 	function formatNumber(n: number): string {
@@ -79,6 +82,13 @@
 							<rect x="2" y="14" width="20" height="8" rx="2"/>
 							<line x1="6" y1="6" x2="6.01" y2="6"/>
 							<line x1="6" y1="18" x2="6.01" y2="18"/>
+						</svg>
+					{:else if tab.icon === 'instructions'}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+							<polyline points="14 2 14 8 20 8"/>
+							<line x1="9" y1="13" x2="15" y2="13"/>
+							<line x1="9" y1="17" x2="15" y2="17"/>
 						</svg>
 					{/if}
 					<span class="tab-label">{tab.label}</span>
