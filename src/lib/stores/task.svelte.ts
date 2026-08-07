@@ -64,17 +64,25 @@ function createTaskStore() {
 	let templatesLoading = $state(false);
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-	// 监听 workflow:stage / workflow:done 事件，实时推进运行状态
-	$effect(() => {
-		const unsubStage = listen('workflow:stage', (event: { payload: any }) => {
+	// 监听 workflow:stage / workflow:done 事件，实时推进运行状态。
+	// store 为单例（模块加载时创建），无 effect 上下文，不能用 $effect，改为普通函数挂载一次。
+	let workflowListenersAttached = false;
+	function attachWorkflowListeners() {
+		if (workflowListenersAttached) return;
+		workflowListenersAttached = true;
+
+		listen('workflow:stage', (event: { payload: any }) => {
 			const payload = event.payload as { run_id?: string; stage_id?: string; status?: string };
 			if (!payload || !runId || payload.run_id !== runId) return;
 			if (runStatus) {
 				runStatus = { ...runStatus, status: 'running', current_stage: payload.stage_id ?? runStatus.current_stage };
 			}
+		}).catch(() => {
+			// 非 Tauri 环境（如纯 web dev）下无事件系统，静默降级
+			workflowListenersAttached = false;
 		});
 
-		const unsubDone = listen('workflow:done', (event: { payload: any }) => {
+		listen('workflow:done', (event: { payload: any }) => {
 			const payload = event.payload as { run_id?: string; status?: string };
 			if (!payload || !runId || payload.run_id !== runId) return;
 			stopPolling();
@@ -82,14 +90,12 @@ function createTaskStore() {
 				runStatus = { ...runStatus, status: payload.status === 'completed' ? 'completed' : 'failed' };
 			}
 			refreshRunStatus();
+		}).catch(() => {
+			workflowListenersAttached = false;
 		});
+	}
 
-		return () => {
-			unsubStage.then((fn) => fn());
-			unsubDone.then((fn) => fn());
-			stopPolling();
-		};
-	});
+	attachWorkflowListeners();
 
 	async function refreshRunStatus() {
 		if (!runId) return;
