@@ -60,8 +60,14 @@ impl TraceService {
         .bind(chrono::Utc::now().timestamp())
         .execute(&self.db.pool).await?;
 
-        // 清理旧记录（保留最近 1000 条）
-        sqlx::query("DELETE FROM agent_traces WHERE id NOT IN (SELECT id FROM agent_traces ORDER BY started_at DESC LIMIT 1000)")
+        // 清理旧记录（保留条数可配置，默认 1000）
+        let retain = crate::data::settings::prefs::get_i64(&self.db.pool, "trace.retain", 1000)
+            .await
+            .clamp(100, 10_000);
+        sqlx::query(
+            "DELETE FROM agent_traces WHERE id NOT IN (SELECT id FROM agent_traces ORDER BY started_at DESC LIMIT ?)"
+        )
+            .bind(retain)
             .execute(&self.db.pool).await?;
         Ok(())
     }

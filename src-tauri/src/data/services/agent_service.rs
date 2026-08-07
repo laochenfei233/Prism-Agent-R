@@ -45,14 +45,24 @@ impl AgentService {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp_millis();
 
+        // 新建 Agent 默认参数（可配置，回退 0.7 / 8192）
+        let temperature = crate::data::settings::prefs::get_f64(&self.pool, "agent.default.temperature", 0.7)
+            .await
+            .clamp(0.0, 2.0);
+        let max_tokens = crate::data::settings::prefs::get_i64(&self.pool, "agent.default.max_tokens", 8192)
+            .await
+            .clamp(256, 128_000);
+
         sqlx::query(
-            "INSERT INTO agents (id, name, description, system_prompt, model_id, disabled_tools, configuration, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, '[]', '{}', 0, ?, ?)"
+            "INSERT INTO agents (id, name, description, system_prompt, model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', '{}', 0, ?, ?)"
         )
         .bind(&id)
         .bind(name)
         .bind(description)
         .bind(system_prompt)
         .bind(model_id)
+        .bind(temperature)
+        .bind(max_tokens)
         .bind(now)
         .bind(now)
         .execute(&self.pool)

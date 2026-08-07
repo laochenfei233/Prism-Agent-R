@@ -275,9 +275,27 @@ export const fileApi = {
 
 // ── Settings API ────────────────────────────────────────
 
+export interface SettingSpecDto {
+	key: string;
+	label: string;
+	group: string;
+	group_label: string;
+	kind: 'bool' | 'int' | 'float' | 'string' | 'select';
+	default: unknown;
+	value: unknown;
+	description: string;
+	options: string[] | null;
+	min: number | null;
+	max: number | null;
+	step: number | null;
+}
+
 export const settingsApi = {
 	saveProviderKey: (providerId: string, apiKey: string) =>
 		invoke<void>('settings_save_provider_key', { providerId, apiKey }),
+	getAll: () => invoke<SettingSpecDto[]>('settings_get_all'),
+	set: (key: string, value: unknown) =>
+		invoke<SettingSpecDto>('settings_set', { key, value }),
 };
 
 // ── Wiki API ─────────────────────────────────────────────

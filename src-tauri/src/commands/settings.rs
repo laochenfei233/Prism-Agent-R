@@ -2,8 +2,98 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::data::models::ProviderRow;
+use crate::data::settings::registry::{self, SettingKind, SettingSpec};
 use crate::utils::crypto::{decrypt_key, encrypt_key};
 use crate::utils::error::AppError;
+
+/// 设置项 DTO：注册表定义 + 当前值（读 preferences，无记录回退默认）
+#[derive(Serialize)]
+pub struct SettingSpecDto {
+    key: String,
+    label: String,
+    group: String,
+    group_label: String,
+    kind: String,
+    default: serde_json::Value,
+    value: serde_json::Value,
+    description: String,
+    options: Option<Vec<String>>,
+    min: Option<f64>,
+    max: Option<f64>,
+    step: Option<f64>,
+}
+
+fn spec_to_dto(spec: SettingSpec, current: serde_json::Value) -> SettingSpecDto {
+    SettingSpecDto {
+        key: spec.key.to_string(),
+        label: spec.label.to_string(),
+        group: serde_json::to_value(spec.group)
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .unwrap_or_default(),
+        group_label: spec.group.label().to_string(),
+        kind: serde_json::to_value(spec.kind)
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .unwrap_or_default(),
+        default: spec.default.clone(),
+        value: current,
+        description: spec.description.to_string(),
+        options: spec.options.map(|o| o.iter().map(|s| s.to_string()).collect()),
+        min: spec.min,
+        max: spec.max,
+        step: spec.step,
+    }
+}
+
+async fn read_current(db: &crate::data::db::Database, spec: &SettingSpec) -> serde_json::Value {
+    use crate::data::settings::prefs;
+    match spec.kind {
+        SettingKind::Bool => {
+            serde_json::json!(prefs::get_bool(&db.pool, spec.key, spec.default.as_bool().unwrap_or(false)).await)
+        }
+        SettingKind::Int => {
+            serde_json::json!(prefs::get_i64(&db.pool, spec.key, spec.default.as_i64().unwrap_or(0)).await)
+        }
+        SettingKind::Float => {
+            serde_json::json!(prefs::get_f64(&db.pool, spec.key, spec.default.as_f64().unwrap_or(0.0)).await)
+        }
+        SettingKind::String | SettingKind::Select => {
+            serde_json::json!(prefs::get_str(&db.pool, spec.key, spec.default.as_str().unwrap_or("")).await)
+        }
+    }
+}
+
+/// 返回全部已注册设置项（含当前值），前端据此按分组渲染
+#[tauri::command]
+pub async fn settings_get_all(
+    state: State<'_, crate::AppState>,
+) -> Result<Vec<SettingSpecDto>, AppError> {
+    let mut out = Vec::new();
+    for spec in registry::specs() {
+        let current = read_current(&state.db, &spec).await;
+        out.push(spec_to_dto(spec, current));
+    }
+    Ok(out)
+}
+
+/// 写入单个设置项（类型/范围校验后落 preferences）；未知 key 拒绝
+#[tauri::command]
+pub async fn settings_set(
+    state: State<'_, crate::AppState>,
+    key: String,
+    value: serde_json::Value,
+) -> Result<SettingSpecDto, AppError> {
+    let spec = registry::spec_by_key(&key)
+        .ok_or_else(|| AppError::Validation(format!("未知设置项: {key}")))?;
+    let normalized = registry::validate(&spec, &value).map_err(AppError::Validation)?;
+    let text = match spec.kind {
+        SettingKind::Bool => normalized.as_bool().unwrap_or(false).to_string(),
+        SettingKind::Int => normalized.as_i64().unwrap_or(0).to_string(),
+        SettingKind::Float => normalized.as_f64().unwrap_or(0.0).to_string(),
+        SettingKind::String | SettingKind::Select => normalized.as_str().unwrap_or("").to_string(),
+    };
+    crate::data::settings::prefs::set(&state.db.pool, &key, &text).await?;
+    Ok(spec_to_dto(spec, normalized))
+}
 
 #[tauri::command]
 pub async fn settings_save_provider_key(

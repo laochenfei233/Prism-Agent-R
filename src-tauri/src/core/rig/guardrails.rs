@@ -72,6 +72,16 @@ impl GuardrailPipeline {
         }
     }
 
+    /// 从设置构建护栏：injection_enabled 控制注入检测，max_chars 为长度限制阈值
+    pub fn configured(max_chars: usize, injection_enabled: bool) -> Self {
+        let mut filters: Vec<Box<dyn InputFilter>> = Vec::new();
+        if injection_enabled {
+            filters.push(Box::new(InjectionDetector::new()));
+        }
+        filters.push(Box::new(LengthLimiter { max_chars }));
+        Self { input_filters: filters }
+    }
+
     pub async fn check_input(&self, input: &str) -> FilterResult {
         for filter in &self.input_filters {
             match filter.check(input).await {

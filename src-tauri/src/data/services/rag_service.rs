@@ -107,8 +107,15 @@ impl RagService {
         // Update status to chunking
         store::update_document_status(&self.db, &doc_id, "chunking", None).await?;
 
-        // Chunk the text
-        let chunks = chunk_text(&content, 1000, 200);
+        // Chunk the text（分块大小/重叠可从设置页调整，回退 1000/200）
+        let (chunk_size, overlap) = {
+            use crate::data::settings::prefs;
+            (
+                prefs::get_i64(&self.db.pool, "rag.chunk_size", 1000).await.clamp(200, 2000) as usize,
+                prefs::get_i64(&self.db.pool, "rag.chunk_overlap", 200).await.clamp(0, 500) as usize,
+            )
+        };
+        let chunks = chunk_text(&content, chunk_size, overlap);
 
         // ── §10.2.2 Contextual Retrieval：为每个 chunk 生成上下文说明 ──
         let contextual = self.contextual_enabled().await;

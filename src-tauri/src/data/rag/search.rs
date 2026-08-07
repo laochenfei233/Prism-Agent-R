@@ -26,6 +26,11 @@ impl RagSearcher {
     ) -> Result<Vec<RagHit>, AppError> {
         let query_vec = self.embedder.embed(query).await?;
 
+        // 混合检索权重（preferences: rag.vector_weight，默认 0.7；BM25 = 1 − w）
+        let vector_weight = crate::data::settings::prefs::get_f64(&self.db.pool, "rag.vector_weight", 0.7)
+            .await
+            .clamp(0.0, 1.0) as f32;
+
         // Fetch all chunks for this wiki with embeddings
         let rows = sqlx::query(
             r#"
@@ -71,8 +76,8 @@ impl RagSearcher {
                 };
                 let bm25 = embedding::bm25_score(query, &bm25_text, avg_dl, 1.5, 0.75);
 
-                // Weighted combination: 0.7 vector + 0.3 BM25
-                let score = 0.7 * cos_sim + 0.3 * bm25;
+                // Weighted combination: vector_weight * vector + (1-w) * BM25
+                let score = vector_weight * cos_sim + (1.0 - vector_weight) * bm25;
 
                 Some(RagHit {
                     chunk_id,
