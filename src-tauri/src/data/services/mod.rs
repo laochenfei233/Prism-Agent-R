@@ -34,3 +34,4 @@ pub mod trace_service;
 pub use trace_service::TraceService;
 pub mod asr;
 pub mod project_index;
+pub mod tts_service;

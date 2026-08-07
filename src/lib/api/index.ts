@@ -686,3 +686,26 @@ export const projectIndexApi = {
 		invoke<ProjectIndexStatusDto>('project_index_toggle', { enabled }),
 	reindex: () => invoke<ProjectIndexStatusDto>('project_index_reindex'),
 };
+
+// ── TTS 播报 API（§10.3.9） ───────────────────────────────
+
+export interface TtsSpeakResultDto {
+	backend: string;
+	segments: string[];
+	lang: string;
+	rate: number;
+}
+
+export interface TtsVoiceInfoDto {
+	backend: string;
+	available: boolean;
+	lang: string | null;
+	rate: number;
+}
+
+export const ttsApi = {
+	speak: (text: string, lang?: string, rate?: number) =>
+		invoke<TtsSpeakResultDto>('tts_speak', { text, lang, rate }),
+	stop: () => invoke<void>('tts_stop'),
+	voices: () => invoke<TtsVoiceInfoDto>('tts_voices'),
+};

@@ -193,6 +193,138 @@ pub async fn fetch_chunk_meta(db: &Database, chunk_ids: &[String]) -> Result<Vec
 
 // ── 三维度评测实现（§10.2.5） ─────────────────────────────
 
+/// 运行评测核心（命令层 rag_eval 与 CI 门槛共用，§10.2.5）：
+/// 检索类指标直接度量；table_acc 结构化比对；ocr_completeness 字符召回率；chart_acc LLM-as-Judge。
+/// 返回报告（不含落库；落库由调用方 save_report）。
+pub async fn run_eval(
+    db: &Database,
+    cases: Vec<EvalCase>,
+    top_k: usize,
+    suite: String,
+) -> Result<EvalReport, AppError> {
+    let now = chrono::Utc::now().timestamp();
+    let mut report = EvalReport {
+        suite,
+        case_count: cases.len(),
+        metrics: Default::default(),
+        cases: Vec::new(),
+        created_at: now,
+    };
+    if cases.is_empty() {
+        return Ok(report);
+    }
+
+    // RagService 循环外复用（避免重复构建嵌入器）
+    let mut svc = crate::data::services::rag_service::RagService::new(db.clone());
+    svc.configure_from_db().await?;
+
+    let mut hit_total = 0usize;
+    let mut hit_denom = 0usize;
+    let mut page_ok = 0usize;
+    let mut page_denom = 0usize;
+    let mut table_sum = 0.0f32;
+    let mut table_denom = 0usize;
+    let mut ocr_sum = 0.0f32;
+    let mut ocr_denom = 0usize;
+    let mut chart_sum = 0.0f32;
+    let mut chart_denom = 0usize;
+    let mut chart_model: Option<std::sync::Arc<dyn crate::core::adk::model::ModelProvider>> = None;
+
+    for case in &cases {
+        let hits = svc.search(&case.wiki_id, &case.question, top_k).await.unwrap_or_default();
+        let hit_ids: Vec<String> = hits.iter().map(|h| h.chunk_id.clone()).collect();
+        let metas = fetch_chunk_meta(db, &hit_ids).await.unwrap_or_default();
+
+        // recall@k
+        let expected = &case.expect.chunk_ids;
+        let matched = expected.iter().filter(|c| hit_ids.contains(c)).count();
+        hit_denom += expected.len();
+        hit_total += matched;
+
+        // page_acc
+        if !case.expect.pages.is_empty() {
+            page_denom += 1;
+            if hits.iter().any(|h| h.page_start.map(|p| case.expect.pages.contains(&(p as u32))).unwrap_or(false)) {
+                page_ok += 1;
+            }
+        }
+
+        // table_acc：期望命中 table 块（has_table）或给出期望单元格时评测
+        if case.expect.has_table == Some(true) || case.expect.table_expected.is_some() {
+            table_denom += 1;
+            let table_json = metas
+                .iter()
+                .find(|m| m.block_type == "table")
+                .and_then(|m| m.table_json.as_deref());
+            if let Some(rate) = table_cell_match_rate(table_json, case.expect.table_expected.as_deref()) {
+                table_sum += rate;
+            }
+        }
+
+        // ocr_completeness：有参考转录文本时，对 top 命中 chunk 内容做字符召回率
+        if let Some(ref_text) = &case.expect.ocr_reference {
+            ocr_denom += 1;
+            if let Some(first) = metas.first() {
+                if let Some(rate) = ocr_char_recall(&first.content, ref_text) {
+                    ocr_sum += rate;
+                }
+            }
+        }
+
+        // chart_acc：期望图注语义 → LLM-as-Judge 5 分制（无模型时维度记 0，降级不报错）
+        if let Some(exp) = &case.expect.chart_expected {
+            chart_denom += 1;
+            let caption = metas
+                .iter()
+                .find(|m| m.block_type == "image")
+                .and_then(|m| m.caption.as_deref());
+            if let Some(cap) = caption {
+                if chart_model.is_none() {
+                    chart_model = crate::data::services::rag_service::resolve_rerank_model(db).await.ok();
+                }
+                if let Some(model) = &chart_model {
+                    let judge = crate::core::rig::judge::AgentJudge::new(model.clone());
+                    let criteria = vec!["语义一致性".to_string()];
+                    let task = format!("判断图表图注是否与期望语义一致。期望：{exp}");
+                    if let Ok(res) = judge.evaluate(&task, cap, &criteria).await {
+                        chart_sum += (res.score / 5.0).clamp(0.0, 1.0);
+                    }
+                }
+            }
+        }
+
+        // 关键词覆盖
+        let kw_miss: Vec<String> = case
+            .expect
+            .answer_keywords
+            .iter()
+            .filter(|kw| !hits.iter().any(|h| h.quote.contains(kw.as_str())))
+            .cloned()
+            .collect();
+        let passed = (expected.is_empty() || matched > 0) && kw_miss.is_empty();
+
+        let detail = if kw_miss.is_empty() {
+            format!("recall {matched}/{}", expected.len())
+        } else {
+            format!("缺少关键词: {}", kw_miss.join(", "))
+        };
+        report.cases.push(CaseResult {
+            id: case.id.clone(),
+            question: case.question.clone(),
+            passed,
+            hit_count: matched,
+            detail,
+        });
+    }
+
+    report.metrics.recall_at_k = if hit_denom > 0 { hit_total as f32 / hit_denom as f32 } else { 0.0 };
+    report.metrics.page_acc = if page_denom > 0 { page_ok as f32 / page_denom as f32 } else { 0.0 };
+    report.metrics.table_acc = if table_denom > 0 { table_sum / table_denom as f32 } else { 0.0 };
+    report.metrics.ocr_completeness = if ocr_denom > 0 { ocr_sum / ocr_denom as f32 } else { 0.0 };
+    report.metrics.chart_acc = if chart_denom > 0 { chart_sum / chart_denom as f32 } else { 0.0 };
+    Ok(report)
+}
+
 /// 表格解析准确：期望单元格在 table_json 中的逐格匹配率（结构化比对，无 LLM 成本）。
 /// 无期望单元格时退化为「命中 table 块」的布尔得分。
 pub fn table_cell_match_rate(table_json: Option<&str>, expected: Option<&[Vec<String>]>) -> Option<f32> {
@@ -380,5 +512,101 @@ mod tests {
         assert_eq!(rate, 1.0);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// CI 回归门槛（§10.2.5）：自包含 golden set → run_eval → 指标必须 ≥ 基线。
+    /// 检索/页码/表格三维度零 LLM 成本，cargo test 在 CI 中即执行门槛，低于基线阻止合并。
+    #[tokio::test]
+    async fn eval_gate_meets_baselines() {
+        use crate::data::rag::embedding::{embedding_to_bytes, Embedder, LocalEmbedder};
+        use crate::data::rag::store;
+
+        let dir = std::env::temp_dir().join(format!("prism_eval_gate_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&dir).await.unwrap();
+
+        sqlx::query("INSERT INTO wikis (id, name, created_at, updated_at) VALUES ('wk-eval', 't', 0, 0)")
+            .execute(&db.pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO rag_documents (id, wiki_id, name, mime_type, size, chunk_count, status, created_at, updated_at) \
+             VALUES ('doc-gate', 'wk-eval', '财务报告.md', 'text/markdown', 100, 2, 'ready', 0, 0)"
+        )
+        .execute(&db.pool).await.unwrap();
+
+        // golden set 文档：一个文本 chunk + 一个表格 chunk（页码 1）
+        let text_chunk = "Q2 2023 收入增长 3%，主要来自企业客户续费。上一季度为 1.2 亿。";
+        let table_chunk = "季度营收明细：Q2 2023 营收 1.2 亿，Q1 2023 营收 1.1 亿。";
+
+        let embedder = LocalEmbedder::default();
+        let emb = embedder.embed_batch(&[text_chunk.to_string(), table_chunk.to_string()]).await.unwrap();
+
+        store::insert_chunks(
+            &db,
+            "doc-gate",
+            "wk-eval",
+            &[
+                (text_chunk.to_string(), Some(embedding_to_bytes(&emb[0]))),
+                (table_chunk.to_string(), Some(embedding_to_bytes(&emb[1]))),
+            ],
+            None,
+            Some(&[(Some(1), Some(1)), (Some(1), Some(1))]),
+        )
+        .await
+        .unwrap();
+        let ch_text = chunk_ids_first(&db, 0).await;
+        let ch_table = chunk_ids_first(&db, 1).await;
+        // 表格 chunk 标注 block_type + table_json
+        sqlx::query("UPDATE rag_chunks SET block_type = 'table', table_json = ? WHERE id = ?")
+            .bind(r#"[["季度","营收"],["Q2 2023","1.2 亿"]]"#)
+            .bind(&ch_table)
+            .execute(&db.pool)
+            .await
+            .unwrap();
+
+        let cases = vec![
+            EvalCase {
+                id: "ev-gate-1".into(),
+                wiki_id: "wk-eval".into(),
+                question: "Q2 2023 收入增长是多少？".into(),
+                expect: EvalExpect {
+                    chunk_ids: vec![ch_text.clone()],
+                    pages: vec![1],
+                    answer_keywords: vec!["3%".into()],
+                    ..Default::default()
+                },
+                suite: "ci".into(),
+            },
+            EvalCase {
+                id: "ev-gate-2".into(),
+                wiki_id: "wk-eval".into(),
+                question: "各季度营收明细？".into(),
+                expect: EvalExpect {
+                    chunk_ids: vec![ch_table.clone()],
+                    has_table: Some(true),
+                    table_expected: Some(vec![vec!["Q2 2023".into(), "1.2 亿".into()]]),
+                    ..Default::default()
+                },
+                suite: "ci".into(),
+            },
+        ];
+
+        let report = run_eval(&db, cases, 5, "ci".into()).await.unwrap();
+
+        // 基线：检索/页码/表格三维度必须 ≥ 0.8（自包含数据下应稳定命中）
+        assert!(report.metrics.recall_at_k >= 0.8, "recall_at_k={} 低于基线 0.8", report.metrics.recall_at_k);
+        assert!(report.metrics.page_acc >= 0.8, "page_acc={} 低于基线 0.8", report.metrics.page_acc);
+        assert!(report.metrics.table_acc >= 0.8, "table_acc={} 低于基线 0.8", report.metrics.table_acc);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// insert_chunks 返回插入数量而非 id，测试按 index 回查 chunk id
+    async fn chunk_ids_first(db: &Database, index: i32) -> String {
+        sqlx::query_scalar::<_, String>(
+            "SELECT id FROM rag_chunks WHERE wiki_id = 'wk-eval' AND \"index\" = ? ORDER BY rowid"
+        )
+        .bind(index)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap()
     }
 }

@@ -23,3 +23,4 @@ pub mod trace;
 pub mod router;
 pub mod agent_eval;
 pub mod project_index;
+pub mod tts;

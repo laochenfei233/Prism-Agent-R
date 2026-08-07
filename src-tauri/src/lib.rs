@@ -207,6 +207,9 @@ pub fn run() {
             commands::project_index::project_index_status,
             commands::project_index::project_index_toggle,
             commands::project_index::project_index_reindex,
+            commands::tts::tts_speak,
+            commands::tts::tts_stop,
+            commands::tts::tts_voices,
             commands::dashboard::dashboard_overview,
         ])
         .run(tauri::generate_context!())

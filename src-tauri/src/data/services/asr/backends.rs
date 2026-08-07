@@ -857,10 +857,12 @@ fn find_file_recursive(dir: &std::path::Path, names: &[&str], depth: usize) -> O
     None
 }
 
-// ── AzureSpeechBackend（§10.3.3 ⑦：云端 REST 上传式识别） ──
-// 端点: https://{region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1
-// 鉴权: Ocp-Apim-Subscription-Key
-// 音频: WAV 一次性上传（离线转写场景）；region 由 base_url 提供，key 由 api_key 提供
+// ── AzureSpeechBackend（§10.3.3 ⑦：WebSocket 双工流式，支持说话人分离） ──
+// 端点: wss://{region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1
+// 鉴权: Header `Ocp-Apim-Subscription-Key`
+// 协议: 首帧 speech.config JSON → 二进制音频帧（16kHz PCM）→ 结束发 {"end":true}
+// 接收: speechHypothesis（中间结果）/ speechFragment（定稿，含 speakerId 说话人分离）
+// region 由 base_url 提供，key 由 api_key 提供
 
 pub struct AzureSpeechBackend {
     base_url: String,
@@ -875,36 +877,6 @@ impl AzureSpeechBackend {
             api_key: cfg.api_key.clone().unwrap_or_default(),
             langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::AzureSpeech.languages()),
         }
-    }
-
-    fn endpoint(&self, lang: &str) -> String {
-        format!(
-            "{}/speech/recognition/conversation/cognitiveservices/v1?language={}&format=detailed",
-            self.base_url.trim_end_matches('/'),
-            lang
-        )
-    }
-
-    async fn transcribe_wav(&self, wav: Vec<u8>, lang: &str) -> Result<String, AsrError> {
-        let req = reqwest::Client::new()
-            .post(self.endpoint(lang))
-            .header("Ocp-Apim-Subscription-Key", &self.api_key)
-            .header("Content-Type", "audio/wav; codecs=audio/pcm; samplerate=16000")
-            .body(wav);
-        let resp = req.send().await.map_err(|e| AsrError::Network(e.to_string()))?;
-        let status = resp.status();
-        if status.as_u16() == 401 {
-            return Err(AsrError::Unauthorized);
-        }
-        if status.as_u16() == 429 {
-            return Err(AsrError::QuotaExceeded);
-        }
-        if !status.is_success() {
-            let text = resp.text().await.unwrap_or_default();
-            return Err(AsrError::Protocol(format!("Azure HTTP {status}: {text}")));
-        }
-        let data: serde_json::Value = resp.json().await.map_err(|e| AsrError::Protocol(e.to_string()))?;
-        Ok(data["DisplayText"].as_str().unwrap_or_default().to_string())
     }
 }
 
@@ -929,40 +901,166 @@ impl AsrBackend for AzureSpeechBackend {
         mut audio: AudioSource,
         events: AsrEventSink,
     ) -> Result<AsrSessionHandle, AsrError> {
-        // 累积整段音频（Azure REST 非流式；录音场景下完整上传）
+        // WS 流式：边收音频边出结果（录音场景增量；重转写场景静态流同样适用）
         let handle = AsrSessionHandle::new();
         let cancel = handle.token();
-        let backend = Self {
-            base_url: self.base_url.clone(),
-            api_key: self.api_key.clone(),
-            langs: self.langs.clone(),
-        };
+        let base_url = self.base_url.clone();
+        let api_key = self.api_key.clone();
         let lang = self.langs.first().cloned().unwrap_or_else(|| "zh-CN".into());
 
         tokio::spawn(async move {
-            let mut buf: Vec<u8> = Vec::new();
-            while let Some(chunk) = audio.next().await {
-                if cancel.is_cancelled() { break; }
-                buf.extend_from_slice(&chunk);
+            use tokio_tungstenite::connect_async;
+            use tokio_tungstenite::tungstenite::Message as WsMessage;
+
+            let url = format!(
+                "{}/speech/recognition/conversation/cognitiveservices/v1?language={}&format=detailed&profanity=raw",
+                base_url.trim_end_matches('/').replace("https://", "wss://"),
+                lang
+            );
+
+            // 鉴权：Azure 要求 Ocp-Apim-Subscription-Key header（IntoClientRequest 携带自定义 header）
+            let mut request =
+                match tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(&url) {
+                    Ok(req) => req,
+                    Err(e) => {
+                        events.status(&format!("构造请求失败: {e}"));
+                        return;
+                    }
+                };
+            if let Ok(val) = http::HeaderValue::from_str(&api_key) {
+                request.headers_mut().insert("Ocp-Apim-Subscription-Key", val);
             }
-            if buf.is_empty() { return; }
-            let wav = pcm_to_wav(&buf);
-            match backend.transcribe_wav(wav, &lang).await {
-                Ok(text) if !text.is_empty() => {
-                    events.segment(AsrSegment {
-                        index: 0,
-                        text,
-                        is_final: true,
-                        start_ms: 0,
-                        end_ms: 0,
-                        language: Some(lang.clone()),
-                        confidence: None,
-                        speaker_id: None,
-                    });
+            let (mut ws, _resp) = match connect_async(request).await {
+                Ok(v) => v,
+                Err(e) => {
+                    events.status(&format!("Azure WebSocket 连接失败: {e}"));
+                    return;
                 }
-                Ok(_) => events.status("Azure 未识别到内容"),
-                Err(e) => events.status(&format!("Azure 识别失败: {e}")),
+            };
+
+            // 1. 首帧 speech.config（含客户端标识）
+            let config = serde_json::json!({
+                "context": { "system": { "name": "PrismAgent", "version": "0.1.0" } }
+            });
+            if ws.send(WsMessage::Text(config.to_string().into())).await.is_err() {
+                events.status("发送 speech.config 失败");
+                return;
             }
+            events.status("connecting");
+
+            let mut index: u64 = 0;
+            let mut finished = false;
+
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => {
+                        let _ = ws.send(WsMessage::Text(r#"{"end":true}"#.into())).await;
+                        let _ = ws.close(None).await;
+                        break;
+                    }
+                    chunk = audio.next() => {
+                        match chunk {
+                            Some(pcm) => {
+                                if ws.send(WsMessage::Binary(pcm.into())).await.is_err() {
+                                    events.status("发送音频失败");
+                                    break;
+                                }
+                            }
+                            None => {
+                                // 音频流结束：通知服务端语音结束
+                                let _ = ws.send(WsMessage::Text(r#"{"end":true}"#.into())).await;
+                                finished = true;
+                            }
+                        }
+                    }
+                }
+                if finished { break; }
+
+                // 非阻塞读结果
+                while let Ok(Some(msg)) = tokio::time::timeout(
+                    std::time::Duration::from_millis(10),
+                    ws.next(),
+                ).await {
+                    match msg {
+                        Ok(WsMessage::Text(text)) => {
+                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                                let ty = v["type"].as_str().unwrap_or("");
+                                match ty {
+                                    // 中间结果（持续修正）
+                                    "speechHypothesis" => {
+                                        let t = v["text"].as_str().unwrap_or("");
+                                        if !t.is_empty() {
+                                            events.segment(AsrSegment {
+                                                index,
+                                                text: t.to_string(),
+                                                is_final: false,
+                                                start_ms: v["offset"].as_u64().unwrap_or(0) / 10_000,
+                                                end_ms: 0,
+                                                language: Some(lang.clone()),
+                                                confidence: None,
+                                                speaker_id: None,
+                                            });
+                                        }
+                                    }
+                                    // 定稿（含说话人分离 speakerId）
+                                    "speechFragment" => {
+                                        let t = v["text"].as_str().unwrap_or("");
+                                        if !t.is_empty() {
+                                            let speaker_id = v["speakerId"]
+                                                .as_u64()
+                                                .or_else(|| v["speakerId"].as_str().and_then(|s| s.parse().ok()))
+                                                .map(|s| s as u32);
+                                            events.segment(AsrSegment {
+                                                index,
+                                                text: t.to_string(),
+                                                is_final: true,
+                                                start_ms: v["offset"].as_u64().unwrap_or(0) / 10_000,
+                                                end_ms: v["duration"].as_u64().unwrap_or(0) / 10_000,
+                                                language: Some(lang.clone()),
+                                                confidence: None,
+                                                speaker_id,
+                                            });
+                                            index += 1;
+                                        }
+                                    }
+                                    "speech.endDetected" | "turn.end" => {
+                                        finished = true;
+                                    }
+                                    "speech.phrase" => {
+                                        // 兼容非 conversation 端点返回（标准 STT 短语）
+                                        let t = v["result"]["DisplayText"].as_str().unwrap_or("");
+                                        if !t.is_empty() {
+                                            events.segment(AsrSegment {
+                                                index,
+                                                text: t.to_string(),
+                                                is_final: true,
+                                                start_ms: 0,
+                                                end_ms: 0,
+                                                language: Some(lang.clone()),
+                                                confidence: None,
+                                                speaker_id: None,
+                                            });
+                                            index += 1;
+                                        }
+                                        finished = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        Ok(WsMessage::Close(_)) => {
+                            finished = true;
+                            break;
+                        }
+                        Err(e) => {
+                            events.status(&format!("Azure WebSocket 错误: {e}"));
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            events.status("stopped");
         });
 
         Ok(handle)

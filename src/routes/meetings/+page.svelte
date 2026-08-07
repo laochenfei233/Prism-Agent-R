@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { meetingApi, asrApi, type MeetingDto, type AsrBackendInfoDto, type AsrModelInfoDto, type InstalledAsrModelDto, type AsrConfigInputDto, type AsrConfigDto } from '$lib/api';
-	import { listen } from '$lib/api/client';
+	import { invoke, listen } from '$lib/api/client';
+	import Speaker from '$lib/components/meeting/Speaker.svelte';
+	import { ttsSpeakSegments, extractActionItems, ttsState } from '$lib/tts.svelte';
 
 	let meetings = $state<MeetingDto[]>([]);
 	let selectedMeeting = $state<MeetingDto | null>(null);
@@ -214,6 +216,37 @@
 			alert(`翻译稿已保存：${path}`);
 		} catch (e) { console.error(e); }
 	}
+
+	// ── TTS 播报（§10.3.9） ───────────────────────────────
+	let broadcastError = $state<string | null>(null);
+	let broadcastBusy = $state(false);
+
+	async function broadcastActionItems() {
+		if (!selectedMeeting?.summary) {
+			broadcastError = '暂无摘要，请先生成摘要';
+			return;
+		}
+		const items = extractActionItems(selectedMeeting.summary);
+		if (!items) {
+			broadcastError = '摘要中未找到「待办事项/行动项」小节';
+			return;
+		}
+		broadcastError = null;
+		broadcastBusy = true;
+		try {
+			// 服务端分段（长文按句切分），前端 Web Speech API 顺序播放
+			const res = await invoke<{ backend: string; segments: string[] }>('tts_speak', {
+				text: items,
+				lang: 'zh-CN',
+				rate: 1
+			});
+			ttsSpeakSegments(res.segments, 1);
+		} catch (e) {
+			broadcastError = String(e);
+		} finally {
+			broadcastBusy = false;
+		}
+	}
 </script>
 
 <div class="page">
@@ -283,8 +316,21 @@
 
 				{#if selectedMeeting.summary}
 					<div class="section">
-						<h3>摘要</h3>
+						<div class="section-head">
+							<h3>摘要</h3>
+							<button class="btn-ghost btn-sm" onclick={broadcastActionItems} disabled={broadcastBusy}>
+								🔊 播报待办
+							</button>
+						</div>
+						{#if broadcastError}
+							<div class="broadcast-error">{broadcastError}</div>
+						{/if}
 						<div class="content-box">{selectedMeeting.summary}</div>
+						{#if ttsState.supported && ttsState.queue.length > 0}
+							<div class="speaker-host">
+								<Speaker />
+							</div>
+						{/if}
 					</div>
 				{/if}
 
@@ -395,6 +441,11 @@
 	.rec-badge { color: #ff4444; font-weight: 600; }
 	.section { margin-top: 20px; }
 	.section h3 { font-size: 14px; color: var(--color-fg-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+	.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+	.section-head h3 { margin: 0; }
+	.btn-sm { font-size: 12px; padding: 3px 10px; }
+	.broadcast-error { color: var(--color-red, #ff453a); font-size: 12px; margin-bottom: 8px; }
+	.speaker-host { margin-top: 10px; }
 	.content-box { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 10px; padding: 16px; font-size: 14px; color: var(--color-fg); white-space: pre-wrap; line-height: 1.6; }
 	.transcript { max-height: 400px; overflow-y: auto; }
 
