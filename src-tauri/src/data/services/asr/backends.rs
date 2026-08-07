@@ -949,8 +949,77 @@ impl AsrBackend for AzureSpeechBackend {
             events.status("connecting");
 
             let mut index: u64 = 0;
-            let mut finished = false;
 
+            // 文本帧处理（主循环与排空循环共用）
+            // 返回 true 表示应结束（endDetected/Close 语义）
+            let mut handle_frame = |text: String, finished: &mut bool| {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                    let ty = v["type"].as_str().unwrap_or("");
+                    match ty {
+                        // 中间结果（持续修正）
+                        "speechHypothesis" => {
+                            let t = v["text"].as_str().unwrap_or("");
+                            if !t.is_empty() {
+                                events.segment(AsrSegment {
+                                    index,
+                                    text: t.to_string(),
+                                    is_final: false,
+                                    start_ms: v["offset"].as_u64().unwrap_or(0) / 10_000,
+                                    end_ms: 0,
+                                    language: Some(lang.clone()),
+                                    confidence: None,
+                                    speaker_id: None,
+                                });
+                            }
+                        }
+                        // 定稿（含说话人分离 speakerId）
+                        "speechFragment" => {
+                            let t = v["text"].as_str().unwrap_or("");
+                            if !t.is_empty() {
+                                let speaker_id = v["speakerId"]
+                                    .as_u64()
+                                    .or_else(|| v["speakerId"].as_str().and_then(|s| s.parse().ok()))
+                                    .map(|s| s as u32);
+                                events.segment(AsrSegment {
+                                    index,
+                                    text: t.to_string(),
+                                    is_final: true,
+                                    start_ms: v["offset"].as_u64().unwrap_or(0) / 10_000,
+                                    end_ms: v["duration"].as_u64().unwrap_or(0) / 10_000,
+                                    language: Some(lang.clone()),
+                                    confidence: None,
+                                    speaker_id,
+                                });
+                                index += 1;
+                            }
+                        }
+                        "speech.endDetected" | "turn.end" => {
+                            *finished = true;
+                        }
+                        "speech.phrase" => {
+                            // 兼容非 conversation 端点返回（标准 STT 短语）
+                            let t = v["result"]["DisplayText"].as_str().unwrap_or("");
+                            if !t.is_empty() {
+                                events.segment(AsrSegment {
+                                    index,
+                                    text: t.to_string(),
+                                    is_final: true,
+                                    start_ms: 0,
+                                    end_ms: 0,
+                                    language: Some(lang.clone()),
+                                    confidence: None,
+                                    speaker_id: None,
+                                });
+                                index += 1;
+                            }
+                            *finished = true;
+                        }
+                        _ => {}
+                    }
+                }
+            };
+
+            let mut finished = false;
             loop {
                 tokio::select! {
                     _ = cancel.cancelled() => {
@@ -967,8 +1036,28 @@ impl AsrBackend for AzureSpeechBackend {
                                 }
                             }
                             None => {
-                                // 音频流结束：通知服务端语音结束
+                                // 音频流结束：通知服务端语音结束，然后排空读——
+                                // 最终定稿（speechFragment）在 end 之后到达，立即退出会丢尾部结果
                                 let _ = ws.send(WsMessage::Text(r#"{"end":true}"#.into())).await;
+                                let drain_deadline = std::time::Instant::now()
+                                    + std::time::Duration::from_secs(3);
+                                while std::time::Instant::now() < drain_deadline {
+                                    match tokio::time::timeout(
+                                        std::time::Duration::from_millis(200),
+                                        ws.next(),
+                                    ).await {
+                                        Ok(Some(Ok(WsMessage::Text(text)))) => {
+                                            handle_frame(text, &mut finished);
+                                            if finished { break; }
+                                        }
+                                        Ok(Some(Ok(WsMessage::Close(_)))) | Ok(None) => break,
+                                        Ok(Some(Err(e))) => {
+                                            events.status(&format!("Azure WebSocket 错误: {e}"));
+                                            break;
+                                        }
+                                        _ => {} // 超时未到 deadline → 继续等
+                                    }
+                                }
                                 finished = true;
                             }
                         }
@@ -982,72 +1071,7 @@ impl AsrBackend for AzureSpeechBackend {
                     ws.next(),
                 ).await {
                     match msg {
-                        Ok(WsMessage::Text(text)) => {
-                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
-                                let ty = v["type"].as_str().unwrap_or("");
-                                match ty {
-                                    // 中间结果（持续修正）
-                                    "speechHypothesis" => {
-                                        let t = v["text"].as_str().unwrap_or("");
-                                        if !t.is_empty() {
-                                            events.segment(AsrSegment {
-                                                index,
-                                                text: t.to_string(),
-                                                is_final: false,
-                                                start_ms: v["offset"].as_u64().unwrap_or(0) / 10_000,
-                                                end_ms: 0,
-                                                language: Some(lang.clone()),
-                                                confidence: None,
-                                                speaker_id: None,
-                                            });
-                                        }
-                                    }
-                                    // 定稿（含说话人分离 speakerId）
-                                    "speechFragment" => {
-                                        let t = v["text"].as_str().unwrap_or("");
-                                        if !t.is_empty() {
-                                            let speaker_id = v["speakerId"]
-                                                .as_u64()
-                                                .or_else(|| v["speakerId"].as_str().and_then(|s| s.parse().ok()))
-                                                .map(|s| s as u32);
-                                            events.segment(AsrSegment {
-                                                index,
-                                                text: t.to_string(),
-                                                is_final: true,
-                                                start_ms: v["offset"].as_u64().unwrap_or(0) / 10_000,
-                                                end_ms: v["duration"].as_u64().unwrap_or(0) / 10_000,
-                                                language: Some(lang.clone()),
-                                                confidence: None,
-                                                speaker_id,
-                                            });
-                                            index += 1;
-                                        }
-                                    }
-                                    "speech.endDetected" | "turn.end" => {
-                                        finished = true;
-                                    }
-                                    "speech.phrase" => {
-                                        // 兼容非 conversation 端点返回（标准 STT 短语）
-                                        let t = v["result"]["DisplayText"].as_str().unwrap_or("");
-                                        if !t.is_empty() {
-                                            events.segment(AsrSegment {
-                                                index,
-                                                text: t.to_string(),
-                                                is_final: true,
-                                                start_ms: 0,
-                                                end_ms: 0,
-                                                language: Some(lang.clone()),
-                                                confidence: None,
-                                                speaker_id: None,
-                                            });
-                                            index += 1;
-                                        }
-                                        finished = true;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
+                        Ok(WsMessage::Text(text)) => handle_frame(text, &mut finished),
                         Ok(WsMessage::Close(_)) => {
                             finished = true;
                             break;

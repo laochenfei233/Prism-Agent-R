@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   # 测试与 RAG 评测回归门槛（§10.2.5）：cargo test 含 eval_gate_meets_baselines，
-  # 低于基线即失败 → 阻止合并（PR 检查）
+  # 低于基线即失败。test job 失败时 build 不运行、PR 检查变红；
+  # 建议在分支保护中将 test 设为 required check 以硬性拦截合并。
   test:
     runs-on: ubuntu-22.04
 

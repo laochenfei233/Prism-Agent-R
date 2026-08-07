@@ -11,14 +11,21 @@ export const ttsState = $state({
 });
 
 let utterance: SpeechSynthesisUtterance | null = null;
+// 代际保护：stop/语速重启会使旧 utterance 的 onend/onerror 过期，防止并发推进队列（双音/跳段）
+let generation = 0;
 
 function speakSegment(text: string, onDone: () => void) {
 	if (!ttsState.supported || !window.speechSynthesis) return;
+	const gen = generation;
 	utterance = new SpeechSynthesisUtterance(text);
 	utterance.lang = 'zh-CN';
 	utterance.rate = ttsState.rate;
-	utterance.onend = onDone;
-	utterance.onerror = onDone;
+	utterance.onend = () => {
+		if (gen === generation) onDone();
+	};
+	utterance.onerror = () => {
+		if (gen === generation) onDone();
+	};
 	window.speechSynthesis.speak(utterance);
 }
 
@@ -74,6 +81,7 @@ export function ttsResume() {
 
 export function ttsStop() {
 	if (!ttsState.supported) return;
+	generation += 1; // 使在途 utterance 回调过期
 	window.speechSynthesis?.cancel();
 	utterance = null;
 	ttsState.playing = false;
@@ -85,9 +93,10 @@ export function ttsStop() {
 export function ttsSetRate(rate: number) {
 	ttsState.rate = Math.min(2, Math.max(0.5, rate));
 	if (ttsState.playing && !ttsState.paused) {
-		// 重启当前段以应用语速
+		// 重启当前段以应用语速（新代次，旧回调丢弃）
 		const seg = ttsState.queue[ttsState.current];
 		if (seg) {
+			generation += 1;
 			window.speechSynthesis?.cancel();
 			utterance = null;
 			speakSegment(seg, () => {

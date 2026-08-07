@@ -92,10 +92,19 @@ mod tests {
 
     #[test]
     fn splits_on_sentence_boundaries() {
-        let text = format!("{}。", "第一句内容".repeat(30)); // 120 字单句
+        let text = format!("{}。", "第一句内容".repeat(30)); // 120 字单句（< 200 无截断）
         let segs = split_for_speech(&text);
-        // 单句超长：无边界时按 200 字截断
         assert!(!segs.is_empty());
+        assert!(segs.iter().all(|s| s.chars().count() <= MAX_SEGMENT_CHARS));
+    }
+
+    #[test]
+    fn long_sentence_without_boundary_truncates() {
+        // 250 字无句号长句：按 200 字上限强制截断为多段
+        let text = "长句无标点".repeat(50);
+        assert_eq!(text.chars().count(), 250);
+        let segs = split_for_speech(&text);
+        assert!(segs.len() > 1, "超长无边界文本应截断为多段，实际 {} 段", segs.len());
         assert!(segs.iter().all(|s| s.chars().count() <= MAX_SEGMENT_CHARS));
     }
 
