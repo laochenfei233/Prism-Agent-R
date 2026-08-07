@@ -42,6 +42,12 @@ pub async fn settings_add_provider(
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp_millis();
 
+    // 非空 key 用 AES-GCM 加密后存储（§12 安全要求）
+    let stored_key = match &api_key {
+        Some(k) if !k.is_empty() => Some(encrypt_key(k)?),
+        _ => api_key,
+    };
+
     sqlx::query(
         "INSERT INTO providers (id, name, kind, base_url, api_key_enc, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)"
     )
@@ -49,7 +55,7 @@ pub async fn settings_add_provider(
     .bind(&name)
     .bind(&kind)
     .bind(&base_url)
-    .bind(&api_key)
+    .bind(&stored_key)
     .bind(now)
     .bind(now)
     .execute(&state.db.pool)

@@ -1,4 +1,4 @@
-import { invoke } from '$lib/api/client';
+import { invoke, listen } from '$lib/api/client';
 
 export interface TaskInput {
 	key: string;
@@ -61,6 +61,69 @@ function createTaskStore() {
 	let templates = $state<TaskTemplateSummary[]>([]);
 	let runStatus = $state<TaskRunStatus | null>(null);
 	let templatesLoading = $state(false);
+	let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+	// 监听 workflow:stage / workflow:done 事件，实时推进运行状态
+	$effect(() => {
+		const unsubStage = listen('workflow:stage', (event: { payload: any }) => {
+			const payload = event.payload as { run_id?: string; stage_id?: string; status?: string };
+			if (!payload || !runId || payload.run_id !== runId) return;
+			if (runStatus) {
+				runStatus = { ...runStatus, status: 'running', current_stage: payload.stage_id ?? runStatus.current_stage };
+			}
+		});
+
+		const unsubDone = listen('workflow:done', (event: { payload: any }) => {
+			const payload = event.payload as { run_id?: string; status?: string };
+			if (!payload || !runId || payload.run_id !== runId) return;
+			stopPolling();
+			if (runStatus) {
+				runStatus = { ...runStatus, status: payload.status === 'completed' ? 'completed' : 'failed' };
+			}
+			refreshRunStatus();
+		});
+
+		return () => {
+			unsubStage.then((fn) => fn());
+			unsubDone.then((fn) => fn());
+			stopPolling();
+		};
+	});
+
+	async function refreshRunStatus() {
+		if (!runId) return;
+		try {
+			const result = await invoke<any>('workflow_result', { runId });
+			const total = definition?.stages.length ?? 0;
+			const done = result.status === 'completed' ? total : (runStatus?.stages_done ?? 0);
+			runStatus = {
+				run_id: result.run_id,
+				status: result.status === 'running' || result.status === 'pending' ? 'running' : result.status,
+				current_stage: runStatus?.current_stage ?? null,
+				stages_done: done,
+				stages_total: total,
+				outputs: result.outputs ?? null,
+				error: result.error ?? null,
+			};
+			if (result.status === 'completed' || result.status === 'failed' || result.status === 'cancelled') {
+				stopPolling();
+			}
+		} catch {
+			// 轮询失败忽略，下次重试
+		}
+	}
+
+	function startPolling() {
+		stopPolling();
+		pollTimer = setInterval(refreshRunStatus, 2000);
+	}
+
+	function stopPolling() {
+		if (pollTimer) {
+			clearInterval(pollTimer);
+			pollTimer = null;
+		}
+	}
 
 	function newDefinition() {
 		definition = {
@@ -124,8 +187,20 @@ function createTaskStore() {
 	async function startRun(inputs?: Record<string, any>) {
 		if (!definition) return;
 		try {
-			runId = await invoke<string>('task_run', { definition, inputs: inputs || null });
+			const id = await invoke<string>('task_run', { definition, inputs: inputs || null });
+			runId = id;
+			runStatus = {
+				run_id: id,
+				status: 'running',
+				current_stage: null,
+				stages_done: 0,
+				stages_total: definition.stages.length,
+				outputs: null,
+				error: null,
+			};
 			viewMode = 'run';
+			refreshRunStatus();
+			startPolling();
 		} catch (e) {
 			validation = { ok: false, errors: [e instanceof Error ? e.message : String(e)] };
 		}
@@ -193,6 +268,7 @@ function createTaskStore() {
 	function resetRun() {
 		runId = null;
 		runStatus = null;
+		stopPolling();
 	}
 
 	return {
