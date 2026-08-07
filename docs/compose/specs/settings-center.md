@@ -1,13 +1,20 @@
 ---
 feature: settings-center
-status: designed
+status: delivered
 updated: 2026-08-07
 branch: feat/settings-center
+commits: 7989472..a43f0d5
 ---
 
 # 设置中心重构 — 全量可配置项整理与重新设计
 
 ## Report
+
+**What was built** — 设置中心全量重构：后端新增设置注册表（`src-tauri/src/data/settings/registry.rs`，16 个设置项按 8 分组定义 key/label/kind/default/min/max/step）与类型化 preferences 读写辅助（`prefs.rs`，get_str/bool/i64/f64/set/remove 带默认值回退），新增通用 IPC 命令 `settings_get_all`/`settings_set`（类型与范围校验后落库）。硬编码消费点全部接线到 preferences（护栏 max_chars/注入开关、Token 预算、反思循环开关与轮数、RAG 分块大小/重叠/top_k/混合权重、trace 保留条数、Agent 默认温度/max_tokens），无记录时回退原硬编码值，行为不变。前端设置页重构为左侧八组导航 + 右侧内容区（模型服务/Agent/记忆/工具/RAG/会议/安全/高级），注册表项按 kind 通用渲染（Switch/数字/文本/下拉），既有管理块（Provider/模型/翻译模型/MCP/技能/Market/ASR/项目索引）归组保留，新增工作区设置块。清理无调用者的死代码 `contextualize_document`。
+
+**Verification** — `cargo check` 零警告；`cargo test` 57 passed（新增 registry 4 + prefs 2 + guardrails configured 2，基线 49）；`npm run check` 0 errors / 35 warnings（既有 a11y）；`npm run build` 通过；Playwright mock-Tauri 浏览器验证通过（八组导航渲染、注册表项分组展示、工作区显示当前目录、数值行即时保存生效）。两轮评审（general-1 / general-2）无 critical/major，minor 全部修复后复评通过。
+
+**Journey log** — (1) TokenBudget 结构体 14 字段实为死配置（chat.rs 只用单值 with_token_budget），只注册单键不展开 UI 是正确的取舍；(2) settings 页 Svelte 5 的 `#snippet` 必须用 `{@render}` 调用而非组件语法，首次实现踩坑；(3) prefs 测试曾因「建库后立即删临时目录」导致连接池打开失败，测试保留临时目录即修复；(4) 数值输入 `Number('') === 0` 会绕过 NaN 防护提交 0，需显式空串判断；(5) 通用注册表 + 类型化读取使「新增设置项只需 registry 加一行」成为现实，后续可继续迁移 workspace/rag 等专有命令到统一键。
 
 ## [S1] Problem
 
@@ -105,11 +112,11 @@ pub async fn remove(db, key) -> Result<(), AppError>       // DELETE
 - **布局**：左侧分组导航（八组 + 图标），右侧内容区；移动端降级为分组 tab 或折叠。复用 base 组件（Tabs / Switch / Input / Select / Slider / Button）。
 - **注册表驱动渲染**：`settings_get_all()` 一次拉取全部项，按 `group` 分组渲染；kind → 组件映射：Bool→Switch、Int→Input(number)/Slider、Float→Slider、String→Input、Select→Select。保存调用 `settings_set(key, value)`。
 - **保留并归组现有管理块**：
-  - 模型服务：Provider 增删/改 Key、模型添加/默认标记（现状逻辑保留）
+  - 模型服务：Provider 增删/改 Key、模型添加/默认标记（现状逻辑保留）、翻译模型选择（translate_model_config）
   - 工具：MCP 服务器增删测、技能安装/卸载、Skill Market
   - 记忆：重建索引按钮 + 说明
   - 会议：ASR 配置管理（asr_list_configs / save / delete / 测试）
-  - 高级：翻译模型选择（translate_model_config）、RAG 嵌入配置（rag_embedding_config 模式/模型/维度）、RAG contextual/rerank 开关、项目索引开关（project_index_toggle）
+  - 高级：工作区设置（workspace_get/set）、项目索引开关（project_index_toggle）、RAG 嵌入配置（rag_embedding_config 模式/模型/维度）、RAG contextual/rerank 开关
 - **即时反馈**：保存后 toast 提示；数值项范围校验（min/max/step 由注册表下发）。
 - **样式**：沿用现有 Apple Design 令牌（`--color-*`），分组卡片 + 分隔线，不复刻新设计语言。
 
@@ -130,7 +137,7 @@ pub async fn remove(db, key) -> Result<(), AppError>       // DELETE
 
 ## Tasks
 
-- [ ] T1: 后端注册表 + prefs 类型化读取 + `settings_get_all`/`settings_set` 命令并注册 — acceptance: `cargo test` 通过，新增 registry/prefs 单测；`cargo check` 零警告 (covers: S2.1)
-- [ ] T2: 硬编码消费点接线（护栏/Token 预算/反思/RAG 分块/top_k/混合权重/trace 保留/Agent 默认值）— acceptance: 各消费点读 preferences 回退默认；`cargo test` 通过 (covers: S2.2, S2.3; depends: T1)
-- [ ] T3: 前端设置页八组重构 + 注册表驱动渲染 + 既有管理块归组 — acceptance: `svelte-check` 无新增错误；设置页可读全部注册项、修改后刷新仍在 (covers: S2.4; depends: T1, T2)
-- [ ] T4: 验证与评审 — acceptance: `npm run check` 0 error；`cargo test` 全绿；评审通过 (covers: S2.1-S2.4; depends: T3)
+- [x] T1: 后端注册表 + prefs 类型化读取 + `settings_get_all`/`settings_set` 命令并注册 — acceptance: `cargo test` 通过，新增 registry/prefs 单测；`cargo check` 零警告 (covers: S2.1)
+- [x] T2: 硬编码消费点接线（护栏/Token 预算/反思/RAG 分块/top_k/混合权重/trace 保留/Agent 默认值）— acceptance: 各消费点读 preferences 回退默认；`cargo test` 通过 (covers: S2.2, S2.3; depends: T1)
+- [x] T3: 前端设置页八组重构 + 注册表驱动渲染 + 既有管理块归组 — acceptance: `svelte-check` 无新增错误；设置页可读全部注册项、修改后刷新仍在 (covers: S2.4; depends: T1, T2)
+- [x] T4: 验证与评审 — acceptance: `npm run check` 0 error；`cargo test` 全绿；评审通过 (covers: S2.1-S2.4; depends: T3)

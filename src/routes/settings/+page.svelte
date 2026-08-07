@@ -778,8 +778,10 @@
 							max={spec.max ?? undefined}
 							step={spec.step ?? (spec.kind === 'int' ? 1 : 0.1)}
 							onchange={(e) => {
-							const v = Number((e.currentTarget as HTMLInputElement).value);
-							if (!Number.isNaN(v)) onsave(v);
+								const raw = (e.currentTarget as HTMLInputElement).value;
+								if (raw === '') return;
+								const v = Number(raw);
+								if (!Number.isNaN(v)) onsave(v);
 						}}
 						/>
 					</div>
