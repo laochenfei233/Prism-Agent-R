@@ -51,6 +51,9 @@ jobs:
         env:
           LIBCLANG_PATH: /usr/lib/llvm-14/lib
 
+      - name: SvelteKit sync (生成 .svelte-kit 类型文件，svelte-check 依赖)
+        run: npx svelte-kit sync
+
       - name: Svelte type check
         run: npx svelte-check --output machine
 
