@@ -11,7 +11,7 @@
 		<h4>{template.name}</h4>
 		<p>{template.description}</p>
 	</div>
-	<span class="card-stages">{template.stage_count} steps</span>
+	<span class="card-stages">{template.stage_count} 步</span>
 </button>
 
 <style>

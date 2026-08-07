@@ -5,9 +5,9 @@
 	import TaskRunPanel from './TaskRunPanel.svelte';
 
 	const TABS = [
-		{ label: 'Templates', key: 'template' as const },
-		{ label: 'Design', key: 'design' as const },
-		{ label: 'Run', key: 'run' as const },
+		{ label: '模板', key: 'template' as const },
+		{ label: '设计', key: 'design' as const },
+		{ label: '运行', key: 'run' as const },
 	];
 
 	let activeTab = $derived(TABS.findIndex((t) => t.key === taskStore.viewMode));
@@ -19,80 +19,80 @@
 	const builtinTemplates: { id: string; name: string; description: string; stage_count: number; icon: string; definition: any }[] = [
 		{
 			id: 'builtin-research',
-			name: 'Deep Research',
-			description: 'Multi-stage research: search → analyze → synthesize',
+			name: '深度研究',
+			description: '搜索 → 分析 → 综合报告',
 			stage_count: 3,
 			icon: '🔍',
 			definition: {
-				name: 'Deep Research',
-				description: 'Comprehensive research workflow',
+				name: '深度研究',
+				description: '多阶段研究工作流',
 				inputs: [
-					{ key: 'topic', label: 'Research Topic', kind: 'Text' as const, options: null, default: '', required: true },
-					{ key: 'depth', label: 'Depth', kind: 'Select' as const, options: ['Quick', 'Standard', 'Deep'], default: 'Standard', required: true },
+					{ key: 'topic', label: '研究主题', kind: 'Text' as const, options: null, default: '', required: true },
+					{ key: 'depth', label: '研究深度', kind: 'Select' as const, options: ['快速', '标准', '深度'], default: '标准', required: true },
 				],
 				stages: [
-					{ id: '1', name: 'Search', role: 'Researcher', agent_id: null, prompt_template: 'Search for comprehensive information about: {{topic}}', tools: ['web_search'], max_iterations: 5, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '2', name: 'Analyze', role: 'Analyst', agent_id: null, prompt_template: 'Analyze the following research findings:\n{{Search}}', tools: [], max_iterations: 3, depends_on: ['1'], model_hint: null, output_spec: null },
-					{ id: '3', name: 'Report', role: 'Writer', agent_id: null, prompt_template: 'Write a comprehensive report based on:\n{{Analyze}}', tools: [], max_iterations: 2, depends_on: ['2'], model_hint: null, output_spec: null },
+					{ id: '1', name: '搜索', role: '研究员', agent_id: null, prompt_template: '请搜索关于「{{topic}}」的全面信息：', tools: ['web_search'], max_iterations: 5, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: '分析', role: '分析师', agent_id: null, prompt_template: '请分析以下搜索结果，提取关键发现：\n{{搜索}}', tools: [], max_iterations: 3, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: '报告', role: '写手', agent_id: null, prompt_template: '请基于分析结果撰写一份综合报告：\n{{分析}}', tools: [], max_iterations: 2, depends_on: ['2'], model_hint: null, output_spec: null },
 				],
 			},
 		},
 		{
 			id: 'builtin-translate',
-			name: 'Translation',
-			description: 'Translate → review → finalize',
+			name: '翻译校对',
+			description: '翻译 → 审校 → 终稿',
 			stage_count: 3,
 			icon: '🌐',
 			definition: {
-				name: 'Translation Pipeline',
-				description: 'Professional translation workflow',
+				name: '翻译校对',
+				description: '专业翻译工作流',
 				inputs: [
-					{ key: 'source_text', label: 'Source Text', kind: 'Textarea' as const, options: null, default: '', required: true },
-					{ key: 'target_lang', label: 'Target Language', kind: 'Select' as const, options: ['English', 'Japanese', 'Korean', 'French', 'German'], default: 'English', required: true },
+					{ key: 'source_text', label: '原文', kind: 'Textarea' as const, options: null, default: '', required: true },
+					{ key: 'target_lang', label: '目标语言', kind: 'Select' as const, options: ['英语', '日语', '韩语', '法语', '德语'], default: '英语', required: true },
 				],
 				stages: [
-					{ id: '1', name: 'Translate', role: 'Translator', agent_id: null, prompt_template: 'Translate the following to {{target_lang}}:\n{{source_text}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '2', name: 'Review', role: 'Reviewer', agent_id: null, prompt_template: 'Review this translation for accuracy and fluency:\n{{Translate}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
-					{ id: '3', name: 'Finalize', role: 'Editor', agent_id: null, prompt_template: 'Produce the final polished translation:\nSource: {{source_text}}\nDraft: {{Translate}}\nReview: {{Review}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
+					{ id: '1', name: '初翻', role: '翻译', agent_id: null, prompt_template: '请将以下文本翻译为{{target_lang}}：\n{{source_text}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: '审校', role: '审校员', agent_id: null, prompt_template: '请审校以下翻译，检查准确性和流畅度：\n{{初翻}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: '终稿', role: '编辑', agent_id: null, prompt_template: '请根据审校意见输出最终译文：\n原文：{{source_text}}\n初翻：{{初翻}}\n审校意见：{{审校}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
 				],
 			},
 		},
 		{
 			id: 'builtin-code-review',
-			name: 'Code Review',
-			description: 'Analyze → find issues → suggest improvements',
+			name: '代码审查',
+			description: '代码分析 → 问题发现 → 改进建议',
 			stage_count: 3,
 			icon: '💻',
 			definition: {
-				name: 'Code Review',
-				description: 'Automated code review workflow',
+				name: '代码审查',
+				description: '自动化代码审查工作流',
 				inputs: [
-					{ key: 'code', label: 'Code', kind: 'Textarea' as const, options: null, default: '', required: true },
-					{ key: 'language', label: 'Language', kind: 'Select' as const, options: ['TypeScript', 'Python', 'Rust', 'Go', 'Java'], default: 'TypeScript', required: true },
+					{ key: 'code', label: '代码', kind: 'Textarea' as const, options: null, default: '', required: true },
+					{ key: 'language', label: '编程语言', kind: 'Select' as const, options: ['TypeScript', 'Python', 'Rust', 'Go', 'Java'], default: 'TypeScript', required: true },
 				],
 				stages: [
-					{ id: '1', name: 'Analyze', role: 'Analyst', agent_id: null, prompt_template: 'Analyze this {{language}} code:\n{{code}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '2', name: 'Find Issues', role: 'Reviewer', agent_id: null, prompt_template: 'Find bugs and issues in this analysis:\n{{Analyze}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
-					{ id: '3', name: 'Suggest', role: 'Advisor', agent_id: null, prompt_template: 'Suggest improvements for:\n{{Find Issues}}\nOriginal code:\n{{code}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
+					{ id: '1', name: '分析', role: '分析师', agent_id: null, prompt_template: '请分析以下{{language}}代码的结构和功能：\n{{code}}', tools: [], max_iterations: 1, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: '找问题', role: '审查员', agent_id: null, prompt_template: '请根据代码分析结果，找出潜在的 Bug 和问题：\n{{分析}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: '建议', role: '顾问', agent_id: null, prompt_template: '请针对发现的问题给出具体改进建议：\n问题列表：{{找问题}}\n原始代码：\n{{code}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
 				],
 			},
 		},
 		{
 			id: 'builtin-brainstorm',
-			name: 'Brainstorm',
-			description: 'Generate ideas → evaluate → select best',
+			name: '头脑风暴',
+			description: '生成创意 → 评估筛选 → 输出方案',
 			stage_count: 3,
 			icon: '💡',
 			definition: {
-				name: 'Brainstorm',
-				description: 'Structured brainstorming workflow',
+				name: '头脑风暴',
+				description: '结构化创意工作流',
 				inputs: [
-					{ key: 'topic', label: 'Topic', kind: 'Text' as const, options: null, default: '', required: true },
+					{ key: 'topic', label: '主题', kind: 'Text' as const, options: null, default: '', required: true },
 				],
 				stages: [
-					{ id: '1', name: 'Generate', role: 'Creative', agent_id: null, prompt_template: 'Generate diverse ideas for: {{topic}}', tools: [], max_iterations: 3, depends_on: [], model_hint: null, output_spec: null },
-					{ id: '2', name: 'Evaluate', role: 'Critic', agent_id: null, prompt_template: 'Evaluate these ideas on feasibility and impact:\n{{Generate}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
-					{ id: '3', name: 'Select', role: 'Strategist', agent_id: null, prompt_template: 'Select and refine the best ideas:\n{{Evaluate}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
+					{ id: '1', name: '发散', role: '创意官', agent_id: null, prompt_template: '请围绕「{{topic}}」进行头脑风暴，尽可能多地产出创意：', tools: [], max_iterations: 3, depends_on: [], model_hint: null, output_spec: null },
+					{ id: '2', name: '评估', role: '评审官', agent_id: null, prompt_template: '请从可行性和影响力两个维度评估以下创意：\n{{发散}}', tools: [], max_iterations: 2, depends_on: ['1'], model_hint: null, output_spec: null },
+					{ id: '3', name: '精选', role: '策略师', agent_id: null, prompt_template: '请从评估结果中选出最佳创意并细化：\n{{评估}}', tools: [], max_iterations: 1, depends_on: ['2'], model_hint: null, output_spec: null },
 				],
 			},
 		},
@@ -131,7 +131,7 @@
 				</div>
 				<button class="start-blank" onclick={taskStore.newDefinition}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-					Start from scratch
+					从零开始
 				</button>
 			</div>
 

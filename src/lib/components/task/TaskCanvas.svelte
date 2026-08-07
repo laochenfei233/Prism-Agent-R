@@ -62,21 +62,21 @@
 						taskStore.definition = { ...taskStore.definition, name: (e.target as HTMLInputElement).value };
 					}
 				}}
-				placeholder="Workflow name"
+				placeholder="输入工作流名称"
 			/>
 		</div>
 		<div class="toolbar-right">
 			<button class="tb-btn" onclick={taskStore.validate}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-				Validate
+				验证
 			</button>
 			<button class="tb-btn" onclick={taskStore.saveTemplate}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
-				Save
+				保存
 			</button>
 			<button class="tb-btn primary" onclick={() => taskStore.startRun()}>
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
-				Run
+				运行
 			</button>
 		</div>
 	</div>
@@ -98,15 +98,15 @@
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
 			</div>
 			<div class="node-info">
-				<span class="node-title">Start</span>
-				<span class="node-sub">User Input</span>
+				<span class="node-title">开始</span>
+				<span class="node-sub">用户输入</span>
 			</div>
 		</div>
 
 		<!-- Connection line -->
 		<div class="connector">
 			<div class="line"></div>
-			<button class="add-btn" onclick={() => handleAddStage(-1)} title="Add stage">
+			<button class="add-btn" onclick={() => handleAddStage(-1)} title="添加阶段">
 				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 			</button>
 		</div>
@@ -133,18 +133,18 @@
 					<span class="stage-num">{i + 1}</span>
 				</div>
 				<div class="node-info">
-					<span class="node-title">{stage.name || `Stage ${i + 1}`}</span>
+					<span class="node-title">{stage.name || `阶段 ${i + 1}`}</span>
 					<div class="node-tags">
 						{#if stage.role}<span class="tag">{stage.role}</span>{/if}
 						{#if stage.agent_id}<span class="tag accent">Agent</span>{/if}
-						{#if stage.tools.length}<span class="tag">{stage.tools.length} tools</span>{/if}
-						<span class="tag muted">{stage.max_iterations} max turns</span>
+						{#if stage.tools.length}<span class="tag">{stage.tools.length} 个工具</span>{/if}
+						<span class="tag muted">最多 {stage.max_iterations} 轮</span>
 					</div>
 					{#if stage.prompt_template}
 						<span class="node-preview">{stage.prompt_template.slice(0, 80)}{stage.prompt_template.length > 80 ? '...' : ''}</span>
 					{/if}
 				</div>
-				<button class="node-delete" onclick={(e) => { e.stopPropagation(); taskStore.removeStage(stage.id); }} title="Remove">
+				<button class="node-delete" onclick={(e) => { e.stopPropagation(); taskStore.removeStage(stage.id); }} title="删除">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 				</button>
 			</div>
@@ -152,7 +152,7 @@
 			<!-- Connector after each stage -->
 			<div class="connector">
 				<div class="line"></div>
-				<button class="add-btn" onclick={() => handleAddStage(i)} title="Add stage">
+				<button class="add-btn" onclick={() => handleAddStage(i)} title="添加阶段">
 					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 				</button>
 			</div>
@@ -164,8 +164,8 @@
 				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
 					<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/>
 				</svg>
-				<p>No stages yet</p>
-				<button class="add-first" onclick={() => handleAddStage()}>Add first stage</button>
+				<p>还没有阶段</p>
+				<button class="add-first" onclick={() => handleAddStage()}>添加第一个阶段</button>
 			</div>
 		{/if}
 
@@ -176,8 +176,8 @@
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
 				</div>
 				<div class="node-info">
-					<span class="node-title">Output</span>
-					<span class="node-sub">Final result</span>
+					<span class="node-title">输出</span>
+					<span class="node-sub">最终结果</span>
 				</div>
 			</div>
 		{/if}
