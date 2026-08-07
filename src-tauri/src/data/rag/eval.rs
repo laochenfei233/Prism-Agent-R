@@ -62,11 +62,11 @@ pub struct Metrics {
     pub recall_at_k: f32,
     /// 页码定位正确：回答引用页码与期望 pages 一致的比例
     pub page_acc: f32,
-    /// 表格解析准确（LLM-as-Judge 或结构化比对，此处占位）
+    /// 表格解析准确：table_json 与期望单元格的逐格匹配率（结构化比对）
     pub table_acc: f32,
-    /// OCR 无漏字（占位：需扫描件样本）
+    /// OCR 无漏字：OCR 文本与人工转录的字符召回率（编辑距离）
     pub ocr_completeness: f32,
-    /// 图表正确理解（LLM-as-Judge，占位）
+    /// 图表正确理解：图注与期望语义一致性（LLM-as-Judge 5 分制 / 5）
     pub chart_acc: f32,
 }
 
@@ -341,6 +341,43 @@ mod tests {
         assert_eq!(reports[0].case_count, 2);
         assert!((reports[0].metrics.recall_at_k - 0.75).abs() < 1e-6);
         assert!((reports[0].metrics.page_acc - 0.5).abs() < 1e-6);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 集成：json_each 运行时可用性 + fetch_chunk_meta 返回 block_type/table_json/caption
+    #[tokio::test]
+    async fn fetch_chunk_meta_reads_block_meta() {
+        let dir = std::env::temp_dir().join(format!("prism_eval_meta_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&dir).await.unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        // 满足 rag_chunks 外键（wiki → document → chunk）
+        sqlx::query("INSERT INTO wikis (id, name, created_at, updated_at) VALUES ('wk-1', 't', 0, 0)")
+            .execute(&db.pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO rag_documents (id, wiki_id, name, mime_type, size, chunk_count, status, created_at, updated_at) \
+             VALUES ('doc-1', 'wk-1', 't.md', 'text/markdown', 10, 1, 'ready', 0, 0)"
+        )
+        .execute(&db.pool).await.unwrap();
+
+        let chunk_id = "ch-meta-1";
+        sqlx::query(
+            "INSERT INTO rag_chunks (id, document_id, wiki_id, \"index\", content, block_type, table_json, caption, created_at) \
+             VALUES (?1, 'doc-1', 'wk-1', 0, '单元格内容', 'table', ?2, NULL, ?3)"
+        )
+        .bind(chunk_id)
+        .bind(r#"[["姓名","年龄"],["张三","30"]]"#)
+        .bind(now)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+        let metas = fetch_chunk_meta(&db, &[chunk_id.to_string()]).await.unwrap();
+        assert_eq!(metas.len(), 1);
+        assert_eq!(metas[0].block_type, "table");
+        let rate = table_cell_match_rate(metas[0].table_json.as_deref(), Some(&[vec!["张三".into()]])).unwrap();
+        assert_eq!(rate, 1.0);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

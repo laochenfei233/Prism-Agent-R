@@ -56,8 +56,10 @@ impl MeetingService {
         let mut tx = self.db.pool.begin().await?;
         for seg in segments {
             let seg_id = uuid::Uuid::new_v4().to_string();
+            // 幂等 upsert：同 (meeting_id, "index") 覆盖更新（迁移 022 唯一索引支撑）
             sqlx::query(
-                "INSERT OR REPLACE INTO meeting_transcripts (id, meeting_id, \"index\", text, is_final, speaker_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+                "INSERT INTO meeting_transcripts (id, meeting_id, \"index\", text, is_final, speaker_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
+                 ON CONFLICT(meeting_id, \"index\") DO UPDATE SET text = excluded.text, is_final = excluded.is_final, speaker_id = excluded.speaker_id"
             )
             .bind(&seg_id).bind(id).bind(seg.index).bind(&seg.text)
             .bind(seg.is_final as i32).bind(seg.speaker_id.map(|s| s as i64)).bind(now)
@@ -429,7 +431,7 @@ impl MeetingService {
 
                 out.push_str("\n---\n\n## 转写\n\n");
                 for seg in &transcript {
-                    let speaker = segment_speaker(seg);
+                    let speaker = speaker_prefix(seg.speaker_id);
                     out.push_str(&format!("{}{}\n\n", speaker, seg.text));
                 }
 
@@ -584,7 +586,35 @@ pub fn speaker_prefix(speaker_id: Option<u32>) -> String {
     }
 }
 
-/// 转写片段说话人前缀（导出用）
-fn segment_speaker(seg: &crate::data::models::TranscriptSegment) -> String {
-    speaker_prefix(seg.speaker_id)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 回归：同 index 片段重复落库必须幂等覆盖（迁移 022 唯一索引 + ON CONFLICT）
+    #[tokio::test]
+    async fn update_transcript_upserts_by_index() {
+        let dir = std::env::temp_dir().join(format!("prism_meeting_up_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&dir).await.unwrap();
+        let svc = MeetingService::new(db, std::env::temp_dir());
+        let meeting = svc.create("t", None).await.unwrap();
+
+        // 同一 index 0 两次写入（第一次中间结果，第二次定稿）
+        svc.update_transcript(&meeting.id, &[TranscriptSegment {
+            index: 0, text: "今天天气".into(), is_final: false, translated: None, speaker_id: Some(1),
+        }]).await.unwrap();
+        svc.update_transcript(&meeting.id, &[TranscriptSegment {
+            index: 0, text: "今天天气很好。".into(), is_final: true, translated: None, speaker_id: Some(2),
+        }]).await.unwrap();
+
+        let segs = svc.get_transcript(&meeting.id).await.unwrap();
+        assert_eq!(segs.len(), 1, "同 index 只能有一行");
+        assert_eq!(segs[0].text, "今天天气很好。");
+        assert_eq!(segs[0].speaker_id, Some(2));
+
+        // transcript_text 带说话人前缀
+        let text = svc.transcript_text(&meeting.id).await.unwrap();
+        assert_eq!(text, "[说话人 2] 今天天气很好。");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

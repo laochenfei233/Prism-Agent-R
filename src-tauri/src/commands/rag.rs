@@ -169,7 +169,10 @@ pub async fn rag_eval(
         created_at: now,
     };
 
-    // 检索类指标直接度量：逐用例 hybrid_search
+    // 检索类指标直接度量：逐用例 hybrid_search（RagService 循环外复用，避免重复构建嵌入器）
+    let mut svc = RagService::new(state.db.clone());
+    svc.configure_from_db().await?;
+
     let mut hit_total = 0usize;
     let mut hit_denom = 0usize;
     let mut page_ok = 0usize;
@@ -185,8 +188,6 @@ pub async fn rag_eval(
     let mut chart_model: Option<std::sync::Arc<dyn crate::core::adk::model::ModelProvider>> = None;
 
     for case in &cases {
-        let mut svc = RagService::new(state.db.clone());
-        svc.configure_from_db().await?;
         let hits = svc.search(&case.wiki_id, &case.question, top_k).await.unwrap_or_default();
         let hit_ids: Vec<String> = hits.iter().map(|h| h.chunk_id.clone()).collect();
         let metas = fetch_chunk_meta(&state.db, &hit_ids).await.unwrap_or_default();

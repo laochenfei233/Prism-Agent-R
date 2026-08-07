@@ -93,6 +93,11 @@ fn walk_snapshot(root: &Path, dir: &Path, map: &mut Snapshot) {
         if IGNORED.contains(&name.as_str()) || name.starts_with('.') {
             continue;
         }
+        // 跳过符号链接（防目录环无限递归；链接指向区外的文件也不纳入快照）
+        let Ok(ftype) = entry.file_type() else { continue };
+        if ftype.is_symlink() {
+            continue;
+        }
         let Ok(meta) = entry.metadata() else { continue };
         let rel = path
             .strip_prefix(root)
