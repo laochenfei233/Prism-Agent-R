@@ -256,7 +256,7 @@
 <ToolApprovalDialog />
 
 <!-- Global Command Palette -->
-<CommandPalette bind:open={paletteOpen} items={paletteCommands} />
+<CommandPalette bind:open={paletteOpen} items={paletteCommands} onOpenSession={handleSelectSession} />
 
 <style>
 	.app {

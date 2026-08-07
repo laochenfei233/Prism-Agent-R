@@ -57,6 +57,8 @@ export const sessionApi = {
 	rename: (id: string, title: string) =>
 		invoke<SessionDto>('session_rename', { id, title }),
 	delete: (id: string) => invoke<void>('session_delete', { id }),
+	search: (query: string, limit?: number) =>
+		invoke<SessionDto[]>('session_search', { query, limit }),
 };
 
 // ── Chat API ──────────────────────────────────────────────

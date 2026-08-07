@@ -1,4 +1,4 @@
-import { invoke } from '$lib/api/client';
+import { invoke, listen } from '$lib/api/client';
 
 // ── Types (mirror backend DashboardOverview) ───────────────
 
@@ -92,6 +92,9 @@ function createDashboardStore() {
 	let overview = $state<DashboardOverview | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	let listenerAttached = false;
+	let lastUsageRefresh = 0;
+	const USAGE_REFRESH_THROTTLE_MS = 5000;
 
 	async function loadOverview() {
 		loading = true;
@@ -104,6 +107,23 @@ function createDashboardStore() {
 			loading = false;
 		}
 	}
+
+	// 消息完成时后端 emit usage:updated，节流刷新用量卡/趋势图
+	function attachUsageListener() {
+		if (listenerAttached) return;
+		listenerAttached = true;
+		listen('usage:updated', () => {
+			const now = Date.now();
+			if (now - lastUsageRefresh < USAGE_REFRESH_THROTTLE_MS) return;
+			lastUsageRefresh = now;
+			void loadOverview();
+		}).catch(() => {
+			// 非 Tauri 环境（如纯 web dev）下无事件系统，静默降级
+			listenerAttached = false;
+		});
+	}
+
+	attachUsageListener();
 
 	return {
 		get overview() { return overview; },

@@ -1,4 +1,4 @@
-import { invoke } from '$lib/api/client';
+import { invoke, listen } from '$lib/api/client';
 
 export interface AgentContext {
 	agent: any;
@@ -70,7 +70,15 @@ function createContextStore() {
 	let sidebarWidth = $state(320);
 	let collapsed = $state(false);
 
+	let lastAgentId: string | null = null;
+	let lastSessionId: string | null = null;
+	let listenerAttached = false;
+	let lastContextRefresh = 0;
+	const CONTEXT_REFRESH_THROTTLE_MS = 5000;
+
 	async function loadContext(agentId: string, sessionId?: string) {
+		lastAgentId = agentId;
+		lastSessionId = sessionId || null;
 		loading = true;
 		try {
 			context = await invoke<AgentContext>('context_agent', {
@@ -83,6 +91,31 @@ function createContextStore() {
 			loading = false;
 		}
 	}
+
+	async function refresh() {
+		if (!lastAgentId) return;
+		await loadContext(lastAgentId, lastSessionId ?? undefined);
+	}
+
+	// workspace / mcp 变化时增量刷新 context，节流避免高频调用后端
+	function attachContextListeners() {
+		if (listenerAttached) return;
+		listenerAttached = true;
+		const onChanged = () => {
+			const now = Date.now();
+			if (now - lastContextRefresh < CONTEXT_REFRESH_THROTTLE_MS) return;
+			lastContextRefresh = now;
+			void refresh();
+		};
+		['workspace:changed', 'mcp:status-changed', 'mcp:tools-changed'].forEach((event) => {
+			listen(event, onChanged).catch(() => {
+				// 非 Tauri 环境（如纯 web dev）下无事件系统，静默降级
+				listenerAttached = false;
+			});
+		});
+	}
+
+	attachContextListeners();
 
 	function toggleCollapse() {
 		collapsed = !collapsed;
@@ -111,6 +144,7 @@ function createContextStore() {
 			return collapsed;
 		},
 		loadContext,
+		refresh,
 		toggleCollapse
 	};
 }

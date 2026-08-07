@@ -3,17 +3,23 @@
 	import SidebarUsage from './SidebarUsage.svelte';
 	import SidebarMcp from './SidebarMcp.svelte';
 	import SidebarFiles from './SidebarFiles.svelte';
+	import SidebarWorkdir from './SidebarWorkdir.svelte';
+	import SidebarLsp from './SidebarLsp.svelte';
 
 	const tabs = [
 		{ id: 'usage', label: '用量', icon: 'chart' },
+		{ id: 'workdir', label: '目录', icon: 'folder' },
+		{ id: 'files', label: '文件', icon: 'files' },
 		{ id: 'mcp', label: 'MCP', icon: 'puzzle' },
-		{ id: 'files', label: '文件', icon: 'files' }
+		{ id: 'lsp', label: 'LSP', icon: 'server' }
 	] as const;
 
 	const tabComponents: Record<string, any> = {
 		usage: SidebarUsage,
+		workdir: SidebarWorkdir,
+		files: SidebarFiles,
 		mcp: SidebarMcp,
-		files: SidebarFiles
+		lsp: SidebarLsp
 	};
 
 	function formatNumber(n: number): string {
@@ -58,9 +64,21 @@
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
 						</svg>
-					{:else if tab.icon === 'files'}
+					{:else if tab.icon === 'folder'}
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+						</svg>
+					{:else if tab.icon === 'files'}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+							<polyline points="14 2 14 8 20 8"/>
+						</svg>
+					{:else if tab.icon === 'server'}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<rect x="2" y="2" width="20" height="8" rx="2"/>
+							<rect x="2" y="14" width="20" height="8" rx="2"/>
+							<line x1="6" y1="6" x2="6.01" y2="6"/>
+							<line x1="6" y1="18" x2="6.01" y2="18"/>
 						</svg>
 					{/if}
 					<span class="tab-label">{tab.label}</span>

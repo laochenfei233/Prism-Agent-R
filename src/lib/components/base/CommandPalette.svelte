@@ -9,24 +9,73 @@
 </script>
 
 <script lang="ts">
+	import { sessionApi, type SessionDto } from '$lib/api';
+
 	let {
 		open = $bindable(false),
 		items = [] as CommandItem[],
-		onclose
+		onclose,
+		onOpenSession
 	}: {
 		open?: boolean;
 		items?: CommandItem[];
 		onclose?: () => void;
+		onOpenSession?: (session: SessionDto) => void;
 	} = $props();
 
 	let query = $state('');
 	let selected = $state(0);
 	let inputEl = $state<HTMLInputElement | null>(null);
+	let searchResults = $state<SessionDto[]>([]);
+	let searchDone = $state(false);
+	let searchSeq = 0;
+
+	const searchItems = $derived<CommandItem[]>(
+		searchResults.map((s) => ({
+			id: `search-${s.id}`,
+			title: `打开会话：${s.title || '新会话'}`,
+			icon: 'chat',
+			action: () => onOpenSession?.(s)
+		}))
+	);
 
 	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return items;
-		return items.filter((i) => i.title.toLowerCase().includes(q));
+		const searchIds = new Set(searchResults.map((s) => s.id));
+		const statics = items.filter((i) => {
+			if (!i.title.toLowerCase().includes(q)) return false;
+			const m = /^session-(.+)$/.exec(i.id);
+			return !(m && searchIds.has(m[1]));
+		});
+		return [...searchItems, ...statics];
+	});
+
+	$effect(() => {
+		const q = query.trim();
+		if (q.length < 2) {
+			searchResults = [];
+			searchDone = false;
+			return;
+		}
+		searchDone = false;
+		const seq = ++searchSeq;
+		const t = setTimeout(async () => {
+			try {
+				const hits = await sessionApi.search(q);
+				if (seq !== searchSeq) return;
+				searchResults = hits;
+			} catch (e) {
+				if (seq !== searchSeq) return;
+				searchResults = [];
+				console.error('会话搜索失败:', e);
+			} finally {
+				if (seq === searchSeq) {
+					searchDone = true;
+				}
+			}
+		}, 300);
+		return () => clearTimeout(t);
 	});
 
 	$effect(() => {
@@ -139,7 +188,13 @@
 			</ul>
 
 			{#if filtered.length === 0}
-				<div class="empty">无匹配命令</div>
+				<div class="empty">
+					{#if query.trim().length >= 2 && searchDone}
+						未找到会话
+					{:else}
+						无匹配命令
+					{/if}
+				</div>
 			{/if}
 
 			<div class="footer">

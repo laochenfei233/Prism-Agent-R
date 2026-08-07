@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { invoke } from '$lib/api/client';
 	import type { AgentContext, DirTree } from '$lib/stores/context.svelte';
 
 	let { data }: { data: AgentContext } = $props();
@@ -6,23 +7,105 @@
 	const tree = $derived(data.tree);
 	let filterText = $state('');
 	let expandedPaths = $state<Set<string>>(new Set());
+	let treeCache = $state<Record<string, DirTree>>({});
+	let loadingPaths = $state<Set<string>>(new Set());
 
-	function toggleExpand(path: string) {
-		const next = new Set(expandedPaths);
-		if (next.has(path)) {
-			next.delete(path);
-		} else {
-			next.add(path);
-		}
-		expandedPaths = next;
+	let previewPath = $state<string | null>(null);
+	let previewContent = $state('');
+	let previewLoading = $state(false);
+	let previewError = $state<string | null>(null);
+
+	let lastClickPath: string | null = null;
+	let lastClickTime = 0;
+
+	function childrenOf(path: string): DirTree[] | null {
+		const cached = treeCache[path];
+		return cached ? cached.children : null;
 	}
 
 	function matchesFilter(node: DirTree): boolean {
 		if (!filterText) return true;
 		const q = filterText.toLowerCase();
 		if (node.name.toLowerCase().includes(q)) return true;
-		if (node.children) return node.children.some(matchesFilter);
+		if (node.is_dir) {
+			const kids = childrenOf(node.path);
+			if (kids) return kids.some(matchesFilter);
+		}
 		return false;
+	}
+
+	async function toggleExpand(node: DirTree) {
+		const next = new Set(expandedPaths);
+		if (next.has(node.path)) {
+			next.delete(node.path);
+			expandedPaths = next;
+			return;
+		}
+		next.add(node.path);
+		expandedPaths = next;
+		if (!treeCache[node.path]) {
+			await loadChildren(node.path);
+		}
+	}
+
+	async function loadChildren(path: string) {
+		const next = new Set(loadingPaths);
+		next.add(path);
+		loadingPaths = next;
+		try {
+			const sub = await invoke<DirTree>('workspace_tree', { path, depth: 2 });
+			treeCache = { ...treeCache, [path]: sub };
+		} catch (e) {
+			console.error('Failed to load tree:', path, e);
+		} finally {
+			const done = new Set(loadingPaths);
+			done.delete(path);
+			loadingPaths = done;
+		}
+	}
+
+	function togglePreview(path: string) {
+		if (previewPath === path) {
+			previewPath = null;
+			return;
+		}
+		previewPath = path;
+		void loadPreview(path);
+	}
+
+	async function loadPreview(path: string) {
+		previewLoading = true;
+		previewError = null;
+		previewContent = '';
+		try {
+			previewContent = await invoke<string>('workspace_read_file', { path });
+		} catch (e) {
+			previewError = errMessage(e);
+		} finally {
+			previewLoading = false;
+		}
+	}
+
+	function openExternal(path: string) {
+		void invoke('workspace_open_file', { path }).catch((e) => {
+			console.error('Failed to open file:', path, e);
+		});
+	}
+
+	function onFileClick(path: string) {
+		const now = Date.now();
+		if (lastClickPath === path && now - lastClickTime < 300) {
+			return; // 双击的第二次点击，交给 ondblclick 处理
+		}
+		lastClickPath = path;
+		lastClickTime = now;
+		togglePreview(path);
+	}
+
+	function errMessage(e: unknown): string {
+		if (typeof e === 'string') return e;
+		if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message);
+		return String(e);
 	}
 
 	function langIcon(lang: string | null): string {
@@ -58,6 +141,83 @@
 	}
 </script>
 
+{#snippet nodeRow(n: DirTree, depth: number)}
+	{#if n.is_dir}
+		<div class="tree-node">
+			<button
+				class="node-row"
+				class:active-dir={expandedPaths.has(n.path)}
+				style:padding-left={`${8 + depth * 16}px`}
+				onclick={() => void toggleExpand(n)}
+			>
+				<svg
+					class="dir-icon"
+					class:expanded={expandedPaths.has(n.path)}
+					width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+				>
+					<polyline points="9 18 15 12 9 6"/>
+				</svg>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="folder-icon">
+					<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+				</svg>
+				<span class="node-name">{n.name}</span>
+			</button>
+			{#if expandedPaths.has(n.path)}
+				{#if loadingPaths.has(n.path)}
+					<div class="hint-row" style:padding-left={`${24 + depth * 16}px`}>加载中…</div>
+				{:else}
+					{@const kids = childrenOf(n.path)}
+					{#if kids && kids.length > 0}
+						<div class="children">
+							{#each kids as c}
+								{#if matchesFilter(c)}
+									{@render nodeRow(c, depth + 1)}
+								{/if}
+							{/each}
+						</div>
+					{:else}
+						<div class="hint-row" style:padding-left={`${24 + depth * 16}px`}>空目录</div>
+					{/if}
+				{/if}
+			{/if}
+		</div>
+	{:else}
+		<div
+			class="node-row file-row"
+			class:active-file={previewPath === n.path}
+			style:padding-left={`${8 + depth * 16}px`}
+			role="button"
+			tabindex="0"
+			onclick={() => onFileClick(n.path)}
+			ondblclick={() => openExternal(n.path)}
+			onkeydown={(e) => {
+				if (e.key === 'Enter') onFileClick(n.path);
+			}}
+		>
+			<span class="lang-badge" style:color={langColor(n.language)}>{langIcon(n.language)}</span>
+			<span class="node-name">{n.name}</span>
+			{#if n.line_count !== null}
+				<span class="line-count">{n.line_count}L</span>
+			{/if}
+		</div>
+		{#if previewPath === n.path}
+			<div class="preview">
+				<div class="preview-header">
+					<span class="preview-name">{n.name}</span>
+					<span class="preview-hint">单击收起 · 双击外部打开</span>
+				</div>
+				{#if previewLoading}
+					<div class="preview-state">加载中…</div>
+				{:else if previewError}
+					<div class="preview-state preview-error">{previewError}</div>
+				{:else}
+					<pre class="preview-content">{previewContent}</pre>
+				{/if}
+			</div>
+		{/if}
+	{/if}
+{/snippet}
+
 <div class="files-panel">
 	<div class="search-bar">
 		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -74,81 +234,7 @@
 		<div class="tree">
 			{#each tree.children ?? [] as child}
 				{#if matchesFilter(child)}
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="tree-node">
-						{#if child.is_dir}
-							<button class="node-row" onclick={() => toggleExpand(child.path)}>
-								<svg
-									class="dir-icon"
-									class:expanded={expandedPaths.has(child.path)}
-									width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-								>
-									<polyline points="9 18 15 12 9 6"/>
-								</svg>
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="folder-icon">
-									<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-								</svg>
-								<span class="node-name">{child.name}</span>
-							</button>
-							{#if expandedPaths.has(child.path) && child.children}
-								<div class="children">
-									{#each child.children as grandchild}
-										{#if matchesFilter(grandchild)}
-											<!-- svelte-ignore a11y_no_static_element_interactions -->
-											<div class="tree-node">
-												{#if grandchild.is_dir}
-													<button class="node-row indent" onclick={() => toggleExpand(grandchild.path)}>
-														<svg
-															class="dir-icon"
-															class:expanded={expandedPaths.has(grandchild.path)}
-															width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-														>
-															<polyline points="9 18 15 12 9 6"/>
-														</svg>
-														<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="folder-icon">
-															<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-														</svg>
-														<span class="node-name">{grandchild.name}</span>
-													</button>
-													{#if expandedPaths.has(grandchild.path) && grandchild.children}
-														<div class="children">
-															{#each grandchild.children as leaf}
-																{#if matchesFilter(leaf)}
-																	<div class="node-row indent-2">
-																		<span class="lang-badge" style:color={langColor(leaf.language)}>{langIcon(leaf.language)}</span>
-																		<span class="node-name">{leaf.name}</span>
-																		{#if leaf.line_count !== null}
-																			<span class="line-count">{leaf.line_count}L</span>
-																		{/if}
-																	</div>
-																{/if}
-															{/each}
-														</div>
-													{/if}
-												{:else}
-													<div class="node-row indent">
-														<span class="lang-badge" style:color={langColor(grandchild.language)}>{langIcon(grandchild.language)}</span>
-														<span class="node-name">{grandchild.name}</span>
-														{#if grandchild.line_count !== null}
-															<span class="line-count">{grandchild.line_count}L</span>
-														{/if}
-													</div>
-												{/if}
-											</div>
-										{/if}
-									{/each}
-								</div>
-							{/if}
-						{:else}
-							<div class="node-row">
-								<span class="lang-badge" style:color={langColor(child.language)}>{langIcon(child.language)}</span>
-								<span class="node-name">{child.name}</span>
-								{#if child.line_count !== null}
-									<span class="line-count">{child.line_count}L</span>
-								{/if}
-							</div>
-						{/if}
-					</div>
+					{@render nodeRow(child, 0)}
 				{/if}
 			{/each}
 		</div>
@@ -208,7 +294,7 @@
 		border: none;
 		background: none;
 		color: var(--color-fg);
-		cursor: default;
+		cursor: pointer;
 		width: 100%;
 		text-align: left;
 		font-size: 12px;
@@ -218,11 +304,9 @@
 		background: var(--color-bg-tertiary);
 	}
 
-	.indent {
-		padding-left: 20px;
-	}
-	.indent-2 {
-		padding-left: 36px;
+	.active-dir,
+	.active-file {
+		background: var(--color-bg-tertiary);
 	}
 
 	.dir-icon {
@@ -267,6 +351,62 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
+	}
+
+	.hint-row {
+		font-size: 11px;
+		color: var(--color-fg-secondary);
+		padding: 3px 6px;
+	}
+
+	.preview {
+		margin: 2px 8px 4px;
+		padding: 8px 10px;
+		background: var(--color-bg);
+		border: 1px solid var(--color-separator);
+		border-radius: 6px;
+	}
+
+	.preview-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		margin-bottom: 6px;
+	}
+
+	.preview-name {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-fg);
+	}
+
+	.preview-hint {
+		font-size: 10px;
+		color: var(--color-fg-secondary);
+	}
+
+	.preview-state {
+		font-size: 12px;
+		color: var(--color-fg-secondary);
+		padding: 4px 0;
+	}
+
+	.preview-error {
+		color: var(--color-red, #ef4444);
+		word-break: break-all;
+	}
+
+	.preview-content {
+		margin: 0;
+		max-height: 240px;
+		overflow: auto;
+		font-size: 11px;
+		font-family: var(--font-mono);
+		line-height: 1.5;
+		color: var(--color-fg);
+		white-space: pre;
+		word-break: break-all;
 	}
 
 	.empty {

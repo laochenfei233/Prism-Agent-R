@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use tauri::State;
+use tauri::{Emitter, State};
 
 use crate::data::models::McpServerDto;
 use crate::data::services::mcp_service::{McpService, McpTestResult};
@@ -11,6 +11,12 @@ use crate::utils::error::AppError;
 
 fn mcp_service(state: &State<'_, crate::AppState>) -> McpService {
     McpService::new(state.db.clone(), state.mcp_runtime.clone())
+}
+
+/// 通知前端 MCP 服务器状态/工具集变化（节流由前端处理）
+fn emit_mcp_changed(app: &tauri::AppHandle, kind: &str) {
+    let _ = app.emit("mcp:status-changed", serde_json::json!({ "kind": kind }));
+    let _ = app.emit("mcp:tools-changed", serde_json::json!({ "kind": kind }));
 }
 
 // ── MCP 命令 ──────────────────────────────────────────────
@@ -25,6 +31,7 @@ pub async fn mcp_list(
 
 #[tauri::command]
 pub async fn mcp_add(
+    app: tauri::AppHandle,
     state: State<'_, crate::AppState>,
     name: String,
     r#type: String,
@@ -36,11 +43,16 @@ pub async fn mcp_add(
     timeout_ms: Option<i32>,
 ) -> Result<McpServerDto, AppError> {
     let svc = mcp_service(&state);
-    svc.add(name, r#type, command, args, env, base_url, headers, timeout_ms).await
+    let result = svc.add(name, r#type, command, args, env, base_url, headers, timeout_ms).await;
+    if result.is_ok() {
+        emit_mcp_changed(&app, "added");
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn mcp_update(
+    app: tauri::AppHandle,
     state: State<'_, crate::AppState>,
     id: String,
     name: Option<String>,
@@ -51,25 +63,37 @@ pub async fn mcp_update(
     timeout_ms: Option<i32>,
 ) -> Result<McpServerDto, AppError> {
     let svc = mcp_service(&state);
-    svc.update(&id, name, r#type, command, args, base_url, timeout_ms).await
+    let result = svc.update(&id, name, r#type, command, args, base_url, timeout_ms).await;
+    if result.is_ok() {
+        emit_mcp_changed(&app, "updated");
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn mcp_remove(
+    app: tauri::AppHandle,
     state: State<'_, crate::AppState>,
     id: String,
 ) -> Result<(), AppError> {
     let svc = mcp_service(&state);
-    svc.remove(&id).await
+    let result = svc.remove(&id).await;
+    if result.is_ok() {
+        emit_mcp_changed(&app, "removed");
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn mcp_test(
+    app: tauri::AppHandle,
     state: State<'_, crate::AppState>,
     id: String,
 ) -> Result<McpTestResult, AppError> {
     let svc = mcp_service(&state);
-    svc.test(&id).await
+    let result = svc.test(&id).await;
+    emit_mcp_changed(&app, "tested");
+    result
 }
 
 #[tauri::command]
