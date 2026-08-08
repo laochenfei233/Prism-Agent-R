@@ -292,16 +292,13 @@
 									{#each events as event (event.timestamp)}
 										<div class="flex items-start gap-2 text-xs py-1 border-b border-slate-700/30 last:border-0">
 											<span class="text-slate-500 shrink-0 w-16">{formatTime(event.timestamp)}</span>
-											<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
-												class:bg-blue-400/10={event.event_type.includes('generat')}
-												class:text-blue-400={event.event_type.includes('generat')}
-												class:bg-emerald-400/10={event.event_type.includes('completed') || event.event_type.includes('passed')}
-												class:text-emerald-400={event.event_type.includes('completed') || event.event_type.includes('passed')}
-												class:bg-yellow-400/10={event.event_type.includes('executing') || event.event_type.includes('reviewing')}
-												class:text-yellow-400={event.event_type.includes('executing') || event.event_type.includes('reviewing')}
-												class:bg-red-400/10={event.event_type.includes('failed') || event.event_type.includes('exhausted')}
-												class:text-red-400={event.event_type.includes('failed') || event.event_type.includes('exhausted')}
-											>
+											<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 {event.event_type.includes('failed') || event.event_type.includes('exhausted')
+												? 'bg-red-400/10 text-red-400'
+												: event.event_type.includes('completed') || event.event_type.includes('passed')
+													? 'bg-emerald-400/10 text-emerald-400'
+													: event.event_type.includes('executing') || event.event_type.includes('reviewing')
+														? 'bg-yellow-400/10 text-yellow-400'
+														: 'bg-blue-400/10 text-blue-400'}">
 												{event.event_type}
 											</span>
 											<span class="text-slate-300">{event.message}</span>

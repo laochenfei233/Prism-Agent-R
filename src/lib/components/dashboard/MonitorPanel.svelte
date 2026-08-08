@@ -158,12 +158,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="text-slate-300 truncate">{wf.workflow_id}</div>
 							<div class="text-slate-500 mt-0.5">
-								<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
-									class:bg-emerald-400/10={wf.status === 'running'}
-									class:text-emerald-400={wf.status === 'running'}
-									class:bg-yellow-400/10={wf.status === 'paused'}
-									class:text-yellow-400={wf.status === 'paused'}
-								>
+								<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {wf.status === 'running' ? 'bg-emerald-400/10 text-emerald-400' : 'bg-yellow-400/10 text-yellow-400'}">
 									{wf.status}
 								</span>
 								· {formatTime(wf.created_at)}
