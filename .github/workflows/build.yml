@@ -112,11 +112,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # LIBCLANG_PATH 是平台特定路径：写 Linux 专用的 .cargo/config.toml（与本机做法一致），
+      # 不能放进共享 env——Windows/macOS runner 上不存在 /usr/lib/llvm-14/lib，bindgen 会失败
+      - name: Configure LIBCLANG_PATH (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          mkdir -p src-tauri/.cargo
+          printf '[env]\nLIBCLANG_PATH = "/usr/lib/llvm-14/lib"\n' > src-tauri/.cargo/config.toml
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LIBCLANG_PATH: /usr/lib/llvm-14/lib
         with:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
