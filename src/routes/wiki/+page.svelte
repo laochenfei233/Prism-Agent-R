@@ -213,8 +213,8 @@
 
 	{#if showCreate}
 		<div class="create-form">
-			<input placeholder="知识库名称" bind:value={newName} />
-			<input placeholder="描述（可选）" bind:value={newDesc} />
+			<input placeholder="知识库名称" bind:value={newName} aria-label="知识库名称" />
+			<input placeholder="描述（可选）" bind:value={newDesc} aria-label="描述可选" />
 			<div class="form-actions">
 				<button class="btn-ghost" onclick={() => showCreate = false}>取消</button>
 				<button class="btn-primary" onclick={createWiki}>创建</button>
@@ -275,7 +275,7 @@
 					</div>
 					<div class="emb-row">
 						<label>模型</label>
-						<input placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} />
+						<input placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="如 text-embedding-3-small / nomic-embed-text" />
 					</div>
 				{/if}
 				<div class="emb-actions">
@@ -306,7 +306,7 @@
 				</div>
 
 				<div class="search-bar">
-					<input placeholder="搜索页面..." bind:value={searchQuery} onkeydown={(e) => e.key === 'Enter' && handleSearch()} />
+					<input placeholder="搜索页面..." bind:value={searchQuery} onkeydown={(e) => e.key === 'Enter' && handleSearch()} aria-label="搜索页面" />
 				</div>
 				{#if searching}<div class="hint">搜索中...</div>{/if}
 				{#if searchResults.length > 0}
@@ -405,7 +405,7 @@
 				<div class="rag-panel">
 					<h3>RAG 检索</h3>
 					<div class="rag-row">
-						<input placeholder="问知识库..." bind:value={ragQuery} onkeydown={(e) => e.key === 'Enter' && ragSearch()} />
+						<input placeholder="问知识库..." bind:value={ragQuery} onkeydown={(e) => e.key === 'Enter' && ragSearch()} aria-label="问知识库" />
 						<button class="btn-primary btn-sm" onclick={ragSearch}>检索</button>
 					</div>
 					{#if ragHits.length > 0}

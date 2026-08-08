@@ -248,6 +248,15 @@
 
 	$effect(() => { load(); });
 
+	// toast 4 秒后自动消失
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		if (!msg) return;
+		if (toastTimer) clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => { msg = ''; }, 4000);
+		return () => { if (toastTimer) clearTimeout(toastTimer); };
+	});
+
 	let asrListenerCleanup: (() => void) | null = null;
 
 	onMount(async () => {
@@ -261,7 +270,7 @@
 </script>
 
 {#if msg}
-	<div class="toast" class:error={msg.startsWith('错误')}>{msg}</div>
+	<div class="toast" class:error={msg.startsWith('错误')} role="status" aria-live="polite">{msg}</div>
 {/if}
 
 <div class="settings-shell">
@@ -271,7 +280,7 @@
 			<button class="nav-back" onclick={() => goto('/')} title="返回聊天" aria-label="返回聊天">
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
 			</button>
-			<span>设置</span>
+			<h1 class="nav-title">设置</h1>
 		</div>
 		<div class="nav-scroll">
 			<div class="nav-group-title">模型管理</div>
@@ -355,7 +364,7 @@
 						<div class="card detail-card">
 							<div class="section-title">连接设置</div>
 							<div class="form-row">
-								<input value={sel.base_url || ''} disabled placeholder="Base URL" />
+								<input value={sel.base_url || ''} disabled placeholder="Base URL" aria-label="Base URL" />
 							</div>
 							<div class="config-row">
 								<div class="config-info">
@@ -368,6 +377,7 @@
 											placeholder="新 API Key"
 											onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(sel.id); }}
 											disabled={keySaving}
+											aria-label="新 API Key"
 										/>
 										<button class="btn-sm" onclick={() => saveProviderKey(sel.id)} disabled={keySaving || !editKeyValue.trim()}>
 											{keySaving ? '保存中…' : '保存'}
@@ -388,7 +398,7 @@
 									<option value="">选择 Provider</option>
 									{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
 								</select>
-								<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" />
+								<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" aria-label="模型 ID,如 gpt-4o" />
 								<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
 									{loadingModels ? '拉取中...' : '拉取'}
 								</button>
@@ -430,11 +440,11 @@
 									<option value="openai">OpenAI 兼容</option>
 									<option value="ollama">Ollama</option>
 								</select>
-								<input bind:value={pName} placeholder="名称" />
+								<input bind:value={pName} placeholder="名称" aria-label="名称" />
 							</div>
 							<div class="form-row">
-								<input bind:value={pUrl} placeholder="Base URL" />
-								<input bind:value={pKey} type="password" placeholder="API Key" />
+								<input bind:value={pUrl} placeholder="Base URL" aria-label="Base URL" />
+								<input bind:value={pKey} type="password" placeholder="API Key" aria-label="API Key" />
 							</div>
 							<div class="form-row">
 								<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
@@ -499,13 +509,13 @@
 						<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
 						{#if asrShowAddConfig}
 							<div class="asr-form">
-								<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" />
+								<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" aria-label="名称如 本地 SenseVoice" />
 								<select bind:value={asrNewConfig.kind}>
 									{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
 								</select>
-								<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" />
+								<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" aria-label="模型路径本地后端,如 asr_models/sherpa-sensevoice-small" />
 								{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
-									<input bind:value={asrNewConfig.api_key} placeholder="API Key" />
+									<input bind:value={asrNewConfig.api_key} placeholder="API Key" aria-label="API Key" />
 								{/if}
 								<div class="form-row">
 									<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
@@ -555,7 +565,7 @@
 			<div class="card">
 				<div class="card-head">
 					<div class="form-row">
-						<input bind:value={mcName} placeholder="名称" />
+						<input bind:value={mcName} placeholder="名称" aria-label="名称" />
 						<select bind:value={mcType}>
 							<option value="stdio">Stdio</option>
 							<option value="http">HTTP</option>
@@ -563,14 +573,14 @@
 					</div>
 					{#if mcType === 'stdio'}
 						<div class="form-row">
-							<input bind:value={mcCommand} placeholder="命令，如 npx" />
+							<input bind:value={mcCommand} placeholder="命令，如 npx" aria-label="命令,如 npx" />
 						</div>
 						<div class="form-row">
-							<input bind:value={mcArgs} placeholder="参数（空格分隔），如 -y @modelcontextprotocol/server-filesystem" />
+							<input bind:value={mcArgs} placeholder="参数（空格分隔），如 -y @modelcontextprotocol/server-filesystem" aria-label="参数空格分隔,如 -y @modelcontextprotocol/server-filesystem" />
 						</div>
 					{:else}
 						<div class="form-row">
-							<input bind:value={mcUrl} placeholder="URL，如 http://localhost:3000/sse" />
+							<input bind:value={mcUrl} placeholder="URL，如 http://localhost:3000/sse" aria-label="URL,如 http://localhost:3000/sse" />
 						</div>
 					{/if}
 					<button class="btn-primary" onclick={addMcp}>添加 MCP</button>
@@ -601,7 +611,7 @@
 			<div class="card">
 				<div class="card-head">
 					<div class="form-row">
-						<input bind:value={skillPath} placeholder="技能目录路径，如 /path/to/my-skill" />
+						<input bind:value={skillPath} placeholder="技能目录路径，如 /path/to/my-skill" aria-label="技能目录路径,如 /path/to/my-skill" />
 					</div>
 					<button class="btn-primary" onclick={installSkill}>安装技能</button>
 				</div>
@@ -687,6 +697,7 @@
 		transition: background 0.15s ease;
 	}
 	.nav-back:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
+	.nav-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--color-fg); letter-spacing: -0.41px; }
 	.nav-scroll {
 		flex: 1;
 		overflow-y: auto;

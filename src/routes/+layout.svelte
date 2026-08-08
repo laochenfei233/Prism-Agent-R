@@ -190,7 +190,7 @@
 		<div class="section">
 			<div class="section-header">
 				<span class="section-title">Agent</span>
-				<button class="icon-btn-sm" onclick={() => showNewAgent = !showNewAgent}>
+				<button class="icon-btn-sm" onclick={() => showNewAgent = !showNewAgent} aria-label="新建 Agent">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
 					</svg>
@@ -217,7 +217,7 @@
 						onclick={() => agentStore.selectAgent(agent)}
 						role="button"
 						tabindex="0"
-						onkeydown={(e) => e.key === 'Enter' && agentStore.selectAgent(agent)}
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); agentStore.selectAgent(agent); } }}
 					>
 						<div class="avatar">{agent.name[0]}</div>
 						<div class="item-content">
@@ -248,7 +248,7 @@
 			<div class="section">
 				<div class="section-header">
 					<span class="section-title">会话</span>
-					<button class="icon-btn-sm" onclick={() => handleNewSession(agentStore.currentAgent!)}>
+					<button class="icon-btn-sm" onclick={() => handleNewSession(agentStore.currentAgent!)} aria-label="新建会话">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
 						</svg>
@@ -262,7 +262,7 @@
 							onclick={() => handleSelectSession(session)}
 							role="button"
 							tabindex="0"
-							onkeydown={(e) => e.key === 'Enter' && handleSelectSession(session)}
+							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectSession(session); } }}
 						>
 							<div class="item-content">
 								<div class="item-title">{session.title || '新会话'}</div>

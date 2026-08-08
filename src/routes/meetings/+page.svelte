@@ -303,6 +303,7 @@
 </script>
 
 <div class="meeting-shell">
+	<h1 class="visually-hidden">会议纪要</h1>
 	<!-- 左栏：会议列表 -->
 	<aside class="meeting-list-pane">
 		<div class="list-header">
@@ -310,6 +311,7 @@
 				class="search-input"
 				placeholder="搜索会议..."
 				bind:value={searchQuery}
+				aria-label="搜索会议"
 			/>
 			<button class="add-btn" onclick={createMeeting} title="新建会议">
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -499,6 +501,7 @@
 						bind:value={question}
 						onkeydown={(e) => e.key === 'Enter' && handleAsk()}
 						disabled={asking}
+						aria-label="对会议内容提问"
 					/>
 					<button class="qa-btn" onclick={handleAsk} disabled={asking || !question.trim()} aria-label="发送提问">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -519,6 +522,17 @@
 
 <style>
 	.meeting-shell { display: flex; height: 100vh; }
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+		border: 0;
+	}
 
 	/* ── 左栏列表 ─────────────────────────────── */
 	.meeting-list-pane {

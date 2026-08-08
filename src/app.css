@@ -124,3 +124,15 @@ body {
 		min-width: 44px;
 	}
 }
+
+/* 键盘焦点环兜底：组件内 outline:none 不得覆盖键盘可达性
+   （组件样式后加载、同特异性会覆盖 *:focus-visible，此处强制恢复） */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+	outline: 2px solid var(--color-focus-ring) !important;
+	outline-offset: 2px;
+}

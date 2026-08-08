@@ -1,0 +1,409 @@
+
+> prism-agent-r@0.1.0 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+The following Vite config options will be overridden by SvelteKit:
+  - root
+Loading svelte-check in workspace: c:\Users\chenfei\Documents\GitHub\prism-agent-R
+Getting Svelte diagnostics...
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\base\Modal.svelte[39m:30:3
+[33mWarn[39m: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+[36m	<div class="overlay" onclick={close} role="presentation">
+		[35m<div class="modal glass" onclick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+			{#if title}
+				<div class="header">
+					<h2>{title}</h2>
+					<button class="close-btn" onclick={close}>×</button>
+				</div>
+			{/if}
+			<div class="body">
+				{@render children()}
+			</div>
+		</div>[36m
+	</div>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\base\Modal.svelte[39m:30:3
+[33mWarn[39m: Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m	<div class="overlay" onclick={close} role="presentation">
+		[35m<div class="modal glass" onclick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+			{#if title}
+				<div class="header">
+					<h2>{title}</h2>
+					<button class="close-btn" onclick={close}>×</button>
+				</div>
+			{/if}
+			<div class="body">
+				{@render children()}
+			</div>
+		</div>[36m
+	</div>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\base\Sheet.svelte[39m:24:3
+[33mWarn[39m: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+[36m	<div class="overlay" onclick={close} role="presentation">
+		[35m<div
+			class="sheet sheet-{position}"
+			onclick={(e) => e.stopPropagation()}
+			role="dialog"
+		>
+			{@render children()}
+		</div>[36m
+	</div>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\base\Sheet.svelte[39m:24:3
+[33mWarn[39m: Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m	<div class="overlay" onclick={close} role="presentation">
+		[35m<div
+			class="sheet sheet-{position}"
+			onclick={(e) => e.stopPropagation()}
+			role="dialog"
+		>
+			{@render children()}
+		</div>[36m
+	</div>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\base\Switch.svelte[39m:19:1
+[33mWarn[39m: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+[36m
+[35m<button
+	class="switch"
+	class:active={checked}
+	{disabled}
+	onclick={toggle}
+	role="switch"
+	aria-checked={checked}
+>
+	<span class="thumb"></span>
+</button>[36m[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\base\Tooltip.svelte[39m:17:1
+[33mWarn[39m: `<div>` with a mouseenter or mouseleave handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m
+[35m<div
+	class="tooltip-wrap"
+	onmouseenter={() => show = true}
+	onmouseleave={() => show = false}
+>
+	{@render children()}
+	{#if show && content}
+		<div class="tooltip tooltip-{position}" role="tooltip">
+			{content}
+		</div>
+	{/if}
+</div>[36m[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\dashboard\AgentCard.svelte[39m:115:3
+[33mWarn[39m: Also define the standard property 'line-clamp' for compatibility (css)
+[36m		display: -webkit-box;
+		[35m-webkit-line-clamp[36m: 2;
+		-webkit-box-orient: vertical;[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\loop\LoopDesigner.svelte[39m:71:5
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m			<div class="form-item">
+				[35m<label>Loop 类型</label>[36m
+				<select bind:value={loopKind}>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\loop\LoopDesigner.svelte[39m:79:5
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m			<div class="form-item">
+				[35m<label>最大轮次</label>[36m
+				<input type="number" bind:value={maxRounds} min="1" max="50" />[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\loop\LoopDesigner.svelte[39m:84:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="form-item">
+					[35m<label>间隔（秒）</label>[36m
+					<input type="number" bind:value={intervalSecs} min="60" max="3600" />[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\loop\LoopDesigner.svelte[39m:90:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="form-item full-width">
+					[35m<label>目标描述</label>[36m
+					<input type="text" bind:value={goalDesc} placeholder="描述需要达成的目标..." />[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\market\SkillCard.svelte[39m:122:3
+[33mWarn[39m: Also define the standard property 'line-clamp' for compatibility (css)
+[36m		display: -webkit-box;
+		[35m-webkit-line-clamp[36m: 2;
+		-webkit-box-orient: vertical;[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\rag\RagConfigPanel.svelte[39m:48:7
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m					<div class="field-row">
+						[35m<label>min_gap</label>[36m
+						<input type="number" bind:value={minGap} min="0.01" max="1" step="0.01" />[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\rag\RagConfigPanel.svelte[39m:52:7
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m					<div class="field-row">
+						[35m<label>rel_drop</label>[36m
+						<input type="number" bind:value={relDrop} min="0.01" max="1" step="0.01" />[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\search\SearchSettings.svelte[39m:69:4
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m		<div class="config-item">
+			[35m<label class="label">Provider</label>[36m
+			<select bind:value={provider}>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\search\SearchSettings.svelte[39m:80:5
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m			<div class="config-item">
+				[35m<label class="label">API Key</label>[36m
+				<input[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\search\SearchSettings.svelte[39m:94:5
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m			<div class="config-item">
+				[35m<label class="label">Searxng 实例地址</label>[36m
+				<input[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\search\SearchSettings.svelte[39m:104:4
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m		<div class="config-item">
+			[35m<label class="label">备用 Provider</label>[36m
+			<select bind:value={fallbackProvider}>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:10:20
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m
+	let name = $state([35mstage[36m.name);
+	let role = $state(stage.role);[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:11:20
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let name = $state(stage.name);
+	let role = $state([35mstage[36m.role);
+	let agentId = $state(stage.agent_id ?? '');[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:12:23
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let role = $state(stage.role);
+	let agentId = $state([35mstage[36m.agent_id ?? '');
+	let prompt = $state(stage.prompt_template);[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:13:22
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let agentId = $state(stage.agent_id ?? '');
+	let prompt = $state([35mstage[36m.prompt_template);
+	let toolsStr = $state(stage.tools.join(', '));[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:14:24
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let prompt = $state(stage.prompt_template);
+	let toolsStr = $state([35mstage[36m.tools.join(', '));
+	let maxIter = $state(stage.max_iterations);[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:15:23
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let toolsStr = $state(stage.tools.join(', '));
+	let maxIter = $state([35mstage[36m.max_iterations);
+	let modelHint = $state(stage.model_hint ?? '');[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:16:25
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let maxIter = $state(stage.max_iterations);
+	let modelHint = $state([35mstage[36m.model_hint ?? '');
+	let outputSpec = $state(stage.output_spec ?? '');[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:17:26
+[33mWarn[39m: This reference only captures the initial value of `stage`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+[36m	let modelHint = $state(stage.model_hint ?? '');
+	let outputSpec = $state([35mstage[36m.output_spec ?? '');[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:34:1
+[33mWarn[39m: Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m<!-- svelte-ignore a11y_no_static_element_interactions -->
+[35m<div class="inspector-backdrop" onclick={onClose}>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="inspector" onclick={(e) => e.stopPropagation()}>
+		<div class="inspector-header">
+			<h3>阶段属性</h3>
+			<button class="close-btn" onclick={onClose}>&times;</button>
+		</div>
+
+		<div class="inspector-body">
+			<div class="field">
+				<label for="si-name">名称</label>
+				<input id="si-name" bind:value={name} oninput={apply} />
+			</div>
+
+			<div class="field">
+				<label for="si-role">角色</label>
+				<select id="si-role" bind:value={role} onchange={apply}>
+					<option value="assistant">Assistant</option>
+					<option value="user">User</option>
+					<option value="system">System</option>
+				</select>
+			</div>
+
+			<div class="field">
+				<label for="si-agent">Agent ID（可选）</label>
+				<input id="si-agent" bind:value={agentId} oninput={apply} placeholder="留空使用默认" />
+			</div>
+
+			<div class="field">
+				<label for="si-model">模型提示（可选）</label>
+				<input id="si-model" bind:value={modelHint} oninput={apply} placeholder="如 gpt-4o" />
+			</div>
+
+			<div class="field">
+				<label for="si-prompt">Prompt 模板</label>
+				<textarea id="si-prompt" bind:value={prompt} oninput={apply} rows="4" placeholder="支持 input.key 变量引用"></textarea>
+			</div>
+
+			<div class="field">
+				<label for="si-tools">工具（逗号分隔）</label>
+				<input id="si-tools" bind:value={toolsStr} oninput={apply} placeholder="web_search, code_exec" />
+			</div>
+
+			<div class="field">
+				<label for="si-iter">最大迭代次数</label>
+				<input id="si-iter" type="number" bind:value={maxIter} oninput={apply} min="1" max="20" />
+			</div>
+
+			<div class="field">
+				<label for="si-output">输出规范（可选）</label>
+				<textarea id="si-output" bind:value={outputSpec} oninput={apply} rows="2" placeholder="描述期望的输出格式"></textarea>
+			</div>
+		</div>
+	</div>
+</div>[36m[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\task\TaskNodeInspector.svelte[39m:36:2
+[33mWarn[39m: Visible, non-interactive element `<div>` with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	[35m<div class="inspector" onclick={(e) => e.stopPropagation()}>
+		<div class="inspector-header">
+			<h3>阶段属性</h3>
+			<button class="close-btn" onclick={onClose}>&times;</button>
+		</div>
+
+		<div class="inspector-body">
+			<div class="field">
+				<label for="si-name">名称</label>
+				<input id="si-name" bind:value={name} oninput={apply} />
+			</div>
+
+			<div class="field">
+				<label for="si-role">角色</label>
+				<select id="si-role" bind:value={role} onchange={apply}>
+					<option value="assistant">Assistant</option>
+					<option value="user">User</option>
+					<option value="system">System</option>
+				</select>
+			</div>
+
+			<div class="field">
+				<label for="si-agent">Agent ID（可选）</label>
+				<input id="si-agent" bind:value={agentId} oninput={apply} placeholder="留空使用默认" />
+			</div>
+
+			<div class="field">
+				<label for="si-model">模型提示（可选）</label>
+				<input id="si-model" bind:value={modelHint} oninput={apply} placeholder="如 gpt-4o" />
+			</div>
+
+			<div class="field">
+				<label for="si-prompt">Prompt 模板</label>
+				<textarea id="si-prompt" bind:value={prompt} oninput={apply} rows="4" placeholder="支持 input.key 变量引用"></textarea>
+			</div>
+
+			<div class="field">
+				<label for="si-tools">工具（逗号分隔）</label>
+				<input id="si-tools" bind:value={toolsStr} oninput={apply} placeholder="web_search, code_exec" />
+			</div>
+
+			<div class="field">
+				<label for="si-iter">最大迭代次数</label>
+				<input id="si-iter" type="number" bind:value={maxIter} oninput={apply} min="1" max="20" />
+			</div>
+
+			<div class="field">
+				<label for="si-output">输出规范（可选）</label>
+				<textarea id="si-output" bind:value={outputSpec} oninput={apply} rows="2" placeholder="描述期望的输出格式"></textarea>
+			</div>
+		</div>
+	</div>[36m
+</div>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\wiki\WikiDetail.svelte[39m:112:3
+[33mWarn[39m: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+[36m	<div class="detail-header">
+		[35m<button class="back-btn" onclick={onback}>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+		</button>[36m
+		<div class="header-info">[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\lib\components\wiki\WikiList.svelte[39m:134:3
+[33mWarn[39m: Also define the standard property 'line-clamp' for compatibility (css)
+[36m		display: -webkit-box;
+		[35m-webkit-line-clamp[36m: 2;
+		-webkit-box-orient: vertical;[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\routes\translate\+page.svelte[39m:123:4
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m		<div class="model-row">
+			[35m<label>翻译模型</label>[36m
+			<select bind:value={translateModelId}>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\routes\wiki\+page.svelte[39m:260:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="emb-row">
+					[35m<label>模式</label>[36m
+					<select bind:value={embMode}>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\routes\wiki\+page.svelte[39m:268:7
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m					<div class="emb-row">
+						[35m<label>Provider</label>[36m
+						<select bind:value={embProvider}>[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\routes\wiki\+page.svelte[39m:277:7
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m					<div class="emb-row">
+						[35m<label>模型</label>[36m
+						<input placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="如 text-embedding-3-small / nomic-embed-text" />[39m
+
+c:\Users\chenfei\Documents\GitHub\prism-agent-R\[32msrc\routes\wiki\+page.svelte[39m:290:6
+[33mWarn[39m: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+[36m				<div class="emb-row">
+					[35m<label>重排序</label>[36m
+					<label class="switch-label">[39m
+
+====================================
+[33msvelte-check found 0 errors and 35 warnings in 14 files
+[39m

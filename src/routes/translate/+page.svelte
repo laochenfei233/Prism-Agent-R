@@ -179,7 +179,7 @@
 	{#if showHistory}
 		<div class="panel">
 			<h3>翻译历史</h3>
-			<input placeholder="搜索历史..." bind:value={historyQuery} onkeydown={(e) => e.key === 'Enter' && loadHistory()} class="search-input" />
+			<input placeholder="搜索历史..." bind:value={historyQuery} onkeydown={(e) => e.key === 'Enter' && loadHistory()} class="search-input" aria-label="搜索历史" />
 			<div class="history-list">
 				{#each history as h}
 					<div class="history-item">
@@ -198,8 +198,8 @@
 		<div class="panel">
 			<h3>术语表</h3>
 			<div class="term-form">
-				<input placeholder="原文" bind:value={newTerm.source_term} />
-				<input placeholder="译文" bind:value={newTerm.target_term} />
+				<input placeholder="原文" bind:value={newTerm.source_term} aria-label="原文" />
+				<input placeholder="译文" bind:value={newTerm.target_term} aria-label="译文" />
 				<button class="btn-primary" onclick={addTerm}>添加</button>
 			</div>
 			<div class="term-list">
