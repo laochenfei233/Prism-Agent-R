@@ -991,4 +991,21 @@
 		box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 	}
 	.toast.error { background: var(--color-red, #ff453a); }
+
+	/* ── 窄视口响应式 ─────────────────────────── */
+	@media (max-width: 900px) {
+		.settings-nav { width: 56px; min-width: 56px; }
+		.nav-item span { display: none; }
+		.nav-item { justify-content: center; padding: 10px 0; }
+		.nav-group-title { display: none; }
+		.nav-back { width: 32px; }
+		.provider-list-pane { width: 140px; min-width: 140px; }
+	}
+	@media (max-width: 720px) {
+		.provider-shell { flex-direction: column; }
+		.provider-list-pane { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid var(--color-separator); }
+		.pane-list { display: flex; gap: 4px; overflow-x: auto; }
+		.pane-item { width: auto; flex-shrink: 0; }
+		.settings-content { padding: 20px; }
+	}
 </style>

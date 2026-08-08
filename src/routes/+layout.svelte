@@ -317,6 +317,7 @@
 	.app {
 		display: flex;
 		height: 100vh;
+		min-width: 375px;
 		overflow: hidden;
 		background: var(--color-bg);
 	}
@@ -541,6 +542,7 @@
 	/* ── Content ────────────────────────────────── */
 	.content {
 		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		overflow-y: auto;
@@ -554,5 +556,14 @@
 	.nav-link {
 		text-decoration: none;
 		color: inherit;
+	}
+
+	/* ── 窄视口响应式 ─────────────────────────── */
+	@media (max-width: 900px) {
+		.sidebar { width: 220px; min-width: 220px; }
+	}
+	@media (max-width: 720px) {
+		.sidebar { width: 180px; min-width: 180px; }
+		.logo-text { display: none; }
 	}
 </style>

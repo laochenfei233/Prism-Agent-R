@@ -777,4 +777,20 @@
 		line-height: 1.7;
 		color: var(--color-fg);
 	}
+
+	/* ── 窄视口响应式 ─────────────────────────── */
+	@media (max-width: 900px) {
+		.meeting-list-pane { width: 220px; min-width: 220px; }
+		.detail-header { padding: 12px 16px; }
+		.detail-body { padding: 12px 16px; }
+		.tabs { padding: 0 16px; }
+		.qa-bar { padding: 10px 16px; }
+	}
+	@media (max-width: 720px) {
+		.meeting-list-pane { width: 160px; min-width: 160px; }
+		.meeting-shell { flex-direction: column; }
+		.meeting-list-pane { width: 100%; min-width: 0; max-height: 200px; border-right: none; border-bottom: 1px solid var(--color-separator); }
+		.list-body { display: flex; gap: 6px; overflow-x: auto; }
+		.list-item { flex-shrink: 0; width: 220px; }
+	}
 </style>

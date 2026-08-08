@@ -255,4 +255,11 @@
 	.term-form input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; outline: none; }
 	.term-item span { flex: 1; font-size: 13px; color: var(--color-fg); }
 	.empty { text-align: center; padding: 24px; color: var(--color-fg-secondary); font-size: 13px; }
+
+	/* ── 窄视口响应式 ─────────────────────────── */
+	@media (max-width: 720px) {
+		.page { padding: 16px; }
+		.translate-columns { grid-template-columns: 1fr; }
+		.model-row { flex-direction: column; align-items: stretch; }
+	}
 </style>
