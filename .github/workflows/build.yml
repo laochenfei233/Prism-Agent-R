@@ -124,6 +124,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GitHub Actions ubuntu runner 无 /dev/fuse（2024 起移除），linuxdeploy 必须走 extract 模式
+          APPIMAGE_EXTRACT_AND_RUN: '1'
         with:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }}
