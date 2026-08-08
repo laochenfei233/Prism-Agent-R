@@ -154,61 +154,83 @@ pub async fn meeting_start_recording(
 ) -> Result<(), AppError> {
     let streams = get_streams(&state).await;
 
-    // 1. 健康检查（若配置了后端）
-    if let Some(cfg) = &asr_config {
-        let backend_cfg = AsrBackendConfig::from_input(
-            &cfg.kind,
-            cfg.base_url.clone(),
-            cfg.api_key.clone(),
-            cfg.model.clone(),
-            cfg.lang.clone(),
-            cfg.model_path.clone(),
-            cfg.extra.clone(),
-        );
-        let mut backend = crate::data::services::asr::create_asr_backend(&backend_cfg);
-        backend.health_check().await.map_err(crate::utils::error::AppError::from)?;
+    // 配置解析：显式传入优先；否则回退到默认配置（is_default=1）；均无则报错
+    let cfg = if let Some(c) = &asr_config {
+        Some(c.clone())
+    } else {
+        let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
+        let configs = svc.list_asr_configs().await?;
+        configs.into_iter().find(|c| c.is_default).map(|c| AsrConfigInput {
+            name: c.name,
+            kind: c.kind,
+            base_url: c.base_url,
+            api_key: None,
+            model: c.model,
+            lang: c.lang,
+            is_default: true,
+            model_path: c.model_path,
+            extra: c.extra,
+        })
+    };
 
-        // 2. 先建 stream（ASR 消费端）——时序规避核心
-        let rx = streams.create_stream(&id).await;
+    let Some(cfg) = cfg else {
+        return Err(AppError::Validation(
+            "未配置 ASR 后端。请先在「设置 → 语音识别 (ASR)」中添加并设为默认。".into(),
+        ));
+    };
 
-        // 3. 事件回调 → 增量落库 + 前端事件
-        let db = state.db.clone();
-        let app_handle = app.clone();
-        let meeting_id = id.clone();
-        let events = AsrEventSink::new(
-            move |seg: AsrSegment| {
-                let svc = MeetingService::new(db.clone(), paths::meetings_dir());
-                let app = app_handle.clone();
-                let meeting_id = meeting_id.clone();
-                tokio::spawn(async move {
-                    let _ = svc.update_transcript(&meeting_id, &[TranscriptSegment {
-                        index: seg.index as i32,
-                        text: seg.text.clone(),
-                        is_final: seg.is_final,
-                        translated: None,
-                        speaker_id: seg.speaker_id,
-                    }]).await;
-                    let _ = app.emit("meeting:transcript", serde_json::json!({
-                        "meeting_id": meeting_id,
-                        "index": seg.index,
-                        "text": seg.text,
-                        "is_final": seg.is_final,
-                        "speaker_id": seg.speaker_id,
-                    }));
-                });
-            },
-            |status: String| {
-                tracing::info!("[ASR] {status}");
-            },
-        );
+    let backend_cfg = AsrBackendConfig::from_input(
+        &cfg.kind,
+        cfg.base_url.clone(),
+        cfg.api_key.clone(),
+        cfg.model.clone(),
+        cfg.lang.clone(),
+        cfg.model_path.clone(),
+        cfg.extra.clone(),
+    );
+    let mut backend = crate::data::services::asr::create_asr_backend(&backend_cfg);
+    backend.health_check().await.map_err(crate::utils::error::AppError::from)?;
 
-        // 4. 音频流（PCM 块流）→ 后端 start
-        let audio = Box::pin(futures::stream::unfold(rx, |mut rx| async move {
-            rx.recv().await.map(|chunk| (chunk, rx))
-        }));
-        let _handle = backend.start(audio, events).await.map_err(crate::utils::error::AppError::from)?;
-        // 会话句柄由前端 stop 时取消（简化：每次 start 覆盖）
-    }
+    // 先建 stream（ASR 消费端）——时序规避核心
+    let rx = streams.create_stream(&id).await;
+
+    // 事件回调 → 增量落库 + 前端事件（meeting:transcript 实时转录）
+    let db = state.db.clone();
+    let app_handle = app.clone();
+    let meeting_id = id.clone();
+    let events = AsrEventSink::new(
+        move |seg: AsrSegment| {
+            let svc = MeetingService::new(db.clone(), paths::meetings_dir());
+            let app = app_handle.clone();
+            let meeting_id = meeting_id.clone();
+            tokio::spawn(async move {
+                let _ = svc.update_transcript(&meeting_id, &[TranscriptSegment {
+                    index: seg.index as i32,
+                    text: seg.text.clone(),
+                    is_final: seg.is_final,
+                    translated: None,
+                    speaker_id: seg.speaker_id,
+                }]).await;
+                let _ = app.emit("meeting:transcript", serde_json::json!({
+                    "meeting_id": meeting_id,
+                    "index": seg.index,
+                    "text": seg.text,
+                    "is_final": seg.is_final,
+                    "speaker_id": seg.speaker_id,
+                }));
+            });
+        },
+        |status: String| {
+            tracing::info!("[ASR] {status}");
+        },
+    );
+
+    // 音频流（PCM 块流）→ 后端 start
+    let audio = Box::pin(futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|chunk| (chunk, rx))
+    }));
+    let _handle = backend.start(audio, events).await.map_err(crate::utils::error::AppError::from)?;
+    // 会话句柄由前端 stop 时取消（简化：每次 start 覆盖）
 
     Ok(())
 }

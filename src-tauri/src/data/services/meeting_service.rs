@@ -473,6 +473,7 @@ impl MeetingService {
             .fetch_all(&self.db.pool).await?;
         Ok(rows.into_iter().map(|r| AsrConfig {
             id: r.id, name: r.name, kind: r.kind, base_url: r.base_url,
+            api_key: r.api_key_enc.as_deref().map(crate::commands::settings::decrypt_provider_key),
             model: r.model, lang: r.lang, is_default: r.is_default != 0,
             model_path: r.model_path,
             extra: r.extra.and_then(|e| serde_json::from_str(&e).ok()),
@@ -483,14 +484,16 @@ impl MeetingService {
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
         let extra = input.extra.as_ref().map(serde_json::to_string).transpose()?;
+        let api_key_enc = input.api_key.as_deref().map(crate::commands::settings::encrypt_provider_key);
         sqlx::query(
-            "INSERT INTO asr_configs (id, name, kind, base_url, model, lang, is_default, model_path, extra, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)"
+            "INSERT INTO asr_configs (id, name, kind, base_url, api_key_enc, model, lang, is_default, model_path, extra, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)"
         )
         .bind(&id).bind(&input.name).bind(&input.kind).bind(&input.base_url)
+        .bind(&api_key_enc)
         .bind(&input.model).bind(&input.lang).bind(input.is_default as i32)
         .bind(&input.model_path).bind(&extra).bind(now)
         .execute(&self.db.pool).await?;
-        Ok(AsrConfig { id, name: input.name, kind: input.kind, base_url: input.base_url, model: input.model, lang: input.lang, is_default: input.is_default, model_path: input.model_path, extra: input.extra })
+        Ok(AsrConfig { id, name: input.name, kind: input.kind, base_url: input.base_url, api_key: input.api_key, model: input.model, lang: input.lang, is_default: input.is_default, model_path: input.model_path, extra: input.extra })
     }
 
     pub async fn delete_asr_config(&self, id: &str) -> Result<(), AppError> {

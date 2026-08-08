@@ -823,6 +823,8 @@ pub struct AsrConfig {
     pub name: String,
     pub kind: String,
     pub base_url: Option<String>,
+    /// 明文 API key（服务层内部传递；落库前由 service 加密）
+    pub api_key: Option<String>,
     pub model: Option<String>,
     pub lang: Option<String>,
     pub is_default: bool,

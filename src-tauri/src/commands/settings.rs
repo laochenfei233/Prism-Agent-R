@@ -31,6 +31,15 @@ pub fn decrypt_provider_key(encoded: &str) -> String {
     decrypt_key(encoded).unwrap_or_else(|_| encoded.to_string())
 }
 
+/// 加密 key；失败时原样返回（空 key 不加密）
+pub fn encrypt_provider_key(plain: &str) -> String {
+    if plain.is_empty() {
+        plain.to_string()
+    } else {
+        encrypt_key(plain).unwrap_or_else(|_| plain.to_string())
+    }
+}
+
 #[tauri::command]
 pub async fn settings_add_provider(
     state: State<'_, crate::AppState>,
