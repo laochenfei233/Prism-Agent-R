@@ -13,6 +13,12 @@
 | § | 内容 | 文件 | 阶段 |
 |---|------|------|------|
 | S0 | 设计模式参考（Agentic Patterns / Cherry Studio / Compose-Next） | 索引 | — |
+| 15 | 网络搜索工具链（SearchProvider / web_search / 缓存 023） | phase4 | 🟪 |
+| 16 | RAG 检索增强（HyDE / RRF 多路融合 / 断崖截断 / 幂等导入） | phase4 | 🟪 |
+| 17 | Harness 工程化（会话生命周期 / Loop / Trace Grading 024） | phase4 | 🟪 |
+| 18 | Phase 4 前端 UI 设计（排版布局参考 Cherry Studio） | phase4 | 🟪 |
+| 19 | Agent 设计参考（Anthropic & OpenAI 2026 推荐 + 增量设计 8 项） | phase4 | 🟪 |
+| 20-21 | Phase 4 迁移与命令补记（023-025）/ 任务清单（T1-T19） | phase4 | 🟪 |
 | S1 | 问题定义 | 索引 | — |
 | S2 / 1-2 | 架构总览 / 技术选型 | 索引 | — |
 | 3 | Rust 后端三层架构（ADK/Rig/AutoAgents） | phase1 | 🟦 |
@@ -44,7 +50,7 @@
 | 13 | 性能设计 | phase1（基线）/ phase3（§13.1 压缩） | 🟦🟩 |
 | 14 | 旧版 prism-agent 经验与规避（51 条） | phase1 | 🟦 |
 
-> **图例**：🟦 Phase 1（Agent 核心闭环）· 🟧 Phase 2（面板）· 🟩 Phase 3（扩展）· (+🟧🟩) = 章节含后续阶段子节
+> **图例**：🟦 Phase 1（Agent 核心闭环）· 🟧 Phase 2（面板）· 🟩 Phase 3（扩展）· 🟪 Phase 4（自主能力深化）· (+🟧🟩) = 章节含后续阶段子节
 
 ---
 
@@ -56,6 +62,7 @@
 | **做 Phase 1 任务**（对话闭环） | `phase1-core.md` 全量 |
 | **做 Phase 2 任务**（面板/侧边栏/审批） | `phase2-panel.md` + 依赖基础（§5/§8/§10.6/§10.7 回查 phase1） |
 | **做 Phase 3 任务**（扩展功能） | `phase3-extend.md` + 依赖基础（§3/§5/§7/§8 回查 phase1） |
+| **做 Phase 4 任务**（搜索/检索增强/Harness） | `phase4-agentic.md` + 差距审计 `gap-audit.md` + 依赖基础（§10.2 回查 phase3、§10.6 回查 phase1） |
 | **数据库 / 迁移相关** | 迁移总表（见总索引）+ phase1 §5（完整 Schema）+ 各阶段 FTS 补充 |
 | **排查旧版教训** | phase1 §14（51 条规避，跨阶段对照） |
 
@@ -76,6 +83,10 @@
 | 做工具审批（HITL） | phase2 §10.10 + phase1 §8.3（tool:approval 事件） |
 | 加安全护栏 | phase3 §10.12 + phase1 §12（安全设计） |
 | 做上下文压缩 | phase3 §13.1（TokenBudget 统一配置） |
+| 做网络搜索 / web_search 工具 | phase4 §15（SearchProvider/缓存/降级） |
+| 做 RAG 检索增强（HyDE/RRF/断崖截断） | phase4 §16 + phase3 §10.2（基础） |
+| 做会话生命周期 / Loop 自动化 | phase4 §17.1-17.2 + phase1 §10.6（引擎）+ phase2 §10.10（审批） |
+| 做轨迹评分 / 回放 | phase4 §17.3 + phase3 §10.13（AgentJudge/trace） |
 | 查历史错误教训 | phase1 §14（51 条规避） |
 
 ---

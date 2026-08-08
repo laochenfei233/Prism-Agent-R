@@ -25,7 +25,7 @@ platform: windows | macos | linux
 | [`phase1-core.md`](../design/phase1-core.md) | **Phase 1 — Agent 核心闭环** | §3 后端三层架构 · §4 目录结构 · §5 数据库（含 §5.7 数据存储跨阶段基础：PRAGMA/消息FTS/分页/保留/索引） · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础（设计系统+对话） · §10.4 Skill（含市场搜索详设） · §10.6 工作流引擎+模板系统 · §10.7 记忆系统（完整设计） · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能基线（§13.1 见 phase3） · §14 旧版规避 | ~3150 |
 | [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.4.1-10.4.4 市场搜索 · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~889 |
 | [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG（含 10.2.2 Contextual Retrieval / 10.2.3 文档解析 / 10.2.4 可追溯引用 / 10.2.5 多维评测） · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §10.14 Skill/MCP Router（每轮意图路由） · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~2164 |
-| [`phase4-agentic.md`](../design/phase4-agentic.md) | **Phase 4 — 自主能力深化** | §15 网络搜索工具链（SearchProvider/web_search/缓存 023） · §16 RAG 检索增强（HyDE/RRF 多路融合/断崖截断/幂等导入） · §17 Harness 工程化（会话生命周期/Loop/Trace Grading 024） · §18 前端 UI 设计（排版布局参考 Cherry Studio） · §19-20 迁移命令补记 + 任务清单 | ~500 |
+| [`phase4-agentic.md`](../design/phase4-agentic.md) | **Phase 4 — 自主能力深化** | §15 网络搜索工具链（SearchProvider/web_search/缓存 023） · §16 RAG 检索增强（HyDE/RRF 多路融合/断崖截断/幂等导入） · §17 Harness 工程化（会话生命周期/Loop/Trace Grading 024） · §18 前端 UI 设计（排版布局参考 Cherry Studio） · §19 Agent 设计参考（Anthropic & OpenAI 2026 推荐 + 19.3 增量设计 8 项：compaction/三原语/双向审批/Auto-review/轨迹监控/渐进披露/评测捆绑/用例审计） · §20-21 迁移命令补记（023-025）+ 任务清单（P4-T1~T19） | ~740 |
 | [`gap-audit.md`](../design/gap-audit.md) | **Phase 4 差距审计** | 文档-代码偏差（web_search 缺失/022 漏登记）+ 4 参考仓库映射 | ~180 |
 | 本文件 | 总览 | 设计模式参考 · 问题定义 · 架构总览（含 §1.1/§1.2） · 技术选型 · MVP 规划 · 各功能 MVP 清单 · [S4] 错误矩阵 · [S5] 功能建议 · Tasks · Phase 1 完成报告 | ~817 |
 
@@ -60,6 +60,7 @@ platform: windows | macos | linux
 | 022_meeting_transcript_upsert | 转写幂等 upsert | meeting_transcripts 唯一索引 + ON CONFLICT（先清重） | phase3 §10.3（完成报告） | 🟩 |
 | 023_web_search_cache | 网络搜索缓存 | web_search_cache | phase4 §15.4 | 🟪 |
 | 024_trace_grading | 轨迹评分回写 | agent_traces 增 grade_score/grade_reason/graded_at | phase4 §17.3 | 🟪 |
+| 025_eval_harness_meta | 评测 harness 元数据 + 用例审计 | rag_eval_reports 增 harness_meta + rag_eval_cases 增 audit_verdict | phase4 §19.3.7-19.3.8 | 🟪 |
 
 > ⚠️ **本文档由原单文件 `docs/compose/specs/prism-agent-r.md` 按阶段拆分而来**，章节编号与设计内容保持不变。
 
