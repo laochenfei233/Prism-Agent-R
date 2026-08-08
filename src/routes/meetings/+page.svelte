@@ -593,18 +593,22 @@
 		position: absolute;
 		top: 8px;
 		right: 8px;
-		display: none;
+		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 20px;
-		height: 20px;
+		width: 24px;
+		height: 24px;
 		border-radius: 6px;
 		border: none;
 		background: transparent;
 		color: var(--color-fg-secondary);
 		cursor: pointer;
+		opacity: 0.45;
+		transition: opacity 0.15s ease, background 0.15s ease;
 	}
-	.list-item:hover .delete-btn { display: flex; }
+	.list-item:hover .delete-btn,
+	.list-item.selected .delete-btn,
+	.delete-btn:focus-visible { opacity: 1; }
 	.delete-btn:hover { background: #ff4444; color: #fff; }
 
 	/* ── 右栏详情 ─────────────────────────────── */

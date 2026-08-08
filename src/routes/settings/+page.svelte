@@ -14,6 +14,8 @@
 	let section = $state<'providers' | 'asr' | 'tts' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
 	// 当前选中的 Provider（Cherry Studio 风格：左侧列表 + 右侧详情）
 	let selectedProviderId = $state<string | null>(null);
+	// 是否处于"添加 Provider"模式（右侧显示表单）
+	let addingProvider = $state(false);
 
 	// Provider/Model
 	let pName = $state('');
@@ -127,7 +129,12 @@
 				baseUrl: pUrl.trim() || null, apiKey: pKey.trim() || null
 			});
 			pName = ''; pUrl = ''; pKey = '';
+			addingProvider = false;
 			await load();
+			// 显式选中新添加的 Provider（位于列表首位）
+			if (providers.length > 0) {
+				selectedProviderId = providers[0].id;
+			}
 			msg = '✓ Provider 已添加';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
@@ -315,7 +322,7 @@
 				<!-- Provider 列表（Cherry Studio 风格左子栏） -->
 				<div class="provider-list-pane">
 					<div class="pane-title">Provider</div>
-					<button class="add-provider-btn" onclick={() => { pName = ''; pUrl = ''; pKey = ''; pKind = 'openai'; }}>
+					<button class="add-provider-btn" onclick={() => { pName = ''; pUrl = ''; pKey = ''; pKind = 'openai'; addingProvider = true; }}>
 						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 						添加 Provider
 					</button>
@@ -338,7 +345,7 @@
 
 				<!-- Provider 详情（连接 + 模型管理） -->
 				<div class="provider-detail-pane">
-					{#if sel}
+					{#if sel && !addingProvider}
 						<div class="content-header">
 							<h2 class="content-title">{sel.name}</h2>
 							<p class="content-desc">配置连接参数并管理该服务商的模型</p>
@@ -411,7 +418,7 @@
 							{/if}
 						</div>
 					{:else}
-						<!-- 无选中：显示添加表单 -->
+						<!-- 添加 Provider 模式 -->
 						<div class="content-header">
 							<h2 class="content-title">Provider & 模型</h2>
 							<p class="content-desc">添加模型服务商并配置其模型</p>
@@ -429,7 +436,12 @@
 								<input bind:value={pUrl} placeholder="Base URL" />
 								<input bind:value={pKey} type="password" placeholder="API Key" />
 							</div>
-							<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
+							<div class="form-row">
+								<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
+								{#if sel}
+									<button class="btn-sm" onclick={() => addingProvider = false}>取消</button>
+								{/if}
+							</div>
 						</div>
 					{/if}
 				</div>

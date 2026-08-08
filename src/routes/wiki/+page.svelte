@@ -234,7 +234,13 @@
 		{:else}
 			<div class="grid">
 				{#each wikis as wiki}
-					<div class="card" onclick={() => selectWiki(wiki)}>
+					<div
+						class="card"
+						onclick={() => selectWiki(wiki)}
+						role="button"
+						tabindex="0"
+						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectWiki(wiki); } }}
+					>
 						<div class="card-icon">📚</div>
 						<h3>{wiki.name}</h3>
 						{#if wiki.description}<p>{wiki.description}</p>{/if}
@@ -306,7 +312,13 @@
 				{#if searchResults.length > 0}
 					<div class="search-results">
 						{#each searchResults as hit}
-							<div class="result-item" onclick={() => openPage(hit.path)}>
+							<div
+								class="result-item"
+								onclick={() => openPage(hit.path)}
+								role="button"
+								tabindex="0"
+								onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPage(hit.path); } }}
+							>
 								<strong>{hit.title}</strong>
 								<span class="snippet">{hit.snippet}</span>
 							</div>
@@ -325,6 +337,9 @@
 									class="tree-item"
 									class:active={selectedPath === page.path}
 									onclick={() => openPage(page.path)}
+									role="button"
+									tabindex="0"
+									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPage(page.path); } }}
 								>{page.title}</div>
 							{/each}
 						{/if}
