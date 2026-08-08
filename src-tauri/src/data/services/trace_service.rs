@@ -16,6 +16,10 @@ pub struct AgentTrace {
     pub total_completion_tokens: i64,
     pub total_cost: f64,
     pub outcome: String,
+    /// §17.3 Trace Grading
+    pub grade_score: Option<f64>,
+    pub grade_reason: Option<String>,
+    pub graded_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +87,89 @@ impl TraceService {
             let total_cost: f64 = row.try_get("total_cost")?;
             let outcome: String = row.try_get("outcome")?;
             let steps: Vec<TraceStep> = serde_json::from_str(&steps_json).unwrap_or_default();
-            traces.push(AgentTrace { id, session_id, agent_id, trace_id, started_at, finished_at, steps, total_prompt_tokens: 0, total_completion_tokens: 0, total_cost, outcome });
+            traces.push(AgentTrace {
+                id, session_id, agent_id, trace_id, started_at, finished_at,
+                steps, total_prompt_tokens: 0, total_completion_tokens: 0,
+                total_cost, outcome, grade_score: None, grade_reason: None, graded_at: None,
+            });
+        }
+        Ok(traces)
+    }
+
+    // ── §17.3 Trace Grading ──────────────────────────────────
+
+    /// 回写轨迹评分
+    pub async fn grade_trace(
+        &self,
+        trace_id: &str,
+        score: f64,
+        reason: &str,
+    ) -> Result<(), AppError> {
+        let now = chrono::Utc::now().timestamp();
+        sqlx::query(
+            "UPDATE agent_traces SET grade_score = ?1, grade_reason = ?2, graded_at = ?3 WHERE id = ?4"
+        )
+        .bind(score)
+        .bind(reason)
+        .bind(now)
+        .bind(trace_id)
+        .execute(&self.db.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// 按评分过滤轨迹列表
+    pub async fn list_traces_with_filter(
+        &self,
+        session_id: &str,
+        limit: Option<i64>,
+        min_grade: Option<f64>,
+        tool_failed: Option<bool>,
+    ) -> Result<Vec<AgentTrace>, AppError> {
+        let limit = limit.unwrap_or(50);
+
+        let mut query = String::from(
+            "SELECT * FROM agent_traces WHERE session_id = ?1"
+        );
+
+        if let Some(min_g) = min_grade {
+            query.push_str(&format!(" AND grade_score >= {min_g}"));
+        }
+
+        query.push_str(" ORDER BY started_at DESC LIMIT ?2");
+
+        let rows = sqlx::query(&query)
+            .bind(session_id)
+            .bind(limit)
+            .fetch_all(&self.db.pool)
+            .await?;
+
+        let mut traces = Vec::new();
+        for row in rows {
+            let id: String = row.try_get("id")?;
+            let session_id: String = row.try_get("session_id")?;
+            let agent_id: String = row.try_get("agent_id")?;
+            let trace_id: String = row.try_get("trace_id")?;
+            let started_at: i64 = row.try_get("started_at")?;
+            let finished_at: Option<i64> = row.try_get("finished_at")?;
+            let steps_json: String = row.try_get("steps")?;
+            let total_cost: f64 = row.try_get("total_cost")?;
+            let outcome: String = row.try_get("outcome")?;
+            let steps: Vec<TraceStep> = serde_json::from_str(&steps_json).unwrap_or_default();
+
+            // tool_failed 过滤：检查 steps 中是否有 error
+            if let Some(failed) = tool_failed {
+                let has_failure = steps.iter().any(|s| s.error.is_some());
+                if failed != has_failure {
+                    continue;
+                }
+            }
+
+            traces.push(AgentTrace {
+                id, session_id, agent_id, trace_id, started_at, finished_at,
+                steps, total_prompt_tokens: 0, total_completion_tokens: 0,
+                total_cost, outcome, grade_score: None, grade_reason: None, graded_at: None,
+            });
         }
         Ok(traces)
     }

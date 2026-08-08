@@ -121,6 +121,7 @@ pub async fn agent_stats(
             out.push(crate::data::services::trace_service::AgentTrace {
                 id, session_id, agent_id, trace_id, started_at, finished_at, steps,
                 total_prompt_tokens: 0, total_completion_tokens: 0, total_cost, outcome,
+                grade_score: None, grade_reason: None, graded_at: None,
             });
         }
         out

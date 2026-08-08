@@ -184,6 +184,9 @@ impl RigAgent {
                     total_completion_tokens: 0,
                     total_cost: 0.0,
                     outcome: "blocked".into(),
+                    grade_score: None,
+                    grade_reason: None,
+                    graded_at: None,
                 });
                 return Err(AgentError::Guardrail(reason));
             }
@@ -317,6 +320,9 @@ impl RigAgent {
                     total_completion_tokens: c as i64,
                     total_cost: 0.0,
                     outcome: "success".into(),
+                    grade_score: None,
+                    grade_reason: None,
+                    graded_at: None,
                 });
 
                 return Ok(AgentRunResult {
@@ -380,6 +386,9 @@ impl RigAgent {
             total_completion_tokens: 0,
             total_cost: 0.0,
             outcome: "timeout".into(),
+            grade_score: None,
+            grade_reason: None,
+            graded_at: None,
         });
 
         Err(AgentError::MaxIterations)

@@ -1,5 +1,7 @@
-use tauri::State;
+use serde::Serialize;
+use tauri::{Emitter, State};
 
+use crate::core::session::{SessionInitReport, SessionLifecycle};
 use crate::data::models::SessionDto;
 use crate::data::services::SessionService;
 use crate::utils::error::AppError;
@@ -47,4 +49,53 @@ pub async fn session_search(
 ) -> Result<Vec<SessionDto>, AppError> {
     let svc = SessionService::new(state.db.pool.clone());
     svc.search(&query, limit.unwrap_or(20)).await
+}
+
+// ── §17.1 会话生命周期命令 ──────────────────────────────────
+
+/// §17.1 会话初始化：校验 Provider/MCP/记忆，返回初始化报告
+#[tauri::command]
+pub async fn session_init(
+    app: tauri::AppHandle,
+    state: State<'_, crate::AppState>,
+    session_id: String,
+) -> Result<SessionInitReport, AppError> {
+    let report = state.session_state.init_session(
+        &session_id,
+        &state.db.pool,
+        &state.mcp_runtime,
+    ).await.map_err(|e| AppError::Internal(e))?;
+
+    let lifecycle = state.session_state.get_state(&session_id).await;
+    let _ = app.emit("session:state-changed", serde_json::json!({
+        "session_id": session_id,
+        "lifecycle": lifecycle,
+        "report": report,
+    }));
+
+    Ok(report)
+}
+
+/// §17.1 查询会话状态
+#[tauri::command]
+pub async fn session_state_query(
+    state: State<'_, crate::AppState>,
+    session_id: String,
+) -> Result<SessionLifecycle, AppError> {
+    Ok(state.session_state.get_state(&session_id).await)
+}
+
+/// §17.1 手动触发会话清理
+#[tauri::command]
+pub async fn session_cleanup(
+    app: tauri::AppHandle,
+    state: State<'_, crate::AppState>,
+    session_id: String,
+) -> Result<(), AppError> {
+    state.session_state.complete(&session_id).await;
+    let _ = app.emit("session:state-changed", serde_json::json!({
+        "session_id": session_id,
+        "lifecycle": SessionLifecycle::Done,
+    }));
+    Ok(())
 }
