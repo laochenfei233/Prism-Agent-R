@@ -238,6 +238,9 @@ pub fn run() {
             commands::monitor::guardrail_check_tool,
             commands::monitor::orchestrator_start,
             commands::monitor::orchestrator_get_session,
+            commands::monitor::workflow_pause,
+            commands::monitor::workflow_resume,
+            commands::monitor::monitor_list_active_workflows,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

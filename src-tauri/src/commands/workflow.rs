@@ -10,7 +10,14 @@ use crate::core::autoagents::scheduler::global as global_scheduler;
 use crate::core::autoagents::workflow::{
     StageStatus, TaskDefinition, TaskValidationResult, Workflow, WorkflowEngine,
 };
+use crate::core::autoagents::workflow_v2::{WorkflowV2, StageStatus as StageStatusV2};
+use crate::core::autoagents::workflow_engine_v2::WorkflowEngineV2;
 use crate::core::autoagents::{Coordinator, GenericActor};
+use crate::core::budget::config::BudgetConfig;
+use crate::core::budget::policy::BudgetPolicy;
+use crate::core::budget::tracker::BudgetTracker;
+use crate::core::observability::exception::ExceptionRecorder;
+use crate::core::observability::logger::{AgentLogger, LogLevel};
 use crate::core::rig::provider::OpenAiProvider;
 use crate::data::models::{ModelRow, ProviderRow, WorkflowDto, WorkflowRow};
 use crate::data::services::workflow_service::WorkflowService;
@@ -42,13 +49,19 @@ pub async fn workflow_run(
     .await?
     .ok_or_else(|| AppError::Validation(format!("工作流 '{workflow_id}' 不存在")))?;
 
-    let workflow: Workflow = serde_json::from_str(&row.definition)?;
-
     let svc = WorkflowService::new(state.db.clone());
     svc.ensure_schema().await?;
 
     let run_id = uuid::Uuid::new_v4().to_string();
-    let status = run_workflow(&app, state.inner(), &workflow, inputs, &run_id, &workflow_id, "workflow").await?;
+
+    // 尝试解析为 V2 工作流（优先），失败则回退到 V1
+    let status = if let Ok(workflow_v2) = serde_json::from_str::<WorkflowV2>(&row.definition) {
+        run_workflow_v2(&app, state.inner(), &workflow_v2, inputs, &run_id, &workflow_id, "workflow").await?
+    } else {
+        let workflow: Workflow = serde_json::from_str(&row.definition)?;
+        run_workflow(&app, state.inner(), &workflow, inputs, &run_id, &workflow_id, "workflow").await?
+    };
+
     Ok(WorkflowRunResult { run_id, status })
 }
 
@@ -475,6 +488,176 @@ async fn build_coordinator(
             provider.clone(),
             system_prompt,
             registry,
+        ));
+        coordinator.register(actor).await;
+    }
+    Ok(coordinator)
+}
+
+// ── V2 工作流执行 ────────────────────────────────────────
+
+/// 执行 V2 工作流：集成预算追踪、工具护栏、异常记录、重试策略
+async fn run_workflow_v2(
+    app: &tauri::AppHandle,
+    state: &crate::AppState,
+    workflow: &WorkflowV2,
+    inputs: HashMap<String, serde_json::Value>,
+    run_id: &str,
+    workflow_id: &str,
+    source: &str,
+) -> Result<String, AppError> {
+    // 用模板默认值补齐缺失输入
+    let mut merged_inputs = inputs;
+    for input in &workflow.inputs {
+        merged_inputs
+            .entry(input.key.clone())
+            .or_insert_with(|| {
+                input.default.clone().unwrap_or(serde_json::Value::Null)
+            });
+    }
+
+    let pool = state.db.pool.clone();
+
+    // 写入运行记录
+    let now = chrono::Utc::now().timestamp_millis();
+    let inputs_json = serde_json::to_string(&merged_inputs)?;
+    sqlx::query(
+        "INSERT INTO workflow_runs (id, workflow_id, status, inputs, outputs, error, created_at, finished_at, source) VALUES (?, ?, 'running', ?, NULL, NULL, ?, NULL, ?)",
+    )
+    .bind(run_id)
+    .bind(workflow_id)
+    .bind(&inputs_json)
+    .bind(now)
+    .bind(source)
+    .execute(&pool)
+    .await?;
+
+    // 构建 Coordinator
+    let coordinator = build_coordinator_v2(&pool, workflow).await?;
+
+    // 构建预算追踪器
+    let budget_tracker = Arc::new(BudgetTracker::new(
+        BudgetConfig::default(),
+        BudgetPolicy::default(),
+    ));
+
+    // 构建异常记录器
+    let exception_recorder = Arc::new(ExceptionRecorder::new(state.db.clone()));
+
+    // 构建日志器
+    let logger = Arc::new(AgentLogger::new(LogLevel::Info));
+
+    // 构建 V2 引擎
+    let engine = WorkflowEngineV2::new(coordinator, budget_tracker)
+        .with_exception_recorder(exception_recorder)
+        .with_logger(logger)
+        .on_stage({
+            let app = app.clone();
+            move |rid: &str, stage_id: &str, status: &StageStatusV2| {
+                let _ = app.emit("workflow:stage", serde_json::json!({
+                    "run_id": rid,
+                    "stage_id": stage_id,
+                    "status": status.as_str(),
+                }));
+            }
+        });
+
+    let _permit = global_scheduler().acquire().await;
+    let result = engine.run(workflow, merged_inputs, run_id).await;
+    drop(_permit);
+
+    let (final_status, outputs_json, error_msg) = match result {
+        Ok(res) => {
+            let failed = res
+                .stage_results
+                .iter()
+                .any(|s| matches!(&s.status, StageStatusV2::Failed));
+            let status = if failed { "failed" } else { "done" };
+            let out = serde_json::to_string(&res.outputs).unwrap_or_else(|_| "{}".into());
+            let err = res
+                .stage_results
+                .iter()
+                .find(|s| matches!(&s.status, StageStatusV2::Failed))
+                .and_then(|s| s.error.clone());
+            (status.to_string(), Some(out), err)
+        }
+        Err(e) => ("failed".to_string(), None, Some(e.to_string())),
+    };
+
+    let finished_at = chrono::Utc::now().timestamp_millis();
+    sqlx::query(
+        "UPDATE workflow_runs SET status = ?, outputs = ?, error = ?, finished_at = ? WHERE id = ?",
+    )
+    .bind(&final_status)
+    .bind(&outputs_json)
+    .bind(&error_msg)
+    .bind(finished_at)
+    .bind(run_id)
+    .execute(&pool)
+    .await?;
+
+    let _ = app.emit("workflow:done", serde_json::json!({
+        "run_id": run_id,
+        "status": final_status,
+    }));
+
+    Ok(final_status)
+}
+
+/// 构建 V2 Coordinator：为工作流的每个角色注册一个 GenericActor
+async fn build_coordinator_v2(
+    pool: &sqlx::SqlitePool,
+    workflow: &WorkflowV2,
+) -> Result<Arc<Coordinator>, AppError> {
+    let mut roles: Vec<String> = workflow.stages.iter().map(|s| s.role.clone()).collect();
+    roles.sort();
+    roles.dedup();
+
+    let model_row = sqlx::query_as::<_, ModelRow>(
+        "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE is_default = 1 LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::Validation("未配置默认模型。请在设置中添加 Provider 并设置默认模型。".into()))?;
+
+    let provider_row = sqlx::query_as::<_, ProviderRow>(
+        "SELECT id, name, kind, base_url, api_key_enc, is_enabled, created_at, updated_at FROM providers WHERE id = ?",
+    )
+    .bind(&model_row.provider_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::LlmProvider(format!("Provider 不存在: {}", model_row.provider_id)))?;
+
+    let base_url = provider_row.base_url.unwrap_or_else(|| {
+        match provider_row.kind.as_str() {
+            "ollama" => "http://localhost:11434/v1".to_string(),
+            _ => "https://api.openai.com/v1".to_string(),
+        }
+    });
+    let api_key = provider_row.api_key_enc.as_deref().map(crate::commands::settings::decrypt_provider_key).unwrap_or_default();
+
+    let provider: Arc<dyn ModelProvider> = Arc::new(OpenAiProvider::new(
+        model_row.provider_id.clone(),
+        model_row
+            .display_name
+            .clone()
+            .unwrap_or_else(|| model_row.model_id.clone()),
+        api_key,
+        base_url,
+        model_row.model_id.clone(),
+    ));
+
+    let coordinator = Arc::new(Coordinator::new());
+    for role in roles {
+        let system_prompt = format!(
+            "你是一个「{role}」角色的专业助手。请严格按照任务提示完成工作，只输出结果内容本身。"
+        );
+        let actor = Arc::new(GenericActor::new(
+            role.clone(),
+            role,
+            provider.clone(),
+            system_prompt,
+            ToolRegistry::new(),
         ));
         coordinator.register(actor).await;
     }

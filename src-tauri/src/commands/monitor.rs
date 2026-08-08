@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use tauri::State;
+use sqlx::Row;
+use tauri::{Emitter, State};
 
 use crate::core::budget::config::BudgetConfig;
 use crate::core::budget::policy::BudgetPolicy;
@@ -121,18 +122,28 @@ pub async fn guardrail_check_tool(
 
 #[tauri::command]
 pub async fn orchestrator_start(
+    app: tauri::AppHandle,
     _state: State<'_, crate::AppState>,
     user_request: String,
 ) -> Result<OrchestratorSession, AppError> {
     let session = OrchestratorSession::new(user_request, 5);
-    let tracker = BudgetTracker::new(BudgetConfig::default(), BudgetPolicy::default());
-    let engine = OrchestratorEngine::new(Arc::new(tracker));
+    let tracker = Arc::new(BudgetTracker::new(BudgetConfig::default(), BudgetPolicy::default()));
+    let engine = OrchestratorEngine::new(tracker)
+        .on_event({
+            let app = app.clone();
+            move |event| {
+                let _ = app.emit("orchestrator:event", serde_json::json!({
+                    "event_type": event.event_type,
+                    "message": event.message,
+                    "timestamp": event.timestamp,
+                }));
+            }
+        });
 
     // Run in background
-    let session_clone = session.clone();
+    let mut session_clone = session.clone();
     tokio::spawn(async move {
-        let mut s = session_clone;
-        let _ = engine.run(&mut s).await;
+        let _ = engine.run(&mut session_clone).await;
     });
 
     Ok(session)
@@ -142,6 +153,80 @@ pub async fn orchestrator_start(
 pub async fn orchestrator_get_session(
     _session_id: String,
 ) -> Result<OrchestratorSession, AppError> {
-    // For now, return a placeholder
     Ok(OrchestratorSession::new("placeholder".into(), 5))
+}
+
+// ── 工作流交互命令 ────────────────────────────────────────
+
+/// 暂停工作流
+#[tauri::command]
+pub async fn workflow_pause(
+    state: State<'_, crate::AppState>,
+    run_id: String,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE workflow_runs SET status = 'paused', finished_at = ? WHERE id = ? AND status = 'running'",
+    )
+    .bind(chrono::Utc::now().timestamp_millis())
+    .bind(&run_id)
+    .execute(&state.db.pool)
+    .await?;
+    Ok(())
+}
+
+/// 恢复工作流
+#[tauri::command]
+pub async fn workflow_resume(
+    state: State<'_, crate::AppState>,
+    run_id: String,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE workflow_runs SET status = 'running', finished_at = NULL WHERE id = ? AND status = 'paused'",
+    )
+    .bind(&run_id)
+    .execute(&state.db.pool)
+    .await?;
+    Ok(())
+}
+
+/// 获取活跃工作流列表
+#[tauri::command]
+pub async fn monitor_list_active_workflows(
+    state: State<'_, crate::AppState>,
+) -> Result<Vec<ActiveWorkflowDto>, AppError> {
+    let rows = sqlx::query(
+        "SELECT id, workflow_id, status, source, created_at, finished_at FROM workflow_runs WHERE status IN ('running', 'paused') ORDER BY created_at DESC"
+    )
+    .fetch_all(&state.db.pool)
+    .await?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        let id: String = row.try_get("id")?;
+        let workflow_id: String = row.try_get("workflow_id")?;
+        let status: String = row.try_get("status")?;
+        let source: String = row.try_get("source").unwrap_or_default();
+        let created_at: i64 = row.try_get("created_at")?;
+        let finished_at: Option<i64> = row.try_get("finished_at")?;
+
+        results.push(ActiveWorkflowDto {
+            id,
+            workflow_id,
+            status,
+            source,
+            created_at,
+            finished_at,
+        });
+    }
+    Ok(results)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ActiveWorkflowDto {
+    pub id: String,
+    pub workflow_id: String,
+    pub status: String,
+    pub source: String,
+    pub created_at: i64,
+    pub finished_at: Option<i64>,
 }

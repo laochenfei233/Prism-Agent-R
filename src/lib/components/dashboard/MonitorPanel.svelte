@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { invoke } from '$lib/api/client';
 	import { monitorStore } from '$lib/stores/monitor.svelte';
 
 	const budget = $derived(monitorStore.budget);
 	const exceptions = $derived(monitorStore.exceptions);
 	const loading = $derived(monitorStore.loading);
+
+	let activeWorkflows = $state<any[]>([]);
 
 	function tokenPercent(): number {
 		if (!budget) return 0;
@@ -25,18 +28,55 @@
 	}
 
 	function formatTime(ts: number): string {
-		const d = new Date(ts);
-		const now = new Date();
-		const diff = now.getTime() - ts;
+		const diff = Date.now() - ts;
 		if (diff < 60000) return '刚刚';
 		if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
 		if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
-		return d.toLocaleDateString();
+		return new Date(ts).toLocaleDateString();
+	}
+
+	async function loadActiveWorkflows() {
+		try {
+			activeWorkflows = await invoke<any[]>('monitor_list_active_workflows');
+		} catch (e) {
+			console.error('Failed to load active workflows:', e);
+		}
+	}
+
+	async function pauseWorkflow(runId: string) {
+		try {
+			await invoke('workflow_pause', { runId });
+			await loadActiveWorkflows();
+		} catch (e) {
+			console.error('Failed to pause workflow:', e);
+		}
+	}
+
+	async function resumeWorkflow(runId: string) {
+		try {
+			await invoke('workflow_resume', { runId });
+			await loadActiveWorkflows();
+		} catch (e) {
+			console.error('Failed to resume workflow:', e);
+		}
+	}
+
+	async function stopWorkflow(runId: string) {
+		try {
+			await invoke('workflow_stop', { runId });
+			await loadActiveWorkflows();
+		} catch (e) {
+			console.error('Failed to stop workflow:', e);
+		}
 	}
 
 	$effect(() => {
 		monitorStore.refresh();
-		const interval = setInterval(() => monitorStore.refresh(), 10000);
+		loadActiveWorkflows();
+		const interval = setInterval(() => {
+			monitorStore.refresh();
+			loadActiveWorkflows();
+		}, 10000);
 		return () => clearInterval(interval);
 	});
 </script>
@@ -47,7 +87,7 @@
 		<h2 class="text-lg font-semibold text-slate-100">监控面板</h2>
 		<button
 			class="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-			onclick={() => monitorStore.refresh()}
+			onclick={() => { monitorStore.refresh(); loadActiveWorkflows(); }}
 			disabled={loading}
 		>
 			{loading ? '刷新中...' : '刷新'}
@@ -105,9 +145,81 @@
 		{/if}
 	</div>
 
+	<!-- Active Workflows with Controls -->
+	<div class="rounded-lg bg-slate-800/50 border border-slate-700/50 p-4 space-y-3">
+		<h3 class="text-sm font-medium text-slate-300">活跃工作流</h3>
+
+		{#if activeWorkflows.length === 0}
+			<div class="text-sm text-slate-500">暂无活跃工作流</div>
+		{:else}
+			<div class="space-y-2">
+				{#each activeWorkflows as wf (wf.id)}
+					<div class="flex items-center justify-between p-2 rounded bg-slate-900/50 text-xs">
+						<div class="min-w-0 flex-1">
+							<div class="text-slate-300 truncate">{wf.workflow_id}</div>
+							<div class="text-slate-500 mt-0.5">
+								<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+									class:bg-emerald-400/10={wf.status === 'running'}
+									class:text-emerald-400={wf.status === 'running'}
+									class:bg-yellow-400/10={wf.status === 'paused'}
+									class:text-yellow-400={wf.status === 'paused'}
+								>
+									{wf.status}
+								</span>
+								· {formatTime(wf.created_at)}
+							</div>
+						</div>
+						<div class="flex items-center gap-1 ml-2">
+							{#if wf.status === 'running'}
+								<button
+									class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-yellow-400 transition-colors"
+									title="暂停"
+									onclick={() => pauseWorkflow(wf.id)}
+								>
+									<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+										<path d="M5.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75A.75.75 0 007.25 3h-1.5zM12.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75a.75.75 0 00-.75-.75h-1.5z"/>
+									</svg>
+								</button>
+							{:else if wf.status === 'paused'}
+								<button
+									class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition-colors"
+									title="继续"
+									onclick={() => resumeWorkflow(wf.id)}
+								>
+									<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+										<path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+									</svg>
+								</button>
+							{/if}
+							<button
+								class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-red-400 transition-colors"
+								title="终止"
+								onclick={() => stopWorkflow(wf.id)}
+							>
+								<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+									<path d="M5.25 3A2.25 2.25 0 003 5.25v9.5A2.25 2.25 0 005.25 17h9.5A2.25 2.25 0 0017 14.75v-9.5A2.25 2.25 0 0014.75 3h-9.5z"/>
+								</svg>
+							</button>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
 	<!-- Recent Exceptions -->
 	<div class="rounded-lg bg-slate-800/50 border border-slate-700/50 p-4 space-y-3">
-		<h3 class="text-sm font-medium text-slate-300">最近异常</h3>
+		<div class="flex items-center justify-between">
+			<h3 class="text-sm font-medium text-slate-300">最近异常</h3>
+			{#if exceptions.length > 0}
+				<button
+					class="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+					onclick={() => monitorStore.loadExceptions(50)}
+				>
+					查看全部
+				</button>
+			{/if}
+		</div>
 
 		{#if exceptions.length === 0}
 			<div class="text-sm text-slate-500">暂无异常</div>
