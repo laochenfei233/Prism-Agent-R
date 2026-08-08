@@ -18,18 +18,21 @@ platform: windows | macos | linux
 
 ## 📚 文档导航
 
-本设计文档按 **开发阶段** 拆分为 3 份详细设计 + 本总索引。按需阅读对应文件：
+本设计文档按 **开发阶段** 拆分为 4 份详细设计 + 本总索引 + 1 份差距审计。按需阅读对应文件：
 
 | 文件 | 阶段 | 内容 | 约行数 |
 |------|------|------|--------|
 | [`phase1-core.md`](../design/phase1-core.md) | **Phase 1 — Agent 核心闭环** | §3 后端三层架构 · §4 目录结构 · §5 数据库（含 §5.7 数据存储跨阶段基础：PRAGMA/消息FTS/分页/保留/索引） · §6 MCP · §7 流式响应 · §8 IPC 命令 · §9.1-9.8 前端基础（设计系统+对话） · §10.4 Skill（含市场搜索详设） · §10.6 工作流引擎+模板系统 · §10.7 记忆系统（完整设计） · §10.8 文件 · §11 错误日志 · §12 安全 · §13 性能基线（§13.1 见 phase3） · §14 旧版规避 | ~3150 |
 | [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.4.1-10.4.4 市场搜索 · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~889 |
 | [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG（含 10.2.2 Contextual Retrieval / 10.2.3 文档解析 / 10.2.4 可追溯引用 / 10.2.5 多维评测） · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §10.14 Skill/MCP Router（每轮意图路由） · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~2164 |
+| [`phase4-agentic.md`](../design/phase4-agentic.md) | **Phase 4 — 自主能力深化** | §15 网络搜索工具链（SearchProvider/web_search/缓存 023） · §16 RAG 检索增强（HyDE/RRF 多路融合/断崖截断/幂等导入） · §17 Harness 工程化（会话生命周期/Loop/Trace Grading 024） · §18 前端 UI 设计（排版布局参考 Cherry Studio） · §19-20 迁移命令补记 + 任务清单 | ~500 |
+| [`gap-audit.md`](../design/gap-audit.md) | **Phase 4 差距审计** | 文档-代码偏差（web_search 缺失/022 漏登记）+ 4 参考仓库映射 | ~180 |
 | 本文件 | 总览 | 设计模式参考 · 问题定义 · 架构总览（含 §1.1/§1.2） · 技术选型 · MVP 规划 · 各功能 MVP 清单 · [S4] 错误矩阵 · [S5] 功能建议 · Tasks · Phase 1 完成报告 | ~817 |
 
 **阅读建议**：
 - **新对话/新 agent 起步**：先读本索引（[S0]/[S1]/§1/§2 + MVP 清单 + Tasks）了解全局，再按任务阶段读对应详细文件。
 - **做 Phase 2/3 任务**：读对应阶段文件；若涉及后端基础（数据库/流式/IPC 命名），回查 `phase1-core.md`。
+- **做 Phase 4 任务**：读 `phase4-agentic.md`（设计）+ `gap-audit.md`（差距审计）；RAG 基础回查 `phase3-extend.md §10.2`，工作流基础回查 `phase1-core.md §10.6`。
 - **数据存储是横切关注点**：§5.7 完整设计在 `phase1-core.md`（建库即做 PRAGMA/索引/分页/保留策略）；Phase 2/3 各阶段的 FTS 搜索补充在对应文件（§5.7.4 会话→迁移 012 / §5.7.5 翻译→迁移 013）。新增表/索引必须同步更新 §5.7.7 关键索引，且**迁移编号必须递增**（§14.3 #28：禁止在已应用迁移上追加）。
 - **跨文件引用**：各文件保留原章节编号（§N），引用时按「阶段文件 → §N」定位；§9/§10 章节头分散在多个文件（§9.1-9.8 在 phase1、§9.9-9.10 在 phase2；§10.1-10.3/10.5/10.9-10.13 在 phase3、§10.4/10.6-10.8 在 phase1）。
 
@@ -54,6 +57,9 @@ platform: windows | macos | linux
 | 019_rag_eval_reports | 评测报告落库 | rag_eval_reports | phase3 §10.2.5 | 🟩 |
 | 020_meeting_speaker | 说话人分离 | meeting_transcripts 增 speaker_id | phase3 §10.3.1 | 🟩 |
 | 021_project_index | 项目索引命名空间 + 指纹 | wikis `__project__` 行 + rag_documents 增 file_path/fingerprint | phase3 §10.2.1 | 🟩 |
+| 022_meeting_transcript_upsert | 转写幂等 upsert | meeting_transcripts 唯一索引 + ON CONFLICT（先清重） | phase3 §10.3（完成报告） | 🟩 |
+| 023_web_search_cache | 网络搜索缓存 | web_search_cache | phase4 §15.4 | 🟪 |
+| 024_trace_grading | 轨迹评分回写 | agent_traces 增 grade_score/grade_reason/graded_at | phase4 §17.3 | 🟪 |
 
 > ⚠️ **本文档由原单文件 `docs/compose/specs/prism-agent-r.md` 按阶段拆分而来**，章节编号与设计内容保持不变。
 
@@ -61,16 +67,17 @@ platform: windows | macos | linux
 
 **当前进度**：Phase 1（MVP Agent 核心闭环）已完成（T1-T16）；Phase 2（面板功能）已完成并合并；Phase 3（扩展功能）**全部完成**（T12-T14/T17/T20-T24/T18，见本文件「Phase 3 完成报告」），含原 [S3]/[S5] 暂缓项（TTS 播报、CI 评测回归门槛、Azure WS 流式、三平台打包验证）。
 
-**What was built** — Phase 3 扩展功能全部落地：Wiki 知识库（write_ai 计划执行 + 分类树 UI）、RAG 引擎（分块/真实嵌入/混合检索/Contextual Retrieval/Reranker + 五维评测完整化：table_acc 结构化比对、ocr_completeness 字符召回率、chart_acc LLM-as-Judge、报告落库趋势、CI 回归门槛 eval_gate）、项目级自动索引（指纹增量 + `__project__` 隔离 + 侧边栏状态条）、会议系统（8 后端可插拔 ASR + sherpa-rs + 说话人分离 + Azure WS 流式 + 离线二次转写 + 摘要/QA/推送/导出 + TTS 播报）、翻译/OCR、反思/目标监控/安全护栏/评估监控、Skill/MCP Router、上下文压缩。迁移 015-022。CI：test 门控 + Linux 打包依赖 + 三平台矩阵；Windows 打包本机验证（MSI+NSIS）。
+**What was built** — Phase 3 扩展功能全部落地：Wiki 知识库（write_ai 计划执行 + 分类树 UI）、RAG 引擎（分块/真实嵌入/混合检索/Contextual Retrieval/Reranker + 五维评测完整化：table_acc 结构化比对、ocr_completeness 字符召回率、chart_acc LLM-as-Judge、报告落库趋势、CI 回归门槛 eval_gate）、项目级自动索引（指纹增量 + `__project__` 隔离 + 侧边栏状态条）、会议系统（8 后端可插拔 ASR + **sherpa-rs 本地推理为可选 feature `sherpa-native`（默认关闭，Agent 本体零依赖构建）** + 说话人分离 + Azure WS 流式 + 离线二次转写 + 摘要/QA/推送/导出 + TTS 播报）、翻译/OCR、反思/目标监控/安全护栏/评估监控、Skill/MCP Router、上下文压缩。迁移 015-022。
 
-**Verification** — `cargo check` 零警告；`cargo test` 49 passed（新增 TTS 分段 5 测试、eval_gate 回归门槛、转写幂等 upsert、json_each 集成测试；临时库跑通全部 22 个迁移）；`svelte-check` 0 errors / 35 warnings（a11y，既有）；Windows `npx tauri build` 产出 `Prism Agent_0.1.0_x64_en-US.msi` + `Prism Agent_0.1.0_x64-setup.exe`。两轮评审（eac08bd→19606ef）修复 2 major + 4 minor 后复评通过。
+**Verification** — `cargo check` 零警告；`cargo test` 49 passed（临时库跑通全部 22 个迁移）；`svelte-check` 0 errors；**CI 全绿**：test 门控（cargo test + svelte-check）+ 三平台构建成功并产出产物（Windows MSI+NSIS 15.6MB / macOS dmg 10MB / Linux deb+rpm 19.8MB）；本机 `npx tauri build` 产出 MSI+NSIS。Linux AppImage 因 GitHub Actions runner 无 FUSE 暂缓（deb/rpm 已覆盖，文档标注）。两轮评审（eac08bd→19606ef）修复后复评通过。
 
 **Journey log** —
 - 转写落库曾用「每次新 UUID + INSERT OR REPLACE」，同 index 重复插入；022 迁移先清重再建唯一索引 + ON CONFLICT upsert 修复（OR REPLACE 依赖主键冲突，UUID 主键下形同虚设）。
 - Web Speech API `cancel()` 会异步触发被取消 utterance 的 onend/onerror——必须带代际保护（generation 快照），否则 stop/语速变更会双音并发/跳段。
 - WS 流式 ASR 在 `end:true` 后立即退出会丢最终定稿帧（尾部结果在 end 之后到达），需 3s 排空读；该特性同样适用于 DashScope/OpenAI Realtime 同类端点。
 - CI 评测门槛用「临时库自包含 golden set + 本地嵌入」实现（零 LLM 成本、确定性命中），比在 CI 里跑应用内命令可靠得多。
-- Windows 首次 release 打包（含 sherpa-rs/bindgen）约 5-6 分钟；LIBCLANG_PATH 为机器特定配置，须放 gitignored 的 `src-tauri/.cargo/config.toml`。
+- Windows 首次 release 打包（含 sherpa-rs/bindgen）约 5-6 分钟；**sherpa-rs 已改为可选 feature**（默认关闭），本体构建无 LIBCLANG_PATH/bindgen/大文件下载要求，本机与 CI 构建均显著加速。
+- GitHub Actions ubuntu runner 无 /dev/fuse：linuxdeploy AppImage 在 extract-and-run 下仍运行异常，Linux 交付 deb/rpm（AppImage 留待有 FUSE 的环境或更换打包器）。
 
 ## [S0] 设计模式参考
 
@@ -544,8 +551,12 @@ Tauri tray-icon + menu:
 | 🔸 低 | **工作流版本控制** | 模板历史版本对比/回滚 | phase1 §10.6.4.1 |
 | 🔸 低 | **TTS 播报** | 会议纪要/通知语音播报（[S3] 暂缓） | phase3 §10.3.9 |
 | 🔸 低 | **项目级 RAG 自动索引** | 工作目录变更自动增量索引（复用 fs:watch） | phase3 §10.2.1 |
+| 🟪 | **网络搜索工具链** | web_search 工具落地（SearchProvider 可插拔 + 缓存 + 降级），服务深度研究工作流（原文档声明但未实现） | phase4 §15 |
+| 🟪 | **RAG 检索增强** | HyDE 假设文档检索 + RRF 多路融合（本地/HyDE/网络并发）+ 动态 TopK 断崖截断 + 幂等导入 | phase4 §16 |
+| 🟪 | **Harness 工程化** | 会话生命周期状态机（init/verify/clean-state）+ Loop 自动化（Goal/Timer/Maker-Checker）+ Trace Grading 回写与回放 | phase4 §17 |
 
 > **决策原则**：新功能优先复用现有引擎（工作流/技能/记忆/MCP），不新增孤岛；敏感操作（同步、导出、Agent 市场）需人工确认（§10.10 审批模式）。
+> **Phase 4 说明**：§15-17 由 4 个参考仓库查漏补缺驱动（deep-search-pro / intelligent-kb-rag / awesome-harness-engineering / learn-harness-engineering），差距审计见 [`gap-audit.md`](../design/gap-audit.md)。
 
 ## MVP 范围与阶段规划
 
