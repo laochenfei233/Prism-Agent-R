@@ -18,7 +18,7 @@ platform: windows | macos | linux
 
 ## 📚 文档导航
 
-本设计文档按 **开发阶段** 拆分为 4 份详细设计 + 本总索引 + 1 份差距审计。按需阅读对应文件：
+本设计文档按 **开发阶段** 拆分为 5 份详细设计 + 本总索引 + 1 份差距审计。按需阅读对应文件：
 
 | 文件 | 阶段 | 内容 | 约行数 |
 |------|------|------|--------|
@@ -26,6 +26,7 @@ platform: windows | macos | linux
 | [`phase2-panel.md`](../design/phase2-panel.md) | **Phase 2 — 面板功能** | §9.9 主页面板 · §9.10 Agent 侧边栏（六 Tab） · §10.4.1-10.4.4 市场搜索 · §10.10 人机协同（工具审批） · §5.7.4 会话标题搜索（迁移 012） | ~889 |
 | [`phase3-extend.md`](../design/phase3-extend.md) | **Phase 3 — 扩展功能** | §10.1 Wiki · §10.2 RAG（含 10.2.2 Contextual Retrieval / 10.2.3 文档解析 / 10.2.4 可追溯引用 / 10.2.5 多维评测） · §10.3 会议 · §10.5 翻译/OCR · §10.9 反思 · §10.11 目标监控 · §10.12 安全护栏 · §10.13 评估监控 · §10.14 Skill/MCP Router（每轮意图路由） · §11A 无障碍 · §13.1 上下文压缩 · §5.7.5 翻译历史搜索（迁移 013） | ~2164 |
 | [`phase4-agentic.md`](../design/phase4-agentic.md) | **Phase 4 — 自主能力深化** | §15 网络搜索工具链（SearchProvider/web_search/缓存 023） · §16 RAG 检索增强（HyDE/RRF 多路融合/断崖截断/幂等导入） · §17 Harness 工程化（会话生命周期/Loop/Trace Grading 024） · §18 前端 UI 设计（排版布局参考 Cherry Studio） · §19 Agent 设计参考（Anthropic & OpenAI 2026 推荐 + 19.3 增量设计 8 项：compaction/三原语/双向审批/Auto-review/轨迹监控/渐进披露/评测捆绑/用例审计） · §20-21 迁移命令补记（023-025）+ 任务清单（P4-T1~T19） | ~740 |
+| [`phase5-production.md`](../design/phase5-production.md) | **Phase 5 — 生产加固** | §22 预算监控与自动降级（三级预算/BudgetTracker/ModelFallbackChain） · §23 越界拦截与安全护栏（工具级/行为级/系统级沙箱） · §24 异常记录与可观测性（异常表/AgentLogger/监控仪表盘） · §25 工作流引擎重构（WorkflowEngineV2/WorkflowV2定义/重试策略） · §26 前端监控面板（MonitorPanel/实时数据流/交互操作） · §27 任务清单（P5-T1~T15） | ~580 |
 | [`gap-audit.md`](../design/gap-audit.md) | **Phase 4 差距审计** | 文档-代码偏差（web_search 缺失/022 漏登记）+ 4 参考仓库映射 | ~180 |
 | 本文件 | 总览 | 设计模式参考 · 问题定义 · 架构总览（含 §1.1/§1.2） · 技术选型 · MVP 规划 · 各功能 MVP 清单 · [S4] 错误矩阵 · [S5] 功能建议 · Tasks · Phase 1 完成报告 | ~817 |
 
@@ -33,6 +34,7 @@ platform: windows | macos | linux
 - **新对话/新 agent 起步**：先读本索引（[S0]/[S1]/§1/§2 + MVP 清单 + Tasks）了解全局，再按任务阶段读对应详细文件。
 - **做 Phase 2/3 任务**：读对应阶段文件；若涉及后端基础（数据库/流式/IPC 命名），回查 `phase1-core.md`。
 - **做 Phase 4 任务**：读 `phase4-agentic.md`（设计）+ `gap-audit.md`（差距审计）；RAG 基础回查 `phase3-extend.md §10.2`，工作流基础回查 `phase1-core.md §10.6`。
+- **做 Phase 5 任务**：读 `phase5-production.md`（设计）；预算/护栏基础回查 `phase4-agentic.md §17.1-17.2`，工作流基础回查 `phase1-core.md §10.6`，前端基础回查 `phase4-agentic.md §18`。
 - **数据存储是横切关注点**：§5.7 完整设计在 `phase1-core.md`（建库即做 PRAGMA/索引/分页/保留策略）；Phase 2/3 各阶段的 FTS 搜索补充在对应文件（§5.7.4 会话→迁移 012 / §5.7.5 翻译→迁移 013）。新增表/索引必须同步更新 §5.7.7 关键索引，且**迁移编号必须递增**（§14.3 #28：禁止在已应用迁移上追加）。
 - **跨文件引用**：各文件保留原章节编号（§N），引用时按「阶段文件 → §N」定位；§9/§10 章节头分散在多个文件（§9.1-9.8 在 phase1、§9.9-9.10 在 phase2；§10.1-10.3/10.5/10.9-10.13 在 phase3、§10.4/10.6-10.8 在 phase1）。
 

@@ -4,6 +4,31 @@
 
 ## 2026-08-08
 
+### Phase 4 实现（后端核心 T1-T10）
+
+**§15 网络搜索工具链**（T1-T3）：
+- `core/search/` 模块：SearchProvider trait + Tavily/Serper/Searxng/Noop 四实现
+- SearchService 选择/切换/降级逻辑
+- WebSearchTool 注册到 chat/workflow 两处
+- assess_risk Low 分支添加 web_search
+- search:config/search_config_save/search_test 命令
+- 迁移 023_web_search_cache 缓存表
+
+**§16 RAG 检索增强**（T4-T7）：
+- HydeRetriever 假设文档检索器（hyde.rs）
+- multi_path_search 三路并发检索 + RRF 融合（search.rs 扩展）
+- cliff_cutoff 动态 TopK 断崖截断
+- insert_document_with_meta 幂等导入（指纹比对/变更重入/跳过）
+
+**§17 Harness 工程化**（T8-T10）：
+- SessionStateManager 会话状态机（CREATED/INIT/READY/RUNNING/PAUSED/VERIFYING/DONE/INIT_FAILED）
+- session_init/state/cleanup IPC 命令 + SessionInitReport
+- AgentLoop（Goal/Timer/Maker-Checker）+ loop:start/stop/list 命令
+- 迁移 024_trace_grading（agent_traces 增 grade_score/grade_reason/graded_at）
+- trace_grade 命令 + trace:list 过滤（min_grade/tool_failed）
+
+**测试**：61 个测试全部通过（含新增 state_transitions/init_report_errors/loop_crud/rrf_fusion/cliff_cutoff 等测试）
+
 ### Phase 4 新增（查漏补缺驱动）
 
 学习 4 个参考仓库（deep-search-pro / intelligent-kb-rag / awesome-harness-engineering / learn-harness-engineering）后对 phase1-3 文档与代码做差距审计，新增：
