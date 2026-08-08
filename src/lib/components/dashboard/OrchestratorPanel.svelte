@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { invoke } from '$lib/api/client';
 	import { orchestratorStore } from '$lib/stores/orchestrator.svelte';
 
 	const session = $derived(orchestratorStore.session);
@@ -15,6 +16,27 @@
 		if (s) {
 			activeTab = 'spec';
 		}
+	}
+
+	async function pauseSession() {
+		if (!session) return;
+		await invoke('orchestrator_pause', { sessionId: session.id });
+		session.status = 'paused';
+	}
+
+	async function resumeSession() {
+		if (!session) return;
+		const s = await invoke('orchestrator_resume', { sessionId: session.id });
+		if (s) {
+			session.status = 'executing';
+			orchestratorStore.attachListeners?.();
+		}
+	}
+
+	async function stopSession() {
+		if (!session) return;
+		await invoke('orchestrator_stop', { sessionId: session.id });
+		session.status = 'failed';
 	}
 
 	function statusLabel(status: string): string {
@@ -66,6 +88,30 @@
 				<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium {statusColor(session.status)}">
 					{statusLabel(session.status)}
 				</span>
+				{#if session.status === 'executing' || session.status === 'spec_generating' || session.status === 'plan_generating' || session.status === 'reviewing' || session.status === 'repairing'}
+					<button
+						class="text-xs px-2 py-1 rounded bg-slate-700/50 hover:bg-slate-600 text-slate-300 transition-colors"
+						onclick={pauseSession}
+					>
+						暂停
+					</button>
+				{/if}
+				{#if session.status === 'paused'}
+					<button
+						class="text-xs px-2 py-1 rounded bg-emerald-600/50 hover:bg-emerald-500 text-white transition-colors"
+						onclick={resumeSession}
+					>
+						继续
+					</button>
+				{/if}
+				{#if session.status !== 'completed'}
+					<button
+						class="text-xs px-2 py-1 rounded bg-red-600/40 hover:bg-red-500 text-red-200 transition-colors"
+						onclick={stopSession}
+					>
+						终止
+					</button>
+				{/if}
 				<button
 					class="text-xs text-slate-400 hover:text-slate-200 transition-colors"
 					onclick={() => { orchestratorStore.reset(); activeTab = 'input'; }}

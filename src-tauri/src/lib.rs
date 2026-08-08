@@ -238,6 +238,8 @@ pub fn run() {
             commands::monitor::guardrail_check_tool,
             commands::monitor::orchestrator_start,
             commands::monitor::orchestrator_resume,
+            commands::monitor::orchestrator_pause,
+            commands::monitor::orchestrator_stop,
             commands::monitor::orchestrator_list,
             commands::monitor::exception_clear,
             commands::monitor::log_export,

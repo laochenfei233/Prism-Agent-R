@@ -201,29 +201,6 @@ pub async fn orchestrator_start(
     user_request: String,
 ) -> Result<OrchestratorSession, AppError> {
     let session = OrchestratorSession::new(user_request, 5);
-    let tracker = Arc::new(BudgetTracker::new(BudgetConfig::default(), BudgetPolicy::default()));
-    let mut engine = OrchestratorEngine::new(tracker)
-        .with_db(state.db.pool.clone())
-        .on_event({
-            let app = app.clone();
-            move |event| {
-                let _ = app.emit("orchestrator:event", serde_json::json!({
-                    "event_type": event.event_type,
-                    "message": event.message,
-                    "timestamp": event.timestamp,
-                }));
-            }
-        });
-
-    // §27.3 配置 Planner/Reviewer 模型（默认模型）
-    match build_default_provider(&state.db.pool).await {
-        Ok(provider) => {
-            engine = engine.with_planner_provider(provider);
-        }
-        Err(e) => {
-            tracing::warn!("编排未配置默认模型，将使用骨架执行: {e}");
-        }
-    }
 
     // §27.2 初始持久化（崩溃可恢复起点）
     if let Err(e) = session.save(&state.db.pool).await {
@@ -231,6 +208,7 @@ pub async fn orchestrator_start(
     }
 
     // Run in background
+    let engine = build_orchestrator_engine(&app, &state).await;
     let mut session_clone = session.clone();
     tokio::spawn(async move {
         let _ = engine.run(&mut session_clone).await;
@@ -239,17 +217,64 @@ pub async fn orchestrator_start(
     Ok(session)
 }
 
-/// §27.2 恢复已持久化的编排会话
+/// §27.2 恢复已持久化的编排会话（继续执行）
 #[tauri::command]
 pub async fn orchestrator_resume(
+    app: tauri::AppHandle,
     state: State<'_, crate::AppState>,
     session_id: String,
 ) -> Result<OrchestratorSession, AppError> {
-    let session = OrchestratorSession::load(&state.db.pool, &session_id)
+    let mut session = OrchestratorSession::load(&state.db.pool, &session_id)
         .await
         .map_err(|e| AppError::Internal(e))?
         .ok_or_else(|| AppError::Validation(format!("编排会话 '{session_id}' 不存在")))?;
+
+    // 已完成的会话不重启
+    if matches!(session.status, crate::core::orchestrator::session::OrchestratorStatus::Completed) {
+        return Ok(session);
+    }
+
+    // 恢复执行状态并重启循环
+    session.status = crate::core::orchestrator::session::OrchestratorStatus::Executing;
+    session.save(&state.db.pool).await.map_err(|e| AppError::Internal(e))?;
+
+    let engine = build_orchestrator_engine(&app, &state).await;
+    let mut session_clone = session.clone();
+    tokio::spawn(async move {
+        let _ = engine.run(&mut session_clone).await;
+    });
+
     Ok(session)
+}
+
+/// §27.6 暂停编排会话（持久化暂停状态）
+#[tauri::command]
+pub async fn orchestrator_pause(
+    state: State<'_, crate::AppState>,
+    session_id: String,
+) -> Result<(), AppError> {
+    let mut session = OrchestratorSession::load(&state.db.pool, &session_id)
+        .await
+        .map_err(|e| AppError::Internal(e))?
+        .ok_or_else(|| AppError::Validation(format!("编排会话 '{session_id}' 不存在")))?;
+    session.status = crate::core::orchestrator::session::OrchestratorStatus::Paused;
+    session.save(&state.db.pool).await.map_err(|e| AppError::Internal(e))?;
+    Ok(())
+}
+
+/// §27.6 终止编排会话（标记失败并持久化）
+#[tauri::command]
+pub async fn orchestrator_stop(
+    state: State<'_, crate::AppState>,
+    session_id: String,
+) -> Result<(), AppError> {
+    let mut session = OrchestratorSession::load(&state.db.pool, &session_id)
+        .await
+        .map_err(|e| AppError::Internal(e))?
+        .ok_or_else(|| AppError::Validation(format!("编排会话 '{session_id}' 不存在")))?;
+    session.status = crate::core::orchestrator::session::OrchestratorStatus::Failed("用户终止".into());
+    session.save(&state.db.pool).await.map_err(|e| AppError::Internal(e))?;
+    Ok(())
 }
 
 /// §27.2 列出已持久化的编排会话
@@ -352,6 +377,37 @@ pub struct ActiveWorkflowDto {
 }
 
 // ── 辅助 ──────────────────────────────────────────────────
+
+/// 构建编排引擎（预算追踪 + 事件转发 + 会话持久化 + Planner 模型）
+async fn build_orchestrator_engine(
+    app: &tauri::AppHandle,
+    state: &tauri::State<'_, crate::AppState>,
+) -> OrchestratorEngine {
+    let tracker = Arc::new(BudgetTracker::new(BudgetConfig::default(), BudgetPolicy::default()));
+    let mut engine = OrchestratorEngine::new(tracker)
+        .with_db(state.db.pool.clone())
+        .on_event({
+            let app = app.clone();
+            move |event| {
+                let _ = app.emit("orchestrator:event", serde_json::json!({
+                    "event_type": event.event_type,
+                    "message": event.message,
+                    "timestamp": event.timestamp,
+                }));
+            }
+        });
+
+    // §27.3 配置 Planner/Reviewer 模型（默认模型）
+    match build_default_provider(&state.db.pool).await {
+        Ok(provider) => {
+            engine = engine.with_planner_provider(provider);
+        }
+        Err(e) => {
+            tracing::warn!("编排未配置默认模型，将使用骨架执行: {e}");
+        }
+    }
+    engine
+}
 
 /// 构建默认模型 Provider（§27.3 Planner/Reviewer 模型）
 async fn build_default_provider(

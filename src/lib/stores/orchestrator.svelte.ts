@@ -142,6 +142,7 @@ function createOrchestratorStore() {
 		get loading() { return loading; },
 		get error() { return error; },
 		startSession,
+		attachListeners,
 		reset,
 	};
 }
