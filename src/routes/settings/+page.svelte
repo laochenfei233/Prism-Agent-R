@@ -11,7 +11,7 @@
 	let skills = $state<any[]>([]);
 	let msg = $state('');
 	// 当前激活的设置分类（Cherry Studio 风格左导航）
-	let section = $state<'providers' | 'asr' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
+	let section = $state<'providers' | 'asr' | 'tts' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
 	// 当前选中的 Provider（Cherry Studio 风格：左侧列表 + 右侧详情）
 	let selectedProviderId = $state<string | null>(null);
 
@@ -267,17 +267,21 @@
 			<span>设置</span>
 		</div>
 		<div class="nav-scroll">
-			<div class="nav-group-title">模型</div>
+			<div class="nav-group-title">模型管理</div>
 			<button class="nav-item" class:active={section === 'providers'} onclick={() => section = 'providers'}>
 				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
 				<span>Provider & 模型</span>
 			</button>
-
-			<div class="nav-group-title">能力</div>
 			<button class="nav-item" class:active={section === 'asr'} onclick={() => section = 'asr'}>
 				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
 				<span>语音识别</span>
 			</button>
+			<button class="nav-item" class:active={section === 'tts'} onclick={() => section = 'tts'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+				<span>语音合成</span>
+			</button>
+
+			<div class="nav-group-title">能力</div>
 			<button class="nav-item" class:active={section === 'agents'} onclick={() => section = 'agents'}>
 				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
 				<span>Agent</span>
@@ -431,74 +435,94 @@
 				</div>
 			</div>
 
-		{:else if section === 'asr'}
-			<div class="content-header">
-				<h2 class="content-title">语音识别 (ASR)</h2>
-				<p class="content-desc">配置会议录音的转写后端与模型</p>
-			</div>
-			<div class="card">
-				<div class="card-head">
-					<div class="section-title">可用后端</div>
-					{#each asrBackends as b}
-						<div class="config-row">
-							<div class="config-info">
-								<span class="config-name">{b.name}</span>
-								<span class="config-badge">{b.languages.join(', ')}</span>
+	{:else if section === 'asr'}
+			<div class="provider-shell">
+				<!-- 后端列表 -->
+				<div class="provider-list-pane">
+					<div class="pane-title">ASR 后端</div>
+					<div class="pane-list">
+						{#each asrBackends as b}
+							<div class="pane-item" class:active={true}>
+								<span class="pane-item-name">{b.name}</span>
+								<span class="pane-item-kind">{b.languages.join(', ')}</span>
 							</div>
-						</div>
-					{/each}
+						{/each}
+						{#if asrBackends.length === 0}
+							<div class="pane-empty">暂无后端</div>
+						{/if}
+					</div>
 				</div>
 
-				<div class="divider"></div>
-				<div class="section-title">模型管理</div>
-				{#each asrCatalog as m}
-					<div class="config-row">
-						<div class="config-info">
-							<span class="config-name">{m.name}</span>
-							<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
-						</div>
-						<div class="config-actions">
-							{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
-								<span class="config-badge default">{(asrDownloadProgress[m.id] * 100).toFixed(0)}%</span>
-							{:else if asrInstalled.some(i => i.id === m.id)}
-								<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
-							{:else}
-								<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
-							{/if}
-						</div>
+				<!-- 详情：模型管理 + 配置 -->
+				<div class="provider-detail-pane">
+					<div class="content-header">
+						<h2 class="content-title">语音识别 (ASR)</h2>
+						<p class="content-desc">配置会议录音的转写模型与后端连接</p>
 					</div>
-				{/each}
 
-				<div class="divider"></div>
-				<div class="section-title">ASR 配置</div>
-				<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
-				{#if asrShowAddConfig}
-					<div class="asr-form">
-						<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" />
-						<select bind:value={asrNewConfig.kind}>
-							{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
-						</select>
-						<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" />
-						{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
-							<input bind:value={asrNewConfig.api_key} placeholder="API Key" />
+					<div class="card detail-card">
+						<div class="section-title">模型管理</div>
+						{#each asrCatalog as m}
+							<div class="config-row">
+								<div class="config-info">
+									<span class="config-name">{m.name}</span>
+									<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
+								</div>
+								<div class="config-actions">
+									{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
+										<span class="config-badge default">{(asrDownloadProgress[m.id] * 100).toFixed(0)}%</span>
+									{:else if asrInstalled.some(i => i.id === m.id)}
+										<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
+									{:else}
+										<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
+									{/if}
+								</div>
+							</div>
+						{/each}
+						{#if asrCatalog.length === 0}<p class="hint">暂无可用模型</p>{/if}
+					</div>
+
+					<div class="card detail-card">
+						<div class="section-title">ASR 配置</div>
+						<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
+						{#if asrShowAddConfig}
+							<div class="asr-form">
+								<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" />
+								<select bind:value={asrNewConfig.kind}>
+									{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
+								</select>
+								<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" />
+								{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
+									<input bind:value={asrNewConfig.api_key} placeholder="API Key" />
+								{/if}
+								<div class="form-row">
+									<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
+									<button class="btn-primary" onclick={asrSaveConfig}>保存</button>
+								</div>
+							</div>
 						{/if}
-						<div class="form-row">
-							<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
-							<button class="btn-primary" onclick={asrSaveConfig}>保存</button>
-						</div>
+						{#each asrConfigs as c}
+							<div class="config-row">
+								<div class="config-info">
+									<span class="config-name">{c.name}</span>
+									<span class="config-badge">{c.kind}</span>
+									{#if c.model_path}<span class="config-badge">{c.model_path}</span>{/if}
+								</div>
+								<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删</button>
+							</div>
+						{/each}
+						{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}
 					</div>
-				{/if}
-				{#each asrConfigs as c}
-					<div class="config-row">
-						<div class="config-info">
-							<span class="config-name">{c.name}</span>
-							<span class="config-badge">{c.kind}</span>
-							{#if c.model_path}<span class="config-badge">{c.model_path}</span>{/if}
-						</div>
-						<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删</button>
-					</div>
-				{/each}
-				{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}
+				</div>
+			</div>
+
+		{:else if section === 'tts'}
+			<div class="content-header">
+				<h2 class="content-title">语音合成 (TTS)</h2>
+				<p class="content-desc">配置文本转语音的后端与音色</p>
+			</div>
+			<div class="card">
+				<p class="hint">TTS 使用浏览器内置的 Web Speech API 播报（如会议待办播报），无需额外配置模型。</p>
 			</div>
 
 		{:else if section === 'agents'}
@@ -706,18 +730,17 @@
 	/* ── Provider 两栏（Cherry Studio 风格） ──── */
 	.provider-shell {
 		display: flex;
-		gap: 16px;
+		gap: 20px;
 		height: 100%;
 		min-height: 0;
 	}
 	.provider-list-pane {
-		width: 200px;
-		min-width: 200px;
+		width: 160px;
+		min-width: 160px;
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-separator);
-		border-radius: 12px;
+		border-right: 1px solid var(--color-separator);
 		overflow: hidden;
 	}
 	.pane-title {
