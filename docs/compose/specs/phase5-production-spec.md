@@ -3,7 +3,7 @@ feature: phase5-production
 status: delivered
 updated: 2026-08-08
 branch: phase5-production
-commits: e9b72e7..5a4abd5
+commits: 142f024..34438a3
 ---
 
 # Phase 5 — 生产加固
@@ -18,7 +18,14 @@ commits: e9b72e7..5a4abd5
 - **Orchestrator** (§27): Auto-orchestration engine (Spec→Plan→Execute→Review loop) with session state
 - **Frontend** (§26): Monitor store + MonitorPanel component with real-time budget/exception display
 
-**Verification** — `cargo test`: 62/62 pass, `cargo check`: 0 errors
+**Verification** — `cargo test`: 93/93 pass, `cargo check`: 0 errors, `svelte-check`: 0 errors
+
+**Merge notes (2026-08-08)** — Phase 4 (branch `phase4-agentic`) was merged into `master`
+first, then `phase5-production` rebased onto the merged master. Migration
+`023_agent_exceptions.sql` renumbered to `026_agent_exceptions.sql` (023/024/025
+occupied by phase4). V2 workflow coordinator now registers the phase4 `web_search`
+tool. svelte `class:` directives with tailwind opacity suffixes (`-400/10`) replaced
+with string class interpolation to fix svelte-check parse errors.
 
 ## [S1] 问题
 
