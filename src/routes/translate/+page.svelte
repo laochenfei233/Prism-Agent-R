@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { invoke } from '$lib/api/client';
 	import { translateApi, glossaryApi, ocrApi, type TranslateHistoryDto, type GlossaryTermDto } from '$lib/api';
 
 	// 翻译
 	let sourceText = $state('');
+	let sourceLang = $state('auto');
 	let targetLang = $state('en');
 	let translatedText = $state('');
 	let translating = $state(false);
@@ -58,10 +60,20 @@
 		if (!sourceText.trim()) return;
 		translating = true;
 		try {
-			const result = await translateApi.translate(sourceText, targetLang, undefined, translateModelId || undefined);
+			const result = await translateApi.translate(sourceText, targetLang, sourceLang === 'auto' ? undefined : sourceLang, translateModelId || undefined);
 			translatedText = result.translated;
 		} catch (e) { console.error(e); translatedText = '翻译失败：' + e; }
 		translating = false;
+	}
+
+	function exchangeLangs() {
+		if (sourceLang === 'auto') return;
+		const tmp = sourceLang;
+		sourceLang = targetLang;
+		targetLang = tmp;
+		const tmpText = sourceText;
+		sourceText = translatedText;
+		translatedText = tmpText;
 	}
 
 	async function loadHistory() {
@@ -110,41 +122,64 @@
 
 <div class="page">
 	<header class="page-header">
-		<h1>翻译工具</h1>
+		<div class="header-left">
+			<button class="nav-back" onclick={() => goto('/')} title="返回聊天" aria-label="返回聊天">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+			</button>
+			<h1 class="page-title">翻译工具</h1>
+		</div>
 		<div class="header-actions">
-			<button class="btn-ghost" onclick={toggleHistory}>历史</button>
-			<button class="btn-ghost" onclick={toggleGlossary}>术语表</button>
+			<button class="btn-ghost" onclick={toggleHistory} aria-pressed={showHistory}>历史</button>
+			<button class="btn-ghost" onclick={toggleGlossary} aria-pressed={showGlossary}>术语表</button>
 		</div>
 	</header>
 
-	<!-- 翻译模型配置 -->
-	<div class="model-panel">
-		<div class="model-row">
-			<label for="translate-model">翻译模型</label>
-			<select id="translate-model" bind:value={translateModelId}>
-				<option value="">默认模型（设置中的默认）</option>
-				{#each models as m}
-					<option value={m.id}>{m.display_name ?? m.model_id}</option>
+	<!-- 顶部工具栏（Cherry 风格：语言栏 + 翻译 + 模型） -->
+	<div class="toolbar">
+		<div class="lang-bar">
+			<select class="lang-select" bind:value={sourceLang} aria-label="源语言">
+				<option value="auto">自动检测</option>
+				{#each LANGUAGES as lang}
+					<option value={lang.code}>{lang.name}</option>
 				{/each}
 			</select>
-			<button class="btn-ghost" onclick={saveTranslateModel} disabled={!translateModelLoaded}>保存</button>
-		</div>
-	</div>
-
-	<!-- 翻译区 -->
-	<div class="translate-area">
-		<div class="lang-bar">
-			<select bind:value={targetLang}>
+			<button class="exchange-btn" onclick={exchangeLangs} title="交换语言" aria-label="交换语言">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 16-4-4 4-4"/><path d="M3 12h17"/><path d="m17 8 4 4-4 4"/><path d="M21 12H4"/></svg>
+			</button>
+			<select class="lang-select" bind:value={targetLang} aria-label="目标语言">
 				{#each LANGUAGES as lang}
 					<option value={lang.code}>{lang.name}</option>
 				{/each}
 			</select>
 		</div>
+		<div class="toolbar-right">
+			<select class="model-select" id="translate-model" bind:value={translateModelId} onchange={saveTranslateModel} aria-label="翻译模型">
+				<option value="">默认模型</option>
+				{#each models as m}
+					<option value={m.id}>{m.display_name ?? m.model_id}</option>
+				{/each}
+			</select>
+			<button class="btn-primary" onclick={doTranslate} disabled={translating || !sourceText.trim()}>
+				{translating ? '翻译中...' : '翻译'}
+			</button>
+		</div>
+	</div>
+
+	<!-- 双栏翻译区 -->
+	<div class="translate-area">
 		<div class="translate-columns">
 			<div class="col">
-				<textarea placeholder="输入要翻译的文本..." bind:value={sourceText} rows="8"></textarea>
+				<div class="col-head">
+					<span class="col-label">原文</span>
+					<span class="char-count">{sourceText.length} 字</span>
+				</div>
+				<textarea placeholder="输入要翻译的文本..." bind:value={sourceText} rows="10" aria-label="源文本"></textarea>
 			</div>
 			<div class="col">
+				<div class="col-head">
+					<span class="col-label">译文</span>
+					<span class="char-count">{translatedText.length} 字</span>
+				</div>
 				<div class="result-box">
 					{#if translating}
 						<span class="loading">翻译中...</span>
@@ -153,11 +188,6 @@
 					{/if}
 				</div>
 			</div>
-		</div>
-		<div class="translate-actions">
-			<button class="btn-primary" onclick={doTranslate} disabled={translating}>
-				{translating ? '翻译中...' : '翻译'}
-			</button>
 		</div>
 	</div>
 
@@ -217,27 +247,50 @@
 
 <style>
 	.page { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
-	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-	.page-header h1 { font-size: 24px; font-weight: 600; color: var(--color-fg); margin: 0; }
+	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+	.header-left { display: flex; align-items: center; gap: 10px; }
 	.header-actions { display: flex; gap: 8px; }
+	.nav-back {
+		display: flex; align-items: center; justify-content: center;
+		width: 32px; height: 32px; border: none; border-radius: 8px;
+		background: var(--color-bg-secondary); color: var(--color-fg-secondary);
+		cursor: pointer; transition: background 0.15s ease;
+	}
+	.nav-back:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
+	.page-title { font-size: 22px; font-weight: 600; color: var(--color-fg); margin: 0; letter-spacing: -0.41px; }
 	.btn-primary { padding: 8px 16px; border-radius: 8px; border: none; background: var(--color-accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
 	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 	.btn-ghost { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--color-separator); background: transparent; color: var(--color-fg-secondary); font-size: 14px; cursor: pointer; }
+	.btn-ghost[aria-pressed="true"] { background: var(--color-bg-tertiary); color: var(--color-fg); }
 	.btn-danger-sm { padding: 2px 6px; border-radius: 4px; border: none; background: var(--color-red); color: #fff; font-size: 11px; cursor: pointer; }
-	.model-panel { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
-	.model-row { display: flex; align-items: center; gap: 12px; }
-	.model-row label { font-size: 13px; color: var(--color-fg-secondary); flex-shrink: 0; }
-	.model-row select { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; outline: none; }
-	.model-row select:focus { border-color: var(--color-accent); }
+
+	/* 顶部工具栏（Cherry 风格） */
+	.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; flex-wrap: wrap; }
+	.lang-bar { display: flex; align-items: center; gap: 8px; }
+	.lang-select { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; outline: none; }
+	.lang-select:focus { border-color: var(--color-accent); }
+	.exchange-btn {
+		display: flex; align-items: center; justify-content: center;
+		width: 32px; height: 32px; border: none; border-radius: 8px;
+		background: transparent; color: var(--color-accent); cursor: pointer;
+		transition: background 0.15s ease;
+	}
+	.exchange-btn:hover { background: var(--color-bg-tertiary); }
+	.toolbar-right { display: flex; align-items: center; gap: 8px; }
+	.model-select { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; outline: none; max-width: 220px; }
+	.model-select:focus { border-color: var(--color-accent); }
+
+	/* 双栏翻译区 */
 	.translate-area { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 16px; margin-bottom: 24px; }
-	.lang-bar { margin-bottom: 12px; }
-	.lang-bar select { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; }
 	.translate-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-	.col textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 14px; resize: vertical; font-family: inherit; outline: none; }
+	.col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+	.col-head { display: flex; align-items: center; justify-content: space-between; }
+	.col-label { font-size: 12px; font-weight: 600; color: var(--color-fg-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+	.char-count { font-size: 11px; color: var(--color-fg-tertiary); }
+	.col textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 14px; resize: vertical; font-family: inherit; outline: none; box-sizing: border-box; min-height: 200px; }
 	.col textarea:focus { border-color: var(--color-accent); }
-	.result-box { padding: 12px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); min-height: 180px; font-size: 14px; color: var(--color-fg); white-space: pre-wrap; }
+	.result-box { padding: 12px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); min-height: 200px; font-size: 14px; color: var(--color-fg); white-space: pre-wrap; }
 	.loading { color: var(--color-fg-secondary); }
-	.translate-actions { display: flex; justify-content: center; margin-top: 12px; }
 	.section { margin-bottom: 24px; }
 	.section h3 { font-size: 14px; color: var(--color-fg-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
 	.ocr-area { display: flex; flex-direction: column; gap: 8px; }
@@ -260,6 +313,7 @@
 	@media (max-width: 720px) {
 		.page { padding: 16px; }
 		.translate-columns { grid-template-columns: 1fr; }
-		.model-row { flex-direction: column; align-items: stretch; }
+		.toolbar { flex-direction: column; align-items: stretch; }
+		.toolbar-right { justify-content: space-between; }
 	}
 </style>

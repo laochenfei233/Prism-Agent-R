@@ -23,6 +23,8 @@
 	let searchQuery = $state('');
 	let searchResults = $state<WikiPageHitDto[]>([]);
 	let searching = $state(false);
+	// 底部查询栏模式
+	let queryMode = $state<'ai' | 'rag' | 'docs'>('ai');
 
 	// AI 写入（§10.1.1）
 	let aiInput = $state('');
@@ -318,10 +320,21 @@
 			</div>
 		</div>
 	{:else}
-		<!-- 知识库详情：左侧分类树 + 右侧内容 -->
+		<!-- 知识库详情：左栏切换器+页面树，右栏内容（Cherry Studio 风格） -->
 		<div class="detail">
-			<!-- 左侧：页面树 -->
+			<!-- 左栏：知识库切换 + 页面树 -->
 			<aside class="tree-pane">
+				<!-- 知识库切换器 -->
+				<div class="wiki-switcher">
+					<div class="switcher-info">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+						<span class="switcher-name">{selectedWiki!.name}</span>
+					</div>
+					<button class="switcher-back" onclick={() => { selectedWiki = null; }} title="返回知识库列表" aria-label="返回知识库列表">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+					</button>
+				</div>
+
 				<div class="pane-header">
 					<h3>页面</h3>
 					<button class="icon-btn-sm" title="刷新" aria-label="刷新页面列表" onclick={() => selectWiki(selectedWiki!)}>
@@ -394,75 +407,91 @@
 				{:else}
 					<div class="empty">← 选择左侧页面，或使用 AI 写入 / RAG 检索</div>
 				{/if}
-
-				<!-- AI 写入区（§10.1.1） -->
-				<div class="ai-panel">
-					<h3>AI 写入</h3>
-					<textarea placeholder="输入新知识或粘贴文档片段，如：Kubernetes 1.30 引入了 ..." bind:value={aiInput} rows="3"></textarea>
-					<div class="ai-actions">
-						<button class="btn-primary btn-sm" onclick={generateAiPlan} disabled={aiGenerating || !aiInput.trim()}>
-							{aiGenerating ? '生成计划中...' : '让 AI 入库'}
-						</button>
-					</div>
-
-					{#if aiPlan}
-						<div class="plan-preview">
-							<h4>操作计划（确认后执行）</h4>
-							{#each aiPlan.operations as op}
-								<div class="plan-op" class:noop={op.op === 'noop'}>
-									<span class="op-badge">{op.op === 'noop' ? '⚠' : '✓'}</span>
-									{opLabel(op)}
-								</div>
-							{/each}
-							<div class="plan-actions">
-								<button class="btn-primary btn-sm" onclick={confirmAiPlan} disabled={aiApplying}>
-									{aiApplying ? '执行中...' : '确认执行'}
-								</button>
-								<button class="btn-ghost btn-sm" onclick={() => aiPlan = null}>取消</button>
-							</div>
-						</div>
-					{/if}
-					{#if aiResult}<div class="ai-result">{aiResult}</div>{/if}
-				</div>
-
-				<!-- RAG 区 -->
-				<div class="rag-panel">
-					<h3>RAG 检索</h3>
-					<div class="rag-row">
-						<input placeholder="问知识库..." bind:value={ragQuery} onkeydown={(e) => e.key === 'Enter' && ragSearch()} aria-label="问知识库" />
-						<button class="btn-primary btn-sm" onclick={ragSearch}>检索</button>
-					</div>
-					{#if ragHits.length > 0}
-						<div class="rag-hits">
-							{#each ragHits as hit}
-								<div class="rag-hit">
-									<div class="rag-hit-meta">
-										<strong>{hit.document_title}</strong>
-										{#if hit.section}<span>· {hit.section}</span>{/if}
-										{#if hit.page_start}<span>· 第 {hit.page_start} 页</span>{/if}
-										<span class="score">{(hit.score * 100).toFixed(0)}</span>
-									</div>
-									<div class="rag-quote">"{hit.quote.slice(0, 200)}..."</div>
-								</div>
-							{/each}
-						</div>
-					{/if}
-
-					<h3 class="mt">文档管理</h3>
-					<button class="btn-ghost btn-sm" onclick={ingestDocument}>导入文档</button>
-					<div class="doc-list">
-						{#each ragDocs as doc}
-							<div class="doc-item">
-								<span class="doc-name">{doc.name}</span>
-								<span class="doc-status" class:ready={doc.status === 'ready'}>{doc.status}</span>
-								<span class="doc-count">{doc.chunk_count} 块</span>
-								<button class="btn-danger-sm" onclick={() => deleteDocument(doc.id)}>删除</button>
-							</div>
-						{/each}
-						{#if ragDocs.length === 0}<div class="hint">暂无文档</div>{/if}
-					</div>
-				</div>
 			</main>
+
+			<!-- 底部查询栏（Cherry WikiQueryBar 风格）：AI 写入 + RAG 检索 -->
+			<div class="query-bar">
+				<div class="query-tabs">
+					<button class="query-tab" class:active={queryMode === 'ai'} onclick={() => queryMode = 'ai'}>AI 写入</button>
+					<button class="query-tab" class:active={queryMode === 'rag'} onclick={() => queryMode = 'rag'}>RAG 检索</button>
+					<button class="query-tab" class:active={queryMode === 'docs'} onclick={() => queryMode = 'docs'}>文档管理</button>
+				</div>
+
+				{#if queryMode === 'ai'}
+					<div class="query-body">
+						<textarea
+							placeholder="输入新知识或粘贴文档片段，如：Kubernetes 1.30 引入了 ..."
+							bind:value={aiInput}
+							rows="3"
+							aria-label="AI 写入内容"
+						></textarea>
+						<div class="query-actions">
+							<button class="btn-primary btn-sm" onclick={generateAiPlan} disabled={aiGenerating || !aiInput.trim()}>
+								{aiGenerating ? '生成计划中...' : '让 AI 入库'}
+							</button>
+							{#if aiResult}<span class="ai-result">{aiResult}</span>{/if}
+						</div>
+						{#if aiPlan}
+							<div class="plan-preview">
+								<h4>操作计划（确认后执行）</h4>
+								{#each aiPlan.operations as op}
+									<div class="plan-op" class:noop={op.op === 'noop'}>
+										<span class="op-badge">{op.op === 'noop' ? '⚠' : '✓'}</span>
+										{opLabel(op)}
+									</div>
+								{/each}
+								<div class="plan-actions">
+									<button class="btn-primary btn-sm" onclick={confirmAiPlan} disabled={aiApplying}>
+										{aiApplying ? '执行中...' : '确认执行'}
+									</button>
+									<button class="btn-ghost btn-sm" onclick={() => aiPlan = null}>取消</button>
+								</div>
+							</div>
+						{/if}
+					</div>
+
+				{:else if queryMode === 'rag'}
+					<div class="query-body">
+						<div class="rag-row">
+							<input placeholder="问知识库..." bind:value={ragQuery} onkeydown={(e) => e.key === 'Enter' && ragSearch()} aria-label="问知识库" />
+							<button class="btn-primary btn-sm" onclick={ragSearch}>检索</button>
+						</div>
+						{#if ragHits.length > 0}
+							<div class="rag-hits">
+								{#each ragHits as hit}
+									<div class="rag-hit">
+										<div class="rag-hit-meta">
+											<strong>{hit.document_title}</strong>
+											{#if hit.section}<span>· {hit.section}</span>{/if}
+											{#if hit.page_start}<span>· 第 {hit.page_start} 页</span>{/if}
+											<span class="score">{(hit.score * 100).toFixed(0)}</span>
+										</div>
+										<div class="rag-quote">"{hit.quote.slice(0, 200)}..."</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+				{:else}
+					<div class="query-body">
+						<div class="doc-toolbar">
+							<button class="btn-ghost btn-sm" onclick={ingestDocument}>导入文档</button>
+						</div>
+						<div class="doc-list">
+							{#each ragDocs as doc}
+								<div class="doc-item">
+									<span class="doc-name">{doc.name}</span>
+									<span class="doc-status" class:ready={doc.status === 'ready'}>{doc.status}</span>
+									<span class="doc-count">{doc.chunk_count} 块</span>
+									<button class="btn-danger-sm" onclick={() => deleteDocument(doc.id)}>删除</button>
+								</div>
+							{/each}
+							{#if ragDocs.length === 0}<div class="hint">暂无文档</div>{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
 		</div>
 	{/if}
 </div>
@@ -552,9 +581,19 @@
 	.emb-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 	.emb-actions .btn-primary { width: fit-content; }
 
-	/* 详情双栏 */
-	.detail { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
-	.tree-pane { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 14px; position: sticky; top: 0; max-height: calc(100vh - 120px); overflow-y: auto; }
+	/* 详情双栏（Cherry 风格：左栏切换器+树 + 右栏内容 + 底部查询栏） */
+	.detail { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+	.tree-pane { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 12px; max-height: 280px; overflow-y: auto; }
+	.wiki-switcher { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 10px; margin-bottom: 10px; border-bottom: 1px solid var(--color-separator); }
+	.switcher-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+	.switcher-info svg { color: var(--color-accent); flex-shrink: 0; }
+	.switcher-name { font-size: 14px; font-weight: 600; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.switcher-back {
+		display: flex; align-items: center; justify-content: center;
+		width: 26px; height: 26px; border: none; border-radius: 6px;
+		background: transparent; color: var(--color-fg-secondary); cursor: pointer;
+	}
+	.switcher-back:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
 	.pane-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 	.pane-header h3 { margin: 0; font-size: 13px; color: var(--color-fg-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
 	.search-bar { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -580,20 +619,26 @@
 	.editor:focus { border-color: var(--color-accent); }
 	.markdown-view { padding: 16px; white-space: pre-wrap; line-height: 1.6; min-height: 120px; overflow-x: auto; }
 
-	/* AI 写入 */
-	.ai-panel, .rag-panel { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 14px; }
-	.ai-panel h3, .rag-panel h3 { margin: 0 0 10px; font-size: 13px; color: var(--color-fg-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-	.ai-panel textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; resize: vertical; outline: none; font-family: inherit; }
-	.ai-panel textarea:focus { border-color: var(--color-accent); }
-	.ai-actions { margin-top: 8px; }
-	.plan-preview { margin-top: 12px; border-top: 1px solid var(--color-separator); padding-top: 10px; }
+	/* 底部查询栏（Cherry WikiQueryBar 风格） */
+	.query-bar { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; overflow: hidden; }
+	.query-tabs { display: flex; gap: 2px; padding: 6px 10px 0; }
+	.query-tab { padding: 6px 12px; border: none; border-radius: 8px 8px 0 0; background: transparent; color: var(--color-fg-secondary); font-size: 13px; cursor: pointer; position: relative; }
+	.query-tab:hover { background: var(--color-bg-tertiary); }
+	.query-tab.active { color: var(--color-fg); font-weight: 500; background: var(--color-bg); }
+	.query-tab.active::after { content: ''; position: absolute; inset-inline: 0; bottom: 0; height: 2px; background: var(--color-accent); }
+	.query-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+	.query-body textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; resize: vertical; outline: none; font-family: inherit; box-sizing: border-box; }
+	.query-body textarea:focus { border-color: var(--color-accent); }
+	.query-actions { display: flex; align-items: center; gap: 12px; }
+	.doc-toolbar { display: flex; align-items: center; justify-content: space-between; }
+	.plan-preview { margin-top: 4px; border-top: 1px solid var(--color-separator); padding-top: 10px; }
 	.plan-preview h4 { margin: 0 0 8px; font-size: 13px; color: var(--color-fg); }
 	.plan-op { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; color: var(--color-fg); }
 	.plan-op.noop { color: var(--color-fg-secondary); }
 	.op-badge { width: 18px; height: 18px; border-radius: 50%; background: var(--color-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
 	.plan-op.noop .op-badge { background: var(--color-warning, #e6a23c); }
 	.plan-actions { display: flex; gap: 8px; margin-top: 8px; }
-	.ai-result { margin-top: 10px; font-size: 13px; color: var(--color-accent); }
+	.ai-result { font-size: 13px; color: var(--color-accent); }
 
 	/* RAG */
 	.rag-row { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -605,8 +650,7 @@
 	.rag-hit-meta strong { color: var(--color-fg); }
 	.score { margin-left: auto; font-size: 11px; color: var(--color-accent); }
 	.rag-quote { font-size: 12px; color: var(--color-fg-secondary); margin-top: 4px; }
-	.mt { margin-top: 16px !important; }
-	.doc-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+	.doc-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 	.doc-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: var(--color-bg); font-size: 12px; }
 	.doc-name { flex: 1; color: var(--color-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.doc-status { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--color-separator); color: var(--color-fg-secondary); }
@@ -614,7 +658,7 @@
 	.doc-count { font-size: 11px; color: var(--color-fg-secondary); }
 
 	@media (max-width: 900px) {
-		.detail { grid-template-columns: 1fr; }
-		.tree-pane { position: static; max-height: none; }
+		.detail { flex-direction: column; }
+		.tree-pane { max-height: 220px; }
 	}
 </style>
