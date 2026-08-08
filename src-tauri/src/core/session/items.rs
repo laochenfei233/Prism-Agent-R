@@ -168,7 +168,7 @@ impl SessionThread {
         let fork_point = self.turns.iter().position(|t| t.id == turn_id)?;
         let now = chrono::Utc::now().timestamp_millis();
 
-        let mut new_thread = SessionThread {
+        let new_thread = SessionThread {
             id: uuid::Uuid::new_v4().to_string(),
             turns: self.turns[..=fork_point].to_vec(),
             status: ThreadStatus::Active,

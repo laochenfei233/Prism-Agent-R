@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
 use crate::utils::error::AppError;
@@ -95,7 +94,7 @@ impl Compactor {
                 let content = match &msg.content {
                     MessageContent::Text(t) => t.clone(),
                     MessageContent::ToolCall(tc) => format!("[工具调用: {}]", tc.name),
-                    MessageContent::ToolResult(to) => format!("[工具结果]"),
+                    MessageContent::ToolResult(_) => "[工具结果]".to_string(),
                 };
                 format!("{role}: {content}")
             })

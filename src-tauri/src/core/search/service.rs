@@ -110,6 +110,11 @@ impl SearchService {
         &self.primary
     }
 
+    /// 返回备用 provider 名称（未配置时为 None）
+    pub fn fallback_provider(&self) -> Option<&str> {
+        self.fallback.as_deref()
+    }
+
     /// 是否有真实搜索能力（非 Noop）
     pub fn has_real_provider(&self) -> bool {
         self.providers.iter().any(|p| p.name() != "noop")

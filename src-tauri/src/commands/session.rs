@@ -1,4 +1,3 @@
-use serde::Serialize;
 use tauri::{Emitter, State};
 
 use crate::core::session::{SessionInitReport, SessionLifecycle};
@@ -105,7 +104,7 @@ pub async fn session_cleanup(
 pub async fn session_fork(
     state: State<'_, crate::AppState>,
     session_id: String,
-    turn_id: String,
+    _turn_id: String,
 ) -> Result<SessionDto, AppError> {
     // 获取原会话信息
     let svc = SessionService::new(state.db.pool.clone());

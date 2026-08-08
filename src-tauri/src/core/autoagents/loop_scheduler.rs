@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 use super::goal::{GoalMonitor, RecoveryAction, TaskGoal, WorkflowState};
-use super::workflow::Workflow;
 
 /// §17.2 Loop 自动化
 ///

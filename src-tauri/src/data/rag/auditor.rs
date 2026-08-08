@@ -45,7 +45,7 @@ impl CaseAuditor {
     pub async fn audit_case(&self, case_id: &str) -> Result<CaseAuditReport, AppError> {
         // 读取用例
         let case = sqlx::query_as::<_, CaseRow>(
-            "SELECT id, query, expected_answer, source_page, source_section FROM rag_eval_cases WHERE id = ?"
+            "SELECT id, query, expected_answer FROM rag_eval_cases WHERE id = ?"
         )
         .bind(case_id)
         .fetch_optional(&self.db.pool)
@@ -95,7 +95,7 @@ impl CaseAuditor {
     /// 审计所有用例
     pub async fn audit_all(&self) -> Result<Vec<CaseAuditReport>, AppError> {
         let cases = sqlx::query_as::<_, CaseRow>(
-            "SELECT id, query, expected_answer, source_page, source_section FROM rag_eval_cases"
+            "SELECT id, query, expected_answer FROM rag_eval_cases"
         )
         .fetch_all(&self.db.pool)
         .await?;
@@ -137,8 +137,6 @@ struct CaseRow {
     id: String,
     query: String,
     expected_answer: String,
-    source_page: Option<i32>,
-    source_section: Option<String>,
 }
 
 #[cfg(test)]

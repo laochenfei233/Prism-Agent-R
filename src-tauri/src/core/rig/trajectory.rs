@@ -167,6 +167,16 @@ impl TrajectoryMonitor {
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
+
+    /// 当前监控是否启用
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// 返回已注册的检测规则
+    pub fn checks(&self) -> &[TrajectoryCheck] {
+        &self.checks
+    }
 }
 
 impl Default for TrajectoryMonitor {
