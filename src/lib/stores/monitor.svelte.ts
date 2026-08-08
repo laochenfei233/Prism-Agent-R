@@ -96,6 +96,32 @@ function createMonitorStore() {
 
 	attachListeners();
 
+	// §26.3 轮询备用（事件系统不可用时保底刷新）
+	let polling = false;
+	function startPolling(intervalMs = 10000) {
+		if (polling) return;
+		polling = true;
+		setInterval(() => refresh(), intervalMs);
+	}
+
+	async function clearResolvedExceptions() {
+		try {
+			await invoke('exception_clear');
+			await loadExceptions(50);
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function exportLog(): Promise<string | null> {
+		try {
+			return await invoke<string>('log_export');
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+			return null;
+		}
+	}
+
 	return {
 		get budget() { return budget; },
 		get exceptions() { return exceptions; },
@@ -104,6 +130,9 @@ function createMonitorStore() {
 		loadBudget,
 		loadExceptions,
 		refresh,
+		startPolling,
+		clearResolvedExceptions,
+		exportLog,
 	};
 }
 

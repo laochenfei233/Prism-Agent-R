@@ -3,6 +3,7 @@ use std::sync::Arc;
 use super::session::{OrchestratorSession, OrchestratorStatus, OrchestratorEvent};
 use super::spec::{SpecDocument, SpecTask, Complexity};
 use super::plan::{ExecutionPlan, ExecutionGroup, GroupKind, PlannedTask, AgentConfig, ReviewResult, TaskReview, TaskResult, TaskStatus};
+use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
 use crate::core::budget::tracker::BudgetTracker;
 use crate::core::observability::exception::ExceptionRecorder;
 use crate::utils::error::AppError;
@@ -10,6 +11,10 @@ use crate::utils::error::AppError;
 pub struct OrchestratorEngine {
     pub budget_tracker: Arc<BudgetTracker>,
     pub exception_recorder: Option<Arc<ExceptionRecorder>>,
+    /// §27.2 会话持久化用数据库连接
+    pub db: Option<sqlx::SqlitePool>,
+    /// §27.3 规划/审查用模型（强推理）
+    pub planner_provider: Option<Arc<dyn ModelProvider>>,
     on_event: Option<Box<dyn Fn(&OrchestratorEvent) + Send + Sync>>,
 }
 
@@ -18,8 +23,22 @@ impl OrchestratorEngine {
         Self {
             budget_tracker,
             exception_recorder: None,
+            db: None,
+            planner_provider: None,
             on_event: None,
         }
+    }
+
+    /// §27.2 配置数据库连接（启用会话持久化）
+    pub fn with_db(mut self, pool: sqlx::SqlitePool) -> Self {
+        self.db = Some(pool);
+        self
+    }
+
+    /// §27.3 配置规划/审查模型
+    pub fn with_planner_provider(mut self, provider: Arc<dyn ModelProvider>) -> Self {
+        self.planner_provider = Some(provider);
+        self
     }
 
     pub fn on_event<F>(mut self, f: F) -> Self
@@ -71,7 +90,8 @@ impl OrchestratorEngine {
                 OrchestratorStatus::Executing => {
                     self.emit_event(session, "executing", "正在执行任务...");
                     let results = self.execute_plan(session).await;
-                    self.record_results(session, &results).await;
+                    session.task_results = results;
+                    self.record_results(session, &session.task_results).await;
                     session.status = OrchestratorStatus::Reviewing;
                     self.emit_event(session, "execution_completed", "执行完成，开始审查");
                 }
@@ -121,14 +141,74 @@ impl OrchestratorEngine {
                 }
                 _ => {}
             }
+
+            // §27.2 每次状态转换后持久化（崩溃可恢复）
+            if let Some(pool) = &self.db {
+                if let Err(e) = session.save(pool).await {
+                    tracing::warn!("编排会话持久化失败: {e}");
+                }
+            }
+        }
+
+        // 最终状态持久化
+        if let Some(pool) = &self.db {
+            if let Err(e) = session.save(pool).await {
+                tracing::warn!("编排会话最终持久化失败: {e}");
+            }
         }
 
         Ok(())
     }
 
-    /// 生成 SPEC（简化版 - 实际应调用 LLM）
+    /// §27.3 生成 SPEC：Planner 模型分析需求并拆解任务（失败时回退骨架）
     async fn generate_spec(&self, user_request: &str) -> Result<SpecDocument, AppError> {
-        // Simplified: generate a basic spec from the request
+        if let Some(provider) = &self.planner_provider {
+            let prompt = format!(
+                r#"你是一个专业的软件架构师。请分析以下需求，生成详细的 SPEC 文档（JSON 格式）。
+
+用户需求：
+{user_request}
+
+输出 JSON，结构如下：
+{{
+  "summary": "需求摘要（1-2 句话）",
+  "tasks": [
+    {{ "id": "T1", "title": "任务标题", "description": "任务描述", "acceptance": ["验收标准1"], "estimated_complexity": "low|medium|high", "required_tools": ["工具名"], "suggested_model": null }}
+  ],
+  "acceptance_criteria": {{ "T1": ["验收标准1"] }},
+  "dependencies": {{ "T1": ["依赖任务ID"] }},
+  "out_of_scope": ["明确排除的内容"]
+}}
+
+要求：
+- 任务拆解粒度适中，每个任务必须有可验证的验收标准
+- 依赖关系必须无环
+- 简单任务用 low，复杂任务用 high
+只输出 JSON，不要其他文字。"#
+            );
+
+            let request = GenerationRequest {
+                messages: vec![ChatMessage {
+                    role: ChatRole::User,
+                    content: MessageContent::Text(prompt),
+                    name: None,
+                }],
+                system: None,
+                tools: Vec::new(),
+                temperature: Some(0.2),
+                max_tokens: Some(4096),
+                stop: None,
+            };
+
+            if let Ok(response) = provider.generate(request).await {
+                if let Some(spec) = parse_spec_json(&response.text) {
+                    return Ok(spec);
+                }
+                tracing::warn!("编排 SPEC 解析失败，回退骨架: {}", response.text.chars().take(80).collect::<String>());
+            }
+        }
+
+        // 骨架回退：最小可行 SPEC
         let tasks = vec![
             SpecTask {
                 id: "T1".into(),
@@ -187,49 +267,187 @@ impl OrchestratorEngine {
         })
     }
 
-    /// 执行计划（简化版 - 实际应调用 Actor）
+    /// §27.3 并行执行计划：为每个任务创建 GenericActor 并真实执行
+    /// 说明：任务执行复用默认模型 provider（planner 模型），工具注册表为空
     async fn execute_plan(&self, session: &OrchestratorSession) -> Vec<TaskResult> {
         let plan = match &session.plan {
             Some(p) => p,
             None => return vec![],
         };
 
-        let mut results = Vec::new();
+        let provider = match &self.planner_provider {
+            Some(p) => p.clone(),
+            None => return vec![],
+        };
+
+        let mut all_results = Vec::new();
         for group in &plan.groups {
-            for task in &group.tasks {
-                results.push(TaskResult {
-                    task_id: task.spec_task_id.clone(),
-                    status: TaskStatus::Completed,
-                    output: format!("任务 {} 执行完成", task.spec_task_id),
-                    tokens_used: Some(100),
-                    duration_ms: 1000,
-                    error: None,
-                });
+            match group.kind {
+                GroupKind::Parallel => {
+                    let handles: Vec<_> = group.tasks.iter().map(|task| {
+                        let provider = provider.clone();
+                        let self_ref = self;
+                        async move {
+                            self_ref.execute_task(task, provider).await
+                        }
+                    }).collect();
+                    let results = futures::future::join_all(handles).await;
+                    all_results.extend(results);
+                }
+                GroupKind::Sequential => {
+                    for task in &group.tasks {
+                        let result = self.execute_task(task, provider.clone()).await;
+                        all_results.push(result);
+                    }
+                }
             }
         }
-        results
+        all_results
+    }
+
+    /// 执行单个任务（真实 LLM 调用，无工具）
+    async fn execute_task(
+        &self,
+        task: &PlannedTask,
+        provider: Arc<dyn ModelProvider>,
+    ) -> TaskResult {
+        let start_time = chrono::Utc::now().timestamp_millis();
+
+        let request = GenerationRequest {
+            messages: vec![ChatMessage {
+                role: ChatRole::User,
+                content: MessageContent::Text(task.prompt.clone()),
+                name: None,
+            }],
+            system: task.agent_config.system_prompt.clone(),
+            tools: Vec::new(),
+            temperature: task.agent_config.temperature,
+            max_tokens: task.agent_config.max_tokens,
+            stop: None,
+        };
+
+        match provider.generate(request).await {
+            Ok(response) => {
+                let usage = response.usage.unwrap_or(crate::core::adk::model::Usage {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
+                });
+                TaskResult {
+                    task_id: task.spec_task_id.clone(),
+                    status: TaskStatus::Completed,
+                    output: response.text,
+                    tokens_used: Some(usage.total_tokens),
+                    duration_ms: chrono::Utc::now().timestamp_millis() - start_time,
+                    error: None,
+                }
+            }
+            Err(e) => TaskResult {
+                task_id: task.spec_task_id.clone(),
+                status: TaskStatus::Failed,
+                output: String::new(),
+                tokens_used: None,
+                duration_ms: chrono::Utc::now().timestamp_millis() - start_time,
+                error: Some(e.to_string()),
+            },
+        }
     }
 
     async fn record_results(&self, _session: &OrchestratorSession, _results: &[TaskResult]) {
         // Record results to budget tracker
     }
 
-    /// 审查结果（简化版）
+    /// §27.3 审查结果：Reviewer 模型检查任务输出是否符合验收标准
     async fn review_results(&self, session: &OrchestratorSession) -> ReviewResult {
         let spec = match &session.spec {
             Some(s) => s,
             None => return ReviewResult { task_reviews: vec![] },
         };
 
+        if let Some(provider) = &self.planner_provider {
+            let spec_json = serde_json::to_string(spec).unwrap_or_default();
+            let results_json = serde_json::to_string(&session.task_results).unwrap_or_default();
+
+            let prompt = format!(
+                r#"你是一个严格的代码审查员。请审查以下任务的输出是否符合 SPEC 中的验收标准。
+
+SPEC 任务清单：
+{spec_json}
+
+任务输出：
+{results_json}
+
+请为每个任务给出 JSON 审查结果：
+{{
+  "task_reviews": [
+    {{ "task_id": "T1", "passed": true, "reasons": [], "suggestions": ["建议1"] }}
+  ]
+}}
+
+要求：passed 为 false 时 reasons 必须给出具体原因。只输出 JSON。"#
+            );
+
+            let request = GenerationRequest {
+                messages: vec![ChatMessage {
+                    role: ChatRole::User,
+                    content: MessageContent::Text(prompt),
+                    name: None,
+                }],
+                system: None,
+                tools: Vec::new(),
+                temperature: Some(0.2),
+                max_tokens: Some(4096),
+                stop: None,
+            };
+
+            if let Ok(response) = provider.generate(request).await {
+                if let Some(review) = parse_review_json(&response.text) {
+                    return review;
+                }
+                tracing::warn!("编排审查解析失败，回退规则判定");
+            }
+        }
+
+        // 规则回退：有 error 的任务判失败，其余通过
         let task_reviews: Vec<TaskReview> = spec.tasks.iter().map(|task| {
+            let failed = session.task_results.iter().find(|r| r.task_id == task.id)
+                .map(|r| matches!(r.status, TaskStatus::Failed))
+                .unwrap_or(false);
             TaskReview {
                 task_id: task.id.clone(),
-                passed: true,
-                reasons: vec![],
+                passed: !failed,
+                reasons: if failed { vec!["任务执行失败".into()] } else { vec![] },
                 suggestions: vec![],
             }
         }).collect();
 
         ReviewResult { task_reviews }
     }
+}
+
+/// §27.3 从 LLM 响应中提取 SPEC JSON（支持 fenced code block）
+fn parse_spec_json(text: &str) -> Option<SpecDocument> {
+    let trimmed = text.trim();
+    // 去掉 ```json ... ``` 围栏
+    let json_str = if trimmed.starts_with("```") {
+        let start = trimmed.find('\n').unwrap_or(0) + 1;
+        let end = trimmed.rfind("```").unwrap_or(trimmed.len());
+        trimmed[start..end].trim()
+    } else {
+        trimmed
+    };
+    serde_json::from_str(json_str).ok()
+}
+
+/// §27.3 从 LLM 响应中提取审查结果 JSON
+fn parse_review_json(text: &str) -> Option<ReviewResult> {
+    let trimmed = text.trim();
+    let json_str = if trimmed.starts_with("```") {
+        let start = trimmed.find('\n').unwrap_or(0) + 1;
+        let end = trimmed.rfind("```").unwrap_or(trimmed.len());
+        trimmed[start..end].trim()
+    } else {
+        trimmed
+    };
+    serde_json::from_str(json_str).ok()
 }

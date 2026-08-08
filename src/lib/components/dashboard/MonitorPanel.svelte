@@ -73,12 +73,28 @@
 	$effect(() => {
 		monitorStore.refresh();
 		loadActiveWorkflows();
+		monitorStore.startPolling(10000);
 		const interval = setInterval(() => {
-			monitorStore.refresh();
 			loadActiveWorkflows();
 		}, 10000);
 		return () => clearInterval(interval);
 	});
+
+	async function handleExportLog() {
+		const log = await monitorStore.exportLog();
+		if (!log) return;
+		const blob = new Blob([log], { type: 'application/x-ndjson' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `prism-log-${Date.now()}.jsonl`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function handleClearExceptions() {
+		await monitorStore.clearResolvedExceptions();
+	}
 </script>
 
 <div class="monitor-panel h-full overflow-y-auto p-4 space-y-4">
@@ -206,14 +222,28 @@
 	<div class="rounded-lg bg-slate-800/50 border border-slate-700/50 p-4 space-y-3">
 		<div class="flex items-center justify-between">
 			<h3 class="text-sm font-medium text-slate-300">最近异常</h3>
-			{#if exceptions.length > 0}
-				<button
-					class="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-					onclick={() => monitorStore.loadExceptions(50)}
-				>
-					查看全部
-				</button>
-			{/if}
+			<div class="flex items-center gap-2">
+				{#if exceptions.length > 0}
+					<button
+						class="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+						onclick={() => monitorStore.loadExceptions(50)}
+					>
+						查看全部
+					</button>
+					<button
+						class="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+						onclick={handleExportLog}
+					>
+						导出日志
+					</button>
+					<button
+						class="text-[10px] text-slate-500 hover:text-red-400 transition-colors"
+						onclick={handleClearExceptions}
+					>
+						清除已处理
+					</button>
+				{/if}
+			</div>
 		</div>
 
 		{#if exceptions.length === 0}

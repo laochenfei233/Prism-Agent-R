@@ -122,7 +122,7 @@ impl AgentActor for GenericActor {
                 arguments: tc.arguments,
                 result: String::new(),
             }).collect(),
-            tokens_used: None,
+            tokens_used: result.usage.map(|u| u.total_tokens),
         })
     }
 }

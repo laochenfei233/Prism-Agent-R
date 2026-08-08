@@ -535,22 +535,77 @@ async fn run_workflow_v2(
     // 构建 Coordinator
     let coordinator = build_coordinator_v2(&pool, workflow).await?;
 
-    // 构建预算追踪器
-    let budget_tracker = Arc::new(BudgetTracker::new(
-        BudgetConfig::default(),
-        BudgetPolicy::default(),
-    ));
+    // 构建预算追踪器（§22.4 预算事件 → 前端）
+    let budget_tracker = Arc::new(
+        BudgetTracker::new(BudgetConfig::default(), BudgetPolicy::default()).on_event({
+            let app = app.clone();
+            move |event| {
+                let event_name = match event.event_type.as_str() {
+                    "warning" => "budget:warning",
+                    "exceeded" => "budget:exceeded",
+                    "model_switched" => "budget:model-switched",
+                    "paused" => "budget:paused",
+                    _ => return,
+                };
+                let _ = app.emit(event_name, serde_json::json!({
+                    "level": event.level,
+                    "current": event.current,
+                    "limit": event.limit,
+                    "entity_type": event.entity_type,
+                    "entity_id": event.entity_id,
+                    "action": event.action,
+                    "message": event.message,
+                    "timestamp": event.timestamp,
+                }));
+            }
+        }),
+    );
 
-    // 构建异常记录器
-    let exception_recorder = Arc::new(ExceptionRecorder::new(state.db.clone()));
+    // 构建异常记录器（§24.3 monitor:exception → 前端）
+    let exception_recorder = Arc::new(
+        ExceptionRecorder::new(state.db.clone()).on_exception({
+            let app = app.clone();
+            move |exc: &crate::core::observability::exception::AgentException| {
+                let _ = app.emit("monitor:exception", serde_json::json!({
+                    "id": exc.id,
+                    "session_id": exc.session_id,
+                    "agent_id": exc.agent_id,
+                    "exception_type": exc.exception_type,
+                    "severity": exc.severity,
+                    "message": exc.message,
+                    "created_at": exc.created_at,
+                }));
+            }
+        }),
+    );
 
     // 构建日志器
     let logger = Arc::new(AgentLogger::new(LogLevel::Info));
+
+    // §22.3 模型降级链：按成本升序排列候选模型
+    let fallback_chain = Arc::new(std::sync::RwLock::new(
+        crate::core::budget::fallback::ModelFallbackChain::new(
+            model_candidates(&pool, workflow).await?,
+        ),
+    ));
+
+    // §23.4 系统级沙箱：默认策略
+    let sandbox = Arc::new(crate::core::guardrails::sandbox::SandboxPolicy::default());
+
+    // §23.3 行为级护栏：默认轨迹检查
+    let trajectory_guard = Arc::new(
+        crate::core::guardrails::trajectory::TrajectoryGuardrail::new(
+            crate::core::guardrails::trajectory::ViolationHandler::LogOnly,
+        ),
+    );
 
     // 构建 V2 引擎
     let engine = WorkflowEngineV2::new(coordinator, budget_tracker)
         .with_exception_recorder(exception_recorder)
         .with_logger(logger)
+        .with_model_fallback(fallback_chain)
+        .with_sandbox(sandbox)
+        .with_trajectory_guard(trajectory_guard)
         .on_stage({
             let app = app.clone();
             move |rid: &str, stage_id: &str, status: &StageStatusV2| {
@@ -602,6 +657,74 @@ async fn run_workflow_v2(
     }));
 
     Ok(final_status)
+}
+
+/// §22.3 构建模型降级链候选：默认模型优先，其余模型按成本估算升序排列
+async fn model_candidates(
+    pool: &sqlx::SqlitePool,
+    workflow: &WorkflowV2,
+) -> Result<Vec<crate::core::budget::fallback::ModelCandidate>, AppError> {
+    use crate::core::budget::fallback::ModelCandidate;
+
+    // 工作流显式指定的降级链（model_fallback: Vec<String> 为 model_id 列表）
+    let explicit = workflow.model_fallback.clone().unwrap_or_default();
+
+    let rows = sqlx::query(
+        "SELECT m.id, m.provider_id, m.model_id, m.display_name, m.max_tokens, m.is_default FROM models m WHERE m.kind = 'chat' ORDER BY m.is_default DESC, m.created_at DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut candidates: Vec<ModelCandidate> = rows.iter().map(|row| {
+        let model_id: String = row.get("model_id");
+        let provider_id: String = row.get("provider_id");
+        let display_name: Option<String> = row.get("display_name");
+        let max_tokens: Option<i64> = row.get("max_tokens");
+        // 成本估算：没有单价表时按模型名启发式（name 含 mini/lite/7b 更便宜）
+        let cost_per_1k_tokens = estimate_model_cost(&model_id);
+        let display = display_name.unwrap_or_else(|| model_id.clone());
+        ModelCandidate {
+            provider_id,
+            model_id,
+            display_name: display,
+            cost_per_1k_tokens,
+            max_tokens: max_tokens.unwrap_or(8192) as u64,
+            capabilities: vec!["chat".into(), "tool_use".into()],
+        }
+    }).collect();
+
+    // 显式降级链排在最前（按指定顺序），且不在数据库中的兜底
+    for model_id in explicit {
+        if !candidates.iter().any(|c| c.model_id == model_id) {
+            candidates.insert(0, ModelCandidate {
+                provider_id: "default".into(),
+                model_id: model_id.clone(),
+                display_name: model_id,
+                cost_per_1k_tokens: 0.0,
+                max_tokens: 8192,
+                capabilities: vec!["chat".into(), "tool_use".into()],
+            });
+        }
+    }
+
+    // ModelFallbackChain::new 会按成本升序排序
+    Ok(candidates)
+}
+
+/// 无单价表时的成本启发式估算（越低越便宜）
+fn estimate_model_cost(model_id: &str) -> f64 {
+    let lower = model_id.to_lowercase();
+    if lower.contains("mini") || lower.contains("lite") || lower.contains("flash")
+        || lower.contains("nano") || lower.contains("-7b") || lower.contains("8b") {
+        0.001
+    } else if lower.contains("haiku") || lower.contains("sonnet") || lower.contains("4o") {
+        0.01
+    } else if lower.contains("opus") || lower.contains("pro") || lower.contains("turbo")
+        || lower.contains("deepseek-r1") {
+        0.05
+    } else {
+        0.02
+    }
 }
 
 /// 构建 V2 Coordinator：为工作流的每个角色注册一个 GenericActor

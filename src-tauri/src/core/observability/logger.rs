@@ -62,6 +62,8 @@ pub struct AgentLogger {
     level: LogLevel,
     entries: std::sync::Mutex<Vec<LogEntry>>,
     max_entries: usize,
+    /// §24.4 可选的 JSON Lines 日志文件输出路径
+    file_path: Option<std::path::PathBuf>,
 }
 
 impl AgentLogger {
@@ -70,11 +72,32 @@ impl AgentLogger {
             level,
             entries: std::sync::Mutex::new(Vec::new()),
             max_entries: 1000,
+            file_path: None,
         }
+    }
+
+    /// §24.4 启用 JSON Lines 文件输出（追加模式）
+    pub fn with_file_output(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.file_path = Some(path.into());
+        self
     }
 
     pub fn log(&self, entry: LogEntry) {
         if LogLevel::from_str(&entry.level) >= self.level {
+            // 文件输出（JSON Lines，追加）
+            if let Some(path) = &self.file_path {
+                if let Ok(json) = serde_json::to_string(&entry) {
+                    use std::io::Write;
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(path)
+                    {
+                        let _ = writeln!(f, "{json}");
+                    }
+                }
+            }
+
             let mut entries = self.entries.lock().unwrap();
             entries.push(entry);
             let excess = entries.len().saturating_sub(self.max_entries);
