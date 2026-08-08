@@ -641,11 +641,6 @@ export interface AgentTraceDto {
 	outcome: string;
 }
 
-export const traceApi = {
-	list: (sessionId: string, limit?: number) =>
-		invoke<AgentTraceDto[]>('trace_list', { sessionId, limit }),
-};
-
 // ── Router API（Skill/MCP 路由调试） ──────────────────────
 
 export interface RouteItemDto {
@@ -708,4 +703,125 @@ export const ttsApi = {
 		invoke<TtsSpeakResultDto>('tts_speak', { text, lang, rate }),
 	stop: () => invoke<void>('tts_stop'),
 	voices: () => invoke<TtsVoiceInfoDto>('tts_voices'),
+};
+
+// ── Search API (§15) ─────────────────────────────────────
+
+export interface SearchConfigResult {
+	provider: string;
+	api_key_set: boolean;
+	searxng_url: string | null;
+	fallback_provider: string | null;
+}
+
+export interface SearchTestResult {
+	success: boolean;
+	provider: string;
+	first_result_title: string | null;
+	first_result_url: string | null;
+	elapsed_ms: number;
+	error: string | null;
+}
+
+export const searchApi = {
+	config: () => invoke<SearchConfigResult>('search_config'),
+	saveConfig: (data: { provider?: string; api_key?: string; searxng_url?: string; fallback_provider?: string }) =>
+		invoke<void>('search_config_save', data),
+	test: () => invoke<SearchTestResult>('search_test'),
+};
+
+// ── Session Lifecycle API (§17.1) ────────────────────────
+
+export type SessionLifecycle = 'Created' | 'Init' | 'Ready' | 'Running' | 'Paused' | 'Verifying' | 'Done' | 'InitFailed';
+
+export interface SessionInitReport {
+	provider_ok: boolean;
+	provider_error: string | null;
+	memory_ok: boolean;
+	memory_error: string | null;
+	mcp_ok: boolean;
+	mcp_error: string | null;
+}
+
+export const sessionLifecycleApi = {
+	init: (sessionId: string) =>
+		invoke<SessionInitReport>('session_init', { sessionId }),
+	state: (sessionId: string) =>
+		invoke<SessionLifecycle>('session_state_query', { sessionId }),
+	cleanup: (sessionId: string) =>
+		invoke<void>('session_cleanup', { sessionId }),
+	fork: (sessionId: string, turnId: string) =>
+		invoke<SessionDto>('session_fork', { sessionId, turnId }),
+	approve: (callId: string, decision: string, alwaysAllow?: boolean) =>
+		invoke<boolean>('session_approve', { callId, decision, alwaysAllow }),
+};
+
+// ── Loop API (§17.2) ────────────────────────────────────
+
+export type LoopKind = 'Goal' | 'Timer' | 'MakerChecker';
+export type LoopStatus = 'Idle' | 'Running' | 'Paused' | 'Completed' | 'Failed';
+
+export interface AgentLoop {
+	id: string;
+	kind: LoopKind;
+	interval_secs: number | null;
+	max_rounds: number;
+	goal: unknown | null;
+	maker_workflow_id: string | null;
+	checker_workflow_id: string | null;
+	status: LoopStatus;
+	current_round: number;
+}
+
+export interface LoopCreateRequest {
+	kind: LoopKind;
+	interval_secs?: number;
+	max_rounds?: number;
+	goal?: unknown;
+	maker_workflow_id?: string;
+	checker_workflow_id?: string;
+}
+
+export const loopApi = {
+	start: (request: LoopCreateRequest) =>
+		invoke<AgentLoop>('loop_start', { request }),
+	stop: (loopId: string) =>
+		invoke<boolean>('loop_stop', { loopId }),
+	list: () => invoke<AgentLoop[]>('loop_list'),
+};
+
+// ── Trace API (§17.3) ───────────────────────────────────
+
+export interface TraceStep {
+	step_index: number;
+	kind: string;
+	input_summary: string;
+	output_summary: string;
+	latency_ms: number;
+	tool_name: string | null;
+	error: string | null;
+}
+
+export interface AgentTrace {
+	id: string;
+	session_id: string;
+	agent_id: string;
+	trace_id: string;
+	started_at: number;
+	finished_at: number | null;
+	steps: TraceStep[];
+	total_prompt_tokens: number;
+	total_completion_tokens: number;
+	total_cost: number;
+	outcome: string;
+	grade_score: number | null;
+	grade_reason: string | null;
+	graded_at: number | null;
+}
+
+export const traceApi = {
+	list: (sessionId: string, limit?: number, minGrade?: number, toolFailed?: boolean) =>
+		invoke<AgentTrace[]>('trace_list', { sessionId, limit, minGrade, toolFailed }),
+	grade: (traceId: string, score: number, reason: string) =>
+		invoke<void>('trace_grade', { traceId, score, reason }),
 };
