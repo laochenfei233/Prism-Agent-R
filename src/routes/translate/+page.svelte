@@ -195,7 +195,7 @@
 	<div class="section">
 		<h3>OCR 识别</h3>
 		<div class="ocr-area">
-			<input type="file" accept="image/*" onchange={handleOcrImage} />
+			<input type="file" accept="image/*" onchange={handleOcrImage} aria-label="选择图片进行 OCR 识别" />
 			{#if ocrImage}
 				<img src={ocrImage} alt="uploaded" class="ocr-preview" />
 			{/if}

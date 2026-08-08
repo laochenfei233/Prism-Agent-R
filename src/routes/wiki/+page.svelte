@@ -400,7 +400,7 @@
 						{/if}
 					</div>
 					{#if editing}
-						<textarea class="editor" bind:value={editContent} rows="20"></textarea>
+						<textarea class="editor" bind:value={editContent} rows="20" aria-label="编辑页面内容"></textarea>
 					{:else}
 						<pre class="markdown-view">{pageContent}</pre>
 					{/if}
@@ -411,10 +411,15 @@
 
 			<!-- 底部查询栏（Cherry WikiQueryBar 风格）：AI 写入 + RAG 检索 -->
 			<div class="query-bar">
-				<div class="query-tabs">
-					<button class="query-tab" class:active={queryMode === 'ai'} onclick={() => queryMode = 'ai'}>AI 写入</button>
-					<button class="query-tab" class:active={queryMode === 'rag'} onclick={() => queryMode = 'rag'}>RAG 检索</button>
-					<button class="query-tab" class:active={queryMode === 'docs'} onclick={() => queryMode = 'docs'}>文档管理</button>
+				<div class="query-tabs" role="tablist" tabindex="0" aria-label="知识库工具" onkeydown={(e) => {
+					const keys = ['ai', 'rag', 'docs'] as const;
+					const idx = keys.indexOf(queryMode);
+					const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+					if (dir) { e.preventDefault(); queryMode = keys[(idx + dir + 3) % 3]; }
+				}}>
+					<button class="query-tab" class:active={queryMode === 'ai'} onclick={() => queryMode = 'ai'} role="tab" aria-selected={queryMode === 'ai'} tabindex={queryMode === 'ai' ? 0 : -1}>AI 写入</button>
+					<button class="query-tab" class:active={queryMode === 'rag'} onclick={() => queryMode = 'rag'} role="tab" aria-selected={queryMode === 'rag'} tabindex={queryMode === 'rag' ? 0 : -1}>RAG 检索</button>
+					<button class="query-tab" class:active={queryMode === 'docs'} onclick={() => queryMode = 'docs'} role="tab" aria-selected={queryMode === 'docs'} tabindex={queryMode === 'docs' ? 0 : -1}>文档管理</button>
 				</div>
 
 				{#if queryMode === 'ai'}

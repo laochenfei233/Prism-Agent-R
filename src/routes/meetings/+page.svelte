@@ -381,6 +381,7 @@
 							<input
 								class="title-input"
 								bind:value={titleValue}
+								aria-label="会议标题"
 								onblur={saveTitle}
 								onkeydown={(e) => {
 									if (e.key === 'Enter') saveTitle();
@@ -431,9 +432,12 @@
 			</div>
 
 			<!-- tab 切换 -->
-			<div class="tabs">
-				<button class="tab" class:active={activeTab === 'summary'} onclick={() => activeTab = 'summary'}>摘要</button>
-				<button class="tab" class:active={activeTab === 'transcript'} onclick={() => activeTab = 'transcript'}>转录</button>
+			<div class="tabs" role="tablist" tabindex="0" aria-label="会议内容" onkeydown={(e) => {
+				const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+				if (dir) { e.preventDefault(); activeTab = activeTab === 'summary' ? 'transcript' : 'summary'; }
+			}}>
+				<button class="tab" class:active={activeTab === 'summary'} onclick={() => activeTab = 'summary'} role="tab" aria-selected={activeTab === 'summary'} tabindex={activeTab === 'summary' ? 0 : -1}>摘要</button>
+				<button class="tab" class:active={activeTab === 'transcript'} onclick={() => activeTab = 'transcript'} role="tab" aria-selected={activeTab === 'transcript'} tabindex={activeTab === 'transcript' ? 0 : -1}>转录</button>
 			</div>
 
 			<!-- 内容 -->
