@@ -30,13 +30,11 @@
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="inspector-backdrop" onclick={onClose}>
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="inspector" onclick={(e) => e.stopPropagation()}>
+<div class="inspector-backdrop" onclick={onClose} role="presentation">
+	<div class="inspector" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" aria-label="阶段属性" tabindex="-1">
 		<div class="inspector-header">
 			<h3>阶段属性</h3>
-			<button class="close-btn" onclick={onClose}>&times;</button>
+			<button class="close-btn" onclick={onClose} aria-label="关闭">&times;</button>
 		</div>
 
 		<div class="inspector-body">

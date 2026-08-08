@@ -68,27 +68,27 @@
 	<div class="create-form">
 		<div class="form-row">
 			<div class="form-item">
-				<label>Loop 类型</label>
-				<select bind:value={loopKind}>
+				<label for="loop-kind">Loop 类型</label>
+				<select id="loop-kind" bind:value={loopKind}>
 					<option value="Goal">Goal 循环</option>
 					<option value="Timer">Timer 定时</option>
 					<option value="MakerChecker">Maker-Checker</option>
 				</select>
 			</div>
 			<div class="form-item">
-				<label>最大轮次</label>
-				<input type="number" bind:value={maxRounds} min="1" max="50" />
+				<label for="loop-rounds">最大轮次</label>
+				<input id="loop-rounds" type="number" bind:value={maxRounds} min="1" max="50" />
 			</div>
 			{#if loopKind === 'Timer'}
 				<div class="form-item">
-					<label>间隔（秒）</label>
-					<input type="number" bind:value={intervalSecs} min="60" max="3600" />
+					<label for="loop-interval">间隔（秒）</label>
+					<input id="loop-interval" type="number" bind:value={intervalSecs} min="60" max="3600" />
 				</div>
 			{/if}
 			{#if loopKind === 'Goal'}
 				<div class="form-item full-width">
-					<label>目标描述</label>
-					<input type="text" bind:value={goalDesc} placeholder="描述需要达成的目标..." />
+					<label for="loop-goal">目标描述</label>
+					<input id="loop-goal" type="text" bind:value={goalDesc} placeholder="描述需要达成的目标..." />
 				</div>
 			{/if}
 		</div>

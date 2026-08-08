@@ -66,8 +66,8 @@
 
 	<div class="config-grid">
 		<div class="config-item">
-			<label class="label">Provider</label>
-			<select bind:value={provider}>
+			<label class="label" for="search-provider">Provider</label>
+			<select id="search-provider" bind:value={provider}>
 				<option value="noop">未配置</option>
 				<option value="tavily">Tavily</option>
 				<option value="serper">Serper (Google)</option>
@@ -77,8 +77,9 @@
 
 		{#if provider === 'tavily' || provider === 'serper'}
 			<div class="config-item">
-				<label class="label">API Key</label>
+				<label class="label" for="search-api-key">API Key</label>
 				<input
+					id="search-api-key"
 					type="password"
 					bind:value={apiKey}
 					placeholder={config?.api_key_set ? '••••••••' : '输入 API Key'}
@@ -91,8 +92,9 @@
 
 		{#if provider === 'searxng'}
 			<div class="config-item">
-				<label class="label">Searxng 实例地址</label>
+				<label class="label" for="search-searxng-url">Searxng 实例地址</label>
 				<input
+					id="search-searxng-url"
 					type="url"
 					bind:value={searxngUrl}
 					placeholder="http://localhost:8888"
@@ -101,8 +103,8 @@
 		{/if}
 
 		<div class="config-item">
-			<label class="label">备用 Provider</label>
-			<select bind:value={fallbackProvider}>
+			<label class="label" for="search-fallback">备用 Provider</label>
+			<select id="search-fallback" bind:value={fallbackProvider}>
 				<option value="">无</option>
 				{#if provider !== 'tavily'}
 					<option value="tavily">Tavily</option>

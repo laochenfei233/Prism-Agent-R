@@ -24,7 +24,10 @@
 		<div
 			class="sheet sheet-{position}"
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
 			role="dialog"
+			aria-label="面板"
+			tabindex="-1"
 		>
 			{@render children()}
 		</div>

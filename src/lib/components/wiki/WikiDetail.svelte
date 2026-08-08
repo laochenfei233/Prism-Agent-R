@@ -109,7 +109,7 @@
 <div class="wiki-detail">
 	<!-- Header -->
 	<div class="detail-header">
-		<button class="back-btn" onclick={onback}>
+		<button class="back-btn" onclick={onback} aria-label="返回">
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
 		</button>
 		<div class="header-info">

@@ -104,7 +104,7 @@
 </script>
 
 <div class="task-designer">
-	<div class="designer-tabs" role="tablist" onkeydown={(e) => {
+	<div class="designer-tabs" role="tablist" tabindex="0" onkeydown={(e) => {
 		const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
 		if (dir) {
 			e.preventDefault();

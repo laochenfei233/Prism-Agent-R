@@ -45,12 +45,12 @@
 			{#if cliffCutoffEnabled}
 				<div class="card-fields">
 					<div class="field-row">
-						<label>min_gap</label>
-						<input type="number" bind:value={minGap} min="0.01" max="1" step="0.01" />
+						<label for="min-gap">min_gap</label>
+						<input id="min-gap" type="number" bind:value={minGap} min="0.01" max="1" step="0.01" />
 					</div>
 					<div class="field-row">
-						<label>rel_drop</label>
-						<input type="number" bind:value={relDrop} min="0.01" max="1" step="0.01" />
+						<label for="rel-drop">rel_drop</label>
+						<input id="rel-drop" type="number" bind:value={relDrop} min="0.01" max="1" step="0.01" />
 					</div>
 				</div>
 			{/if}

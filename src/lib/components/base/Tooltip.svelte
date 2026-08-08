@@ -16,8 +16,11 @@
 
 <div
 	class="tooltip-wrap"
+	role="group"
 	onmouseenter={() => show = true}
 	onmouseleave={() => show = false}
+	onfocusin={() => show = true}
+	onfocusout={() => show = false}
 >
 	{@render children()}
 	{#if show && content}

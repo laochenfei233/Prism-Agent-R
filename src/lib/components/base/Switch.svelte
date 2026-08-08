@@ -2,10 +2,12 @@
 	let {
 		checked = $bindable(false),
 		disabled = false,
+		label = '开关',
 		onchange
 	}: {
 		checked?: boolean;
 		disabled?: boolean;
+		label?: string;
 		onchange?: (checked: boolean) => void;
 	} = $props();
 
@@ -23,6 +25,7 @@
 	onclick={toggle}
 	role="switch"
 	aria-checked={checked}
+	aria-label={label}
 >
 	<span class="thumb"></span>
 </button>

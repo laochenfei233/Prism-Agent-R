@@ -284,16 +284,16 @@
 			</div>
 			<div class="emb-body">
 				<div class="emb-row">
-					<label>模式</label>
-					<select bind:value={embMode}>
+					<label for="emb-mode">模式</label>
+					<select id="emb-mode" bind:value={embMode}>
 						<option value="local">本地（离线特征哈希，无网络）</option>
 						<option value="api">API（OpenAI 兼容 /embeddings）</option>
 					</select>
 				</div>
 				{#if embMode === 'api'}
 					<div class="emb-row">
-						<label>Provider</label>
-						<select bind:value={embProvider}>
+						<label for="emb-provider">Provider</label>
+						<select id="emb-provider" bind:value={embProvider}>
 							<option value="">选择 Provider</option>
 							{#each providers as p}
 								<option value={p.id}>{p.name} ({p.kind})</option>
@@ -301,14 +301,14 @@
 						</select>
 					</div>
 					<div class="emb-row">
-						<label>模型</label>
-						<input placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="嵌入模型" />
+						<label for="emb-model">模型</label>
+						<input id="emb-model" placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="嵌入模型" />
 					</div>
 				{/if}
 				<div class="emb-row">
-					<label>重排序</label>
-					<label class="switch-label">
-						<input type="checkbox" bind:checked={rerankEnabled} onchange={toggleRerank} />
+					<label for="emb-rerank">重排序</label>
+					<label class="switch-label" for="emb-rerank">
+						<input id="emb-rerank" type="checkbox" bind:checked={rerankEnabled} onchange={toggleRerank} />
 						<span>LLM 重排序（初检 top-150 → 重排 → top-k，有成本）</span>
 					</label>
 				</div>
@@ -503,7 +503,6 @@
 	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 	.card { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 16px; cursor: pointer; transition: border-color 0.15s, transform 0.15s; position: relative; }
 	.card:hover { border-color: var(--color-accent); }
-	.card.selected { border-color: var(--color-accent); }
 	.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 	.card-icon {
 		width: 32px;

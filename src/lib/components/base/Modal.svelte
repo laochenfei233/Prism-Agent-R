@@ -27,11 +27,18 @@
 
 {#if open}
 	<div class="overlay" onclick={close} role="presentation">
-		<div class="modal glass" onclick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+		<div
+			class="modal glass"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-label={title}
+			tabindex="-1"
+		>
 			{#if title}
 				<div class="header">
 					<h2>{title}</h2>
-					<button class="close-btn" onclick={close}>×</button>
+					<button class="close-btn" onclick={close} aria-label="关闭">×</button>
 				</div>
 			{/if}
 			<div class="body">

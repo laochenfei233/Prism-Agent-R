@@ -120,8 +120,8 @@
 	<!-- 翻译模型配置 -->
 	<div class="model-panel">
 		<div class="model-row">
-			<label>翻译模型</label>
-			<select bind:value={translateModelId}>
+			<label for="translate-model">翻译模型</label>
+			<select id="translate-model" bind:value={translateModelId}>
 				<option value="">默认模型（设置中的默认）</option>
 				{#each models as m}
 					<option value={m.id}>{m.display_name ?? m.model_id}</option>
