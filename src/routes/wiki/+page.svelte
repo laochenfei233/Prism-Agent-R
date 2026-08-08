@@ -429,7 +429,7 @@
 </div>
 
 <style>
-	.page { padding: 24px 32px; max-width: 1200px; margin: 0 auto; }
+	.page { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
 	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 	.page-header h1 { font-size: 24px; font-weight: 600; color: var(--color-fg); margin: 0; }
 	.btn-primary { padding: 8px 16px; border-radius: 8px; border: none; background: var(--color-accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }

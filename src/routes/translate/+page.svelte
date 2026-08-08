@@ -216,7 +216,7 @@
 </div>
 
 <style>
-	.page { padding: 24px 32px; max-width: 960px; margin: 0 auto; }
+	.page { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
 	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 	.page-header h1 { font-size: 24px; font-weight: 600; color: var(--color-fg); margin: 0; }
 	.header-actions { display: flex; gap: 8px; }

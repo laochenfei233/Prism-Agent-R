@@ -91,6 +91,7 @@
 			action: () => {
 				agentStore.currentSession = null;
 				chatStore.messages = [];
+				goto('/');
 			}
 		},
 		...agentStore.agents.map((agent) => ({
@@ -165,7 +166,7 @@
 	<aside class="sidebar">
 		<!-- Sidebar Header -->
 		<div class="sidebar-header">
-			<button class="logo" onclick={() => { agentStore.currentSession = null; chatStore.messages = []; }} title="返回面板">
+			<button class="logo" onclick={() => { agentStore.currentSession = null; chatStore.messages = []; goto('/'); }} title="返回面板">
 				<img src="/icon.svg" alt="" width="24" height="24" />
 				<span class="logo-text">Prism</span>
 			</button>

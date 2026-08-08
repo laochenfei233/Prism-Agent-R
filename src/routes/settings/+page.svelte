@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { invoke } from '$lib/api/client';
-	import { agentApi, mcpApi, memoryApi, settingsApi, skillApi } from '$lib/api';
+	import { onMount } from 'svelte';
+	import { invoke, listen } from '$lib/api/client';
+	import { agentApi, asrApi, mcpApi, memoryApi, settingsApi, skillApi } from '$lib/api';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
 
 	let providers = $state<any[]>([]);
@@ -21,6 +22,19 @@
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
+
+	// ASR 语音识别（从会议页移入）
+	let asrBackends = $state<any[]>([]);
+	let asrCatalog = $state<any[]>([]);
+	let asrInstalled = $state<any[]>([]);
+	let asrConfigs = $state<any[]>([]);
+	let asrDownloadProgress = $state<Record<string, number>>({});
+	let asrShowAddConfig = $state(false);
+	let asrNewConfig = $state<any>({
+		name: '本地 SenseVoice', kind: 'SherpaOnnx', is_default: false,
+		model_path: '', lang: 'zh'
+	});
+	let asrModelPathInput = $state('');
 
 	// MCP
 	let mcName = $state('');
@@ -51,6 +65,44 @@
 		models = await invoke<any[]>('model_list');
 		try { mcpServers = await mcpApi.list(); } catch (e) {}
 		try { skills = await skillApi.list(); } catch (e) {}
+		try { loadAsr(); } catch (e) {}
+	}
+
+	// ── ASR 语音识别 ─────────────────────────────────────
+	async function loadAsr() {
+		try {
+			[asrBackends, asrCatalog, asrInstalled, asrConfigs] = await Promise.all([
+				asrApi.backends(), asrApi.modelCatalog(), asrApi.modelInstalled(), asrApi.listConfigs()
+			]);
+		} catch (e) { console.error(e); }
+	}
+
+	async function asrDownloadModel(id: string) {
+		try { await asrApi.modelDownload(id); } catch (e) { console.error(e); }
+	}
+
+	async function asrRemoveModel(id: string) {
+		if (!confirm('删除模型？')) return;
+		try { await asrApi.modelRemove(id); await loadAsr(); } catch (e) { console.error(e); }
+	}
+
+	async function asrTestConfig() {
+		try {
+			const res = await asrApi.test({ ...asrNewConfig, model_path: asrModelPathInput || undefined });
+			alert(res.ok ? `连接正常（${res.latency_ms}ms）` : `失败：${res.error}`);
+		} catch (e) { console.error(e); }
+	}
+
+	async function asrSaveConfig() {
+		try {
+			await asrApi.saveConfig({ ...asrNewConfig, model_path: asrModelPathInput || undefined, api_key: asrNewConfig.api_key || undefined });
+			asrShowAddConfig = false;
+			await loadAsr();
+		} catch (e) { console.error(e); }
+	}
+
+	async function asrDeleteConfig(id: string) {
+		try { await asrApi.deleteConfig(id); await loadAsr(); } catch (e) { console.error(e); }
 	}
 
 	async function saveProvider() {
@@ -172,6 +224,17 @@
 	}
 
 	$effect(() => { load(); });
+
+	let asrListenerCleanup: (() => void) | null = null;
+
+	onMount(async () => {
+		// ASR 模型下载进度事件
+		const un = await listen<{ model_id: string; progress: number; message: string }>('asr:model-download-progress', (e) => {
+			asrDownloadProgress[e.model_id] = e.progress;
+			if (e.progress >= 1) loadAsr();
+		});
+		asrListenerCleanup = un;
+	});
 </script>
 
 <div class="page">
@@ -283,6 +346,73 @@
 					</div>
 				{/each}
 			{/if}
+		</div>
+	</div>
+
+	<!-- 语音识别（ASR） -->
+	<div class="group">
+		<div class="group-header">语音识别 (ASR)</div>
+		<div class="group-body">
+			<div class="section-title">可用后端</div>
+			{#each asrBackends as b}
+				<div class="config-row">
+					<div class="config-info">
+						<span class="config-name">{b.name}</span>
+						<span class="config-badge">{b.languages.join(', ')}</span>
+					</div>
+				</div>
+			{/each}
+
+			<div class="divider"></div>
+			<div class="section-title">模型管理</div>
+			{#each asrCatalog as m}
+				<div class="config-row">
+					<div class="config-info">
+						<span class="config-name">{m.name}</span>
+						<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
+					</div>
+					<div class="config-actions">
+						{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
+							<span class="config-badge default">{(asrDownloadProgress[m.id] * 100).toFixed(0)}%</span>
+						{:else if asrInstalled.some(i => i.id === m.id)}
+							<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
+						{:else}
+							<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
+						{/if}
+					</div>
+				</div>
+			{/each}
+
+			<div class="divider"></div>
+			<div class="section-title">ASR 配置</div>
+			<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
+			{#if asrShowAddConfig}
+				<div class="asr-form">
+					<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" />
+					<select bind:value={asrNewConfig.kind}>
+						{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
+					</select>
+					<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" />
+					{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
+						<input bind:value={asrNewConfig.api_key} placeholder="API Key" />
+					{/if}
+					<div class="form-row">
+						<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
+						<button class="btn-primary" onclick={asrSaveConfig}>保存</button>
+					</div>
+				</div>
+			{/if}
+			{#each asrConfigs as c}
+				<div class="config-row">
+					<div class="config-info">
+						<span class="config-name">{c.name}</span>
+						<span class="config-badge">{c.kind}</span>
+						{#if c.model_path}<span class="config-badge">{c.model_path}</span>{/if}
+					</div>
+					<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删</button>
+				</div>
+			{/each}
+			{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}
 		</div>
 	</div>
 
@@ -480,6 +610,42 @@
 		margin: 0;
 		padding: 8px 0;
 	}
+
+	.section-title {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-fg-secondary);
+		margin: 4px 0 8px;
+	}
+
+	.asr-form {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin: 10px 0;
+	}
+	.asr-form input,
+	.asr-form select {
+		width: 100%;
+		padding: 10px 12px;
+		border-radius: 10px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg-secondary);
+		color: var(--color-fg);
+		font-size: 14px;
+		outline: none;
+		box-sizing: border-box;
+	}
+	.asr-form input:focus,
+	.asr-form select:focus { border-color: var(--color-accent); }
+	.asr-form .btn-primary,
+	.asr-form .btn-secondary {
+		width: auto;
+		padding: 8px 16px;
+		font-size: 14px;
+		margin-bottom: 0;
+	}
+	.asr-form .form-row { align-items: center; }
 
 	.divider {
 		height: 0.5px;
