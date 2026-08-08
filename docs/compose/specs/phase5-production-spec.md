@@ -1,9 +1,9 @@
 ---
 feature: phase5-production
-status: in-progress
+status: delivered
 updated: 2026-08-08
 branch: phase5-production
-commits: e9b72e7..8d5c11d
+commits: e9b72e7..5a4abd5
 ---
 
 # Phase 5 — 生产加固
@@ -155,16 +155,16 @@ Phase 1-4 完成后，项目存在以下核心缺口：
 ### §25 工作流重构（T10-T12）
 - [x] T10: WorkflowEngineV2 核心重构 — acceptance: 集成预算/护栏/异常记录 (covers: §25.1; depends: T1, T4, T7)
 - [x] T11: WorkflowV2 定义扩展 — acceptance: 支持工作流/阶段级配置 (covers: §25.2)
-- [ ] T12: 工作流命令迁移 — acceptance: 现有工作流无回归 (covers: §25.1; depends: T10, T11)
+- [x] T12: 工作流命令迁移 — acceptance: 现有工作流无回归 (covers: §25.1; depends: T10, T11)
 
 ### §26 前端监控（T13-T15）
 - [x] T13: monitorStore + IPC 事件监听 — acceptance: 实时接收监控数据 (covers: §26.3)
 - [x] T14: MonitorPanel 主面板组件 — acceptance: 展示预算/异常/趋势 (covers: §26.1)
-- [ ] T15: 交互操作（暂停/继续/终止/切换模型） — acceptance: 按钮触发对应命令 (covers: §26.4; depends: T14)
+- [x] T15: 交互操作（暂停/继续/终止/切换模型） — acceptance: 按钮触发对应命令 (covers: §26.4; depends: T14)
 
 ### §27 自主编排循环（T16-T20）
 - [x] T16: OrchestratorSession + 数据结构 + SQLite 表 — acceptance: 会话状态可持久化，崩溃可恢复 (covers: §27.2)
 - [x] T17: SpecGenerator（需求分析 + 任务拆解） — acceptance: 输入模糊需求 → 输出 SPEC (covers: §27.3)
 - [x] T18: PlanGenerator（任务分组 + Agent 分配） — acceptance: SPEC → 执行计划（并行组+模型分配） (covers: §27.3; depends: T17)
 - [x] T19: OrchestratorEngine 主循环 — acceptance: Spec→Plan→Execute→Review→循环完整执行 (covers: §27.3, §27.6; depends: T16, T17, T18)
-- [ ] T20: 前端自主编排界面 — acceptance: 用户可输入需求、查看SPEC、监控执行 (covers: §27.4; depends: T19)
+- [x] T20: 前端自主编排界面 — acceptance: 用户可输入需求、查看SPEC、监控执行 (covers: §27.4; depends: T19)
