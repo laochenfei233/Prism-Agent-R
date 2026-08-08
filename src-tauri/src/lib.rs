@@ -90,6 +90,8 @@ pub fn run() {
             commands::session::session_init,
             commands::session::session_state_query,
             commands::session::session_cleanup,
+            commands::session::session_fork,
+            commands::session::session_approve,
             commands::chat::chat_history,
             commands::chat::chat_send,
             commands::chat::chat_abort,
