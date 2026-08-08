@@ -1,3 +1,4 @@
+pub mod auditor;
 pub mod chunker;
 pub mod contextualize;
 pub mod embedding;
