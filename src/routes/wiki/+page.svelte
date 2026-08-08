@@ -324,7 +324,9 @@
 			<aside class="tree-pane">
 				<div class="pane-header">
 					<h3>页面</h3>
-					<button class="icon-btn-sm" title="刷新" onclick={() => selectWiki(selectedWiki!)}>↻</button>
+					<button class="icon-btn-sm" title="刷新" aria-label="刷新页面列表" onclick={() => selectWiki(selectedWiki!)}>
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+					</button>
 				</div>
 
 				<div class="search-bar">
@@ -489,7 +491,7 @@
 	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 	.btn-sm { padding: 5px 12px; font-size: 13px; }
 	.btn-ghost { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--color-separator); background: transparent; color: var(--color-fg-secondary); font-size: 14px; cursor: pointer; }
-	.btn-danger-sm { padding: 4px 8px; border-radius: 6px; border: none; background: #ff4444; color: #fff; font-size: 12px; cursor: pointer; }
+	.btn-danger-sm { padding: 4px 8px; border-radius: 6px; border: none; background: var(--color-red); color: #fff; font-size: 12px; cursor: pointer; }
 	.icon-btn-sm { width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; color: var(--color-fg-secondary); cursor: pointer; }
 	.icon-btn-sm:hover { background: var(--color-bg-tertiary); }
 	.create-form { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
@@ -534,7 +536,7 @@
 	}
 	.card:hover .card-delete,
 	.card-delete:focus-visible { opacity: 1; }
-	.card-delete:hover { background: #ff4444; color: #fff; }
+	.card-delete:hover { background: var(--color-red); color: #fff; }
 	.empty { text-align: center; padding: 48px; color: var(--color-fg-secondary); }
 
 	/* RAG 嵌入器卡片 */

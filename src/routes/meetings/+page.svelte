@@ -444,7 +444,10 @@
 								<button class="mini-btn" onclick={generateSummary} disabled={summarizing}>
 									{summarizing ? '生成中...' : '重新生成'}
 								</button>
-								<button class="mini-btn" onclick={broadcastActionItems} disabled={broadcastBusy}>🔊 播报待办</button>
+								<button class="mini-btn" onclick={broadcastActionItems} disabled={broadcastBusy}>
+									<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -1px; margin-right: 4px;"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+									播报待办
+								</button>
 								<button class="mini-btn" onclick={() => exportContent(m.summary, `${m.title}_摘要`)}>导出</button>
 							</div>
 						</div>
@@ -602,7 +605,7 @@
 	.item-duration { font-size: 11px; color: var(--color-fg-secondary); flex-shrink: 0; }
 	.item-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px; color: var(--color-fg-secondary); }
 	.badge-summarized { color: var(--color-accent); font-size: 10px; }
-	.item-preview { margin-top: 4px; font-size: 11px; color: var(--color-fg-tertiary, #8b93a7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.item-preview { margin-top: 4px; font-size: 11px; color: var(--color-fg-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.delete-btn {
 		position: absolute;
 		top: 8px;
@@ -623,7 +626,7 @@
 	.list-item:hover .delete-btn,
 	.list-item.selected .delete-btn,
 	.delete-btn:focus-visible { opacity: 1; }
-	.delete-btn:hover { background: #ff4444; color: #fff; }
+	.delete-btn:hover { background: var(--color-red); color: #fff; }
 
 	/* ── 右栏详情 ─────────────────────────────── */
 	.meeting-detail-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -669,7 +672,7 @@
 		color: #fff;
 		transition: background 0.15s;
 	}
-	.rec-btn.recording { background: #ff4444; }
+	.rec-btn.recording { background: var(--color-red); }
 	.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1s infinite; }
 	@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 	.ghost-btn {
@@ -733,7 +736,7 @@
 		line-height: 1.7;
 	}
 	.transcript { max-height: calc(100vh - 320px); overflow-y: auto; }
-	.broadcast-error { color: #ff453a; font-size: 12px; margin-bottom: 8px; }
+	.broadcast-error { color: var(--color-red); font-size: 12px; margin-bottom: 8px; }
 	.speaker-host { margin-top: 10px; }
 	.empty-state { text-align: center; padding: 48px; color: var(--color-fg-secondary); }
 	.empty-state.center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -748,7 +751,7 @@
 		cursor: pointer;
 	}
 	.primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-	.rec-live { color: #ff453a; }
+	.rec-live { color: var(--color-red); }
 
 	/* ── Q&A ──────────────────────────────────── */
 	.qa-bar {

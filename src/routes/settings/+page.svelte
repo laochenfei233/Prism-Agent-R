@@ -687,8 +687,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
+		width: 32px;
+		height: 32px;
 		border: none;
 		border-radius: 8px;
 		background: transparent;
@@ -707,7 +707,7 @@
 		padding: 12px 12px 4px;
 		font-size: 12px;
 		font-weight: 500;
-		color: var(--color-fg-tertiary, #8b93a7);
+		color: var(--color-fg-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.4px;
 	}
@@ -811,7 +811,7 @@
 	.pane-item.active { background: var(--color-bg-tertiary); font-weight: 500; }
 	.pane-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.pane-item-kind { font-size: 11px; color: var(--color-fg-secondary); flex-shrink: 0; }
-	.pane-empty { padding: 16px 10px; font-size: 13px; color: var(--color-fg-tertiary, #8b93a7); }
+	.pane-empty { padding: 16px 10px; font-size: 13px; color: var(--color-fg-tertiary); }
 	.provider-detail-pane { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
 	.detail-card { margin-bottom: 16px; }
 	.detail-card .form-row .btn-secondary { flex-shrink: 0; }
@@ -846,7 +846,7 @@
 
 	.hint {
 		font-size: 13px;
-		color: var(--color-fg-tertiary, #8b93a7);
+		color: var(--color-fg-tertiary);
 		margin: 0;
 		padding: 8px 0;
 		line-height: 1.6;
@@ -949,8 +949,11 @@
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;
+		transition: opacity 0.15s ease;
 	}
 	.btn-green:hover { opacity: 0.92; }
+	.btn-green:active { transform: scale(0.98); }
+	.btn-green:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.btn-sm {
 		padding: 4px 12px;
@@ -963,7 +966,8 @@
 		transition: background 0.15s ease;
 	}
 	.btn-sm:hover { background: var(--color-bg-tertiary); }
-	.btn-sm.danger { color: var(--color-red, #ff453a); border-color: var(--color-red, #ff453a); }
+	.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn-sm.danger { color: var(--color-red, var(--color-red)); border-color: var(--color-red, var(--color-red)); }
 
 	/* ── ASR 表单 ─────────────────────────── */
 	.asr-form {
@@ -1001,7 +1005,7 @@
 		font-size: 14px;
 		box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 	}
-	.toast.error { background: var(--color-red, #ff453a); }
+	.toast.error { background: var(--color-red, var(--color-red)); }
 
 	/* ── 窄视口响应式 ─────────────────────────── */
 	@media (max-width: 900px) {

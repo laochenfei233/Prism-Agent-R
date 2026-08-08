@@ -104,13 +104,20 @@
 </script>
 
 <div class="task-designer">
-	<div class="designer-tabs" role="tablist">
+	<div class="designer-tabs" role="tablist" onkeydown={(e) => {
+		const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+		if (dir) {
+			e.preventDefault();
+			handleTabChange((activeTab + dir + TABS.length) % TABS.length);
+		}
+	}}>
 		{#each TABS as tab, i}
 			<button
 				class="tab"
 				class:active={activeTab === i}
 				role="tab"
 				aria-selected={activeTab === i}
+				tabindex={activeTab === i ? 0 : -1}
 				onclick={() => handleTabChange(i)}
 			>
 				{tab.label}

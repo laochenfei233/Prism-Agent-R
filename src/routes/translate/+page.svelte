@@ -223,7 +223,7 @@
 	.btn-primary { padding: 8px 16px; border-radius: 8px; border: none; background: var(--color-accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
 	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 	.btn-ghost { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--color-separator); background: transparent; color: var(--color-fg-secondary); font-size: 14px; cursor: pointer; }
-	.btn-danger-sm { padding: 2px 6px; border-radius: 4px; border: none; background: #ff4444; color: #fff; font-size: 11px; cursor: pointer; }
+	.btn-danger-sm { padding: 2px 6px; border-radius: 4px; border: none; background: var(--color-red); color: #fff; font-size: 11px; cursor: pointer; }
 	.model-panel { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
 	.model-row { display: flex; align-items: center; gap: 12px; }
 	.model-row label { font-size: 13px; color: var(--color-fg-secondary); flex-shrink: 0; }

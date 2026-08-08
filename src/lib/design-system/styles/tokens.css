@@ -1,8 +1,8 @@
 :root {
 	/* iOS 18 System Colors */
-	--color-accent: #FF6900;
-	--color-accent-hover: #E85D00;
-	--color-green: #34C759;
+	--color-accent: #E85D00;
+	--color-accent-hover: #CC5200;
+	--color-green: #2DA84F;
 	--color-red: #FF3B30;
 	--color-orange: #FF9500;
 	--color-yellow: #FFCC00;
@@ -24,8 +24,8 @@
 	--color-bg-secondary: #F2F2F7;
 	--color-bg-tertiary: #FFFFFF;
 	--color-fg: rgba(0, 0, 0, 0.85);
-	--color-fg-secondary: rgba(0, 0, 0, 0.5);
-	--color-fg-tertiary: rgba(0, 0, 0, 0.3);
+	--color-fg-secondary: rgba(0, 0, 0, 0.65);
+	--color-fg-tertiary: rgba(0, 0, 0, 0.48);
 	--color-separator: rgba(0, 0, 0, 0.1);
 	--color-glass: rgba(255, 255, 255, 0.94);
 	--color-glass-border: rgba(255, 255, 255, 0.5);
@@ -71,8 +71,8 @@
 
 	/* Semantic aliases (used by components) */
 	--color-label: rgba(0, 0, 0, 0.85);
-	--color-secondary-label: rgba(0, 0, 0, 0.5);
-	--color-tertiary-label: rgba(0, 0, 0, 0.3);
+	--color-secondary-label: rgba(0, 0, 0, 0.65);
+	--color-tertiary-label: rgba(0, 0, 0, 0.48);
 
 	/* Surface elevation / interaction */
 	--color-bg-elevated: #FFFFFF;
@@ -134,15 +134,15 @@
 	--color-bg-secondary: #1C1C1E;
 	--color-bg-tertiary: #2C2C2E;
 	--color-fg: rgba(255, 255, 255, 0.95);
-	--color-fg-secondary: rgba(235, 235, 245, 0.6);
-	--color-fg-tertiary: rgba(235, 235, 245, 0.3);
+	--color-fg-secondary: rgba(235, 235, 245, 0.72);
+	--color-fg-tertiary: rgba(235, 235, 245, 0.45);
 	--color-separator: rgba(84, 84, 88, 0.65);
 	--color-glass: rgba(28, 28, 30, 0.94);
 	--color-glass-border: rgba(255, 255, 255, 0.08);
 
 	/* Dark Mode System Colors */
 	--color-accent: #FF8533;
-	--color-accent-hover: #FF6900;
+	--color-accent-hover: #E85D00;
 	--color-green: #30D158;
 	--color-red: #FF453A;
 	--color-orange: #FF9F0A;
@@ -154,8 +154,8 @@
 
 	/* Dark Mode Semantic aliases */
 	--color-label: rgba(255, 255, 255, 0.95);
-	--color-secondary-label: rgba(235, 235, 245, 0.6);
-	--color-tertiary-label: rgba(235, 235, 245, 0.3);
+	--color-secondary-label: rgba(235, 235, 245, 0.72);
+	--color-tertiary-label: rgba(235, 235, 245, 0.45);
 
 	/* Dark surface elevation / interaction */
 	--color-bg-elevated: #2C2C2E;
