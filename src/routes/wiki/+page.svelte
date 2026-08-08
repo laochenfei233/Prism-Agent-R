@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { invoke } from '$lib/api/client';
 	import { wikiApi, ragApi, type WikiDto, type WikiPageDto, type WikiPageHitDto, type EmbeddingStatusDto, type WikiWritePlan, type WikiOp, type RagDocumentDto, type RagHitDto } from '$lib/api';
 
@@ -203,12 +204,19 @@
 
 <div class="page">
 	<header class="page-header">
-		<h1>知识库</h1>
-		{#if selectedWiki}
-			<button class="btn-ghost" onclick={() => selectedWiki = null}>← 返回列表</button>
-		{:else}
-			<button class="btn-primary" onclick={() => showCreate = true}>新建知识库</button>
-		{/if}
+		<div class="header-left">
+			<button class="nav-back" onclick={() => goto('/')} title="返回聊天" aria-label="返回聊天">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+			</button>
+			<h1 class="page-title">知识库</h1>
+		</div>
+		<div class="header-right">
+			{#if selectedWiki}
+				<button class="btn-ghost" onclick={() => { selectedWiki = null; }}>← 返回列表</button>
+			{:else}
+				<button class="btn-primary" onclick={() => showCreate = true}>新建知识库</button>
+			{/if}
+		</div>
 	</header>
 
 	{#if showCreate}
@@ -241,21 +249,40 @@
 						tabindex="0"
 						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectWiki(wiki); } }}
 					>
-						<div class="card-icon">📚</div>
+						<div class="card-head">
+							<div class="card-icon">
+								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+							</div>
+							<button
+								class="card-delete"
+								onclick={(e) => { e.stopPropagation(); deleteWiki(wiki.id); }}
+								title="删除知识库"
+								aria-label="删除知识库"
+							>
+								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+							</button>
+						</div>
 						<h3>{wiki.name}</h3>
 						{#if wiki.description}<p>{wiki.description}</p>{/if}
-						<div class="card-actions">
-							<button class="btn-danger-sm" onclick={(e) => { e.stopPropagation(); deleteWiki(wiki.id); }}>删除</button>
-						</div>
 					</div>
 				{/each}
 			</div>
 		{/if}
 
-		<!-- 嵌入器配置 -->
-		<div class="section">
-			<h3>RAG 嵌入器</h3>
-			<div class="emb-panel">
+		<!-- RAG 嵌入器配置（Cherry Studio 卡片风格） -->
+		<div class="emb-card">
+			<div class="emb-card-head">
+				<div>
+					<h2 class="emb-title">RAG 嵌入器</h2>
+					<p class="emb-desc">配置知识库检索的向量化模式</p>
+				</div>
+				{#if embStatus}
+					<span class="emb-status">
+						{embStatus.is_local ? '本地' : embStatus.model || 'API'} · {embStatus.dim} 维
+					</span>
+				{/if}
+			</div>
+			<div class="emb-body">
 				<div class="emb-row">
 					<label>模式</label>
 					<select bind:value={embMode}>
@@ -275,23 +302,18 @@
 					</div>
 					<div class="emb-row">
 						<label>模型</label>
-						<input placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="如 text-embedding-3-small / nomic-embed-text" />
+						<input placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="嵌入模型" />
 					</div>
 				{/if}
-				<div class="emb-actions">
-					<button class="btn-ghost" onclick={saveEmbConfig}>保存配置</button>
-					{#if embStatus}
-						<span class="emb-status">
-							当前: {embStatus.is_local ? '本地' : embStatus.model || 'API'} · 维度 {embStatus.dim}
-						</span>
-					{/if}
-				</div>
 				<div class="emb-row">
 					<label>重排序</label>
 					<label class="switch-label">
 						<input type="checkbox" bind:checked={rerankEnabled} onchange={toggleRerank} />
 						<span>LLM 重排序（初检 top-150 → 重排 → top-k，有成本）</span>
 					</label>
+				</div>
+				<div class="emb-actions">
+					<button class="btn-primary" onclick={saveEmbConfig}>保存配置</button>
 				</div>
 			</div>
 		</div>
@@ -446,7 +468,23 @@
 <style>
 	.page { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
 	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-	.page-header h1 { font-size: 24px; font-weight: 600; color: var(--color-fg); margin: 0; }
+	.header-left { display: flex; align-items: center; gap: 10px; }
+	.header-right { display: flex; align-items: center; gap: 8px; }
+	.nav-back {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border: none;
+		border-radius: 8px;
+		background: var(--color-bg-secondary);
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+		transition: background 0.15s ease, color 0.15s ease;
+	}
+	.nav-back:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
+	.page-title { font-size: 22px; font-weight: 600; color: var(--color-fg); margin: 0; letter-spacing: -0.41px; }
 	.btn-primary { padding: 8px 16px; border-radius: 8px; border: none; background: var(--color-accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
 	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 	.btn-sm { padding: 5px 12px; font-size: 13px; }
@@ -460,14 +498,58 @@
 	.form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 	/* 列表 */
-	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-	.card { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 16px; cursor: pointer; transition: border-color 0.15s; }
+	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+	.card { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 16px; cursor: pointer; transition: border-color 0.15s, transform 0.15s; position: relative; }
 	.card:hover { border-color: var(--color-accent); }
-	.card-icon { font-size: 24px; margin-bottom: 8px; }
-	.card h3 { margin: 0 0 8px; font-size: 16px; color: var(--color-fg); }
-	.card p { margin: 0; font-size: 13px; color: var(--color-fg-secondary); }
-	.card-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
+	.card.selected { border-color: var(--color-accent); }
+	.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+	.card-icon {
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+		color: var(--color-accent);
+	}
+	.card h3 { margin: 0 0 6px; font-size: 15px; color: var(--color-fg); }
+	.card p { margin: 0; font-size: 13px; color: var(--color-fg-secondary); line-height: 1.5; }
+	.card-delete {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 6px;
+		border: none;
+		background: transparent;
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.15s ease, background 0.15s ease;
+	}
+	.card:hover .card-delete,
+	.card-delete:focus-visible { opacity: 1; }
+	.card-delete:hover { background: #ff4444; color: #fff; }
 	.empty { text-align: center; padding: 48px; color: var(--color-fg-secondary); }
+
+	/* RAG 嵌入器卡片 */
+	.emb-card { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; overflow: hidden; margin-top: 20px; }
+	.emb-card-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--color-separator); }
+	.emb-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--color-fg); }
+	.emb-desc { margin: 2px 0 0; font-size: 12px; color: var(--color-fg-secondary); }
+	.emb-status { font-size: 12px; color: var(--color-accent); }
+	.emb-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+	.emb-row { display: flex; align-items: center; gap: 12px; }
+	.emb-row label { width: 80px; font-size: 13px; color: var(--color-fg-secondary); flex-shrink: 0; }
+	.emb-row select, .emb-row input { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; outline: none; }
+	.emb-row select:focus, .emb-row input:focus { border-color: var(--color-accent); }
+	.emb-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+	.emb-actions .btn-primary { width: fit-content; }
 
 	/* 详情双栏 */
 	.detail { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
@@ -529,17 +611,6 @@
 	.doc-status { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--color-separator); color: var(--color-fg-secondary); }
 	.doc-status.ready { background: var(--color-accent); color: #fff; }
 	.doc-count { font-size: 11px; color: var(--color-fg-secondary); }
-
-	/* 嵌入器配置 */
-	.section { margin-top: 32px; }
-	.section h3 { font-size: 14px; color: var(--color-fg-secondary); margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-	.emb-panel { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-	.emb-row { display: flex; align-items: center; gap: 12px; }
-	.emb-row label { width: 80px; font-size: 13px; color: var(--color-fg-secondary); flex-shrink: 0; }
-	.emb-row select, .emb-row input { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; outline: none; }
-	.emb-row select:focus, .emb-row input:focus { border-color: var(--color-accent); }
-	.emb-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
-	.emb-status { font-size: 12px; color: var(--color-fg-secondary); }
 
 	@media (max-width: 900px) {
 		.detail { grid-template-columns: 1fr; }
