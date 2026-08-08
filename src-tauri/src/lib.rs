@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 use mcp::McpRuntime;
 use core::adk::tool::ToolApprovalStore;
+use core::autoagents::loop_scheduler::LoopScheduler;
 use core::session::state::SessionStateManager;
 use data::services::meeting::AudioStreamManager;
 
@@ -22,6 +23,7 @@ pub struct AppState {
     pub approval_store: std::sync::Arc<ToolApprovalStore>,
     pub audio_streams: std::sync::Arc<AudioStreamManager>,
     pub session_state: std::sync::Arc<SessionStateManager>,
+    pub loop_scheduler: std::sync::Arc<LoopScheduler>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -68,6 +70,7 @@ pub fn run() {
                 approval_store: std::sync::Arc::new(ToolApprovalStore::new()),
                 audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
                 session_state: std::sync::Arc::new(SessionStateManager::new()),
+                loop_scheduler: std::sync::Arc::new(LoopScheduler::new()),
             });
             Ok(())
         })
@@ -127,6 +130,9 @@ pub fn run() {
             commands::workflow::task_validate,
             commands::workflow::task_rerun,
             commands::workflow::goal_evaluate,
+            commands::loop_cmd::loop_start,
+            commands::loop_cmd::loop_stop,
+            commands::loop_cmd::loop_list,
             commands::workspace::workspace_get,
             commands::workspace::workspace_set,
             commands::workspace::workspace_tree,

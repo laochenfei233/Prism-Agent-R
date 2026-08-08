@@ -3,6 +3,7 @@ pub mod chat;
 pub mod dashboard;
 pub mod file;
 pub mod fs;
+pub mod loop_cmd;
 pub mod lsp;
 pub mod mcp;
 pub mod memory;
