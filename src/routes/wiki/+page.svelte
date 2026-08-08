@@ -456,7 +456,7 @@
 								<span class="doc-name">{doc.name}</span>
 								<span class="doc-status" class:ready={doc.status === 'ready'}>{doc.status}</span>
 								<span class="doc-count">{doc.chunk_count} 块</span>
-								<button class="btn-danger-sm" onclick={() => deleteDocument(doc.id)}>删</button>
+								<button class="btn-danger-sm" onclick={() => deleteDocument(doc.id)}>删除</button>
 							</div>
 						{/each}
 						{#if ragDocs.length === 0}<div class="hint">暂无文档</div>{/if}

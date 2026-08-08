@@ -10,6 +10,8 @@
 	let mcpServers = $state<any[]>([]);
 	let skills = $state<any[]>([]);
 	let msg = $state('');
+	// 是否已完成首载（区分"加载中"与"暂无"）
+	let loaded = $state(false);
 	// 当前激活的设置分类（Cherry Studio 风格左导航）
 	let section = $state<'providers' | 'asr' | 'tts' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
 	// 当前选中的 Provider（Cherry Studio 风格：左侧列表 + 右侧详情）
@@ -77,11 +79,13 @@
 	}
 
 	async function load() {
+		loaded = false;
 		providers = await invoke<any[]>('model_providers');
 		models = await invoke<any[]>('model_list');
 		try { mcpServers = await mcpApi.list(); } catch (e) {}
 		try { skills = await skillApi.list(); } catch (e) {}
 		try { loadAsr(); } catch (e) {}
+		loaded = true;
 	}
 
 	// ── ASR 语音识别 ─────────────────────────────────────
@@ -347,7 +351,7 @@
 							</button>
 						{/each}
 						{#if providers.length === 0}
-							<div class="pane-empty">暂无 Provider</div>
+							<div class="pane-empty">{loaded ? '暂无 Provider' : '加载中...'}</div>
 						{/if}
 					</div>
 				</div>
@@ -470,7 +474,7 @@
 							</div>
 						{/each}
 						{#if asrBackends.length === 0}
-							<div class="pane-empty">暂无后端</div>
+							<div class="pane-empty">{loaded ? '暂无后端' : '加载中...'}</div>
 						{/if}
 					</div>
 				</div>
@@ -501,7 +505,7 @@
 								</div>
 							</div>
 						{/each}
-						{#if asrCatalog.length === 0}<p class="hint">暂无可用模型</p>{/if}
+						{#if asrCatalog.length === 0}<p class="hint">{loaded ? '暂无可用模型' : '加载中...'}</p>{/if}
 					</div>
 
 					<div class="card detail-card">
@@ -530,7 +534,7 @@
 									<span class="config-badge">{c.kind}</span>
 									{#if c.model_path}<span class="config-badge">{c.model_path}</span>{/if}
 								</div>
-								<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删</button>
+								<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删除</button>
 							</div>
 						{/each}
 						{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}

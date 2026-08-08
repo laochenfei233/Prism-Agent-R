@@ -415,6 +415,8 @@
 						class="rec-btn"
 						class:recording={recording}
 						onclick={toggleRecording}
+						aria-pressed={recording}
+						aria-label={recording ? '停止录音' : '开始录音'}
 					>
 						{#if recording}
 							<span class="rec-dot"></span>
@@ -656,6 +658,7 @@
 		cursor: pointer;
 	}
 	.icon-btn:hover { background: var(--color-bg-tertiary); }
+	.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 	.meta-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--color-fg-secondary); flex-wrap: wrap; }
 	.header-actions { display: flex; gap: 8px; flex-shrink: 0; }
 	.rec-btn {
