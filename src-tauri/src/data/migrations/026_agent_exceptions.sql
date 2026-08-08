@@ -1,4 +1,4 @@
--- 023_agent_exceptions.sql
+-- 026_agent_exceptions.sql
 -- Phase 5: 异常记录表
 
 CREATE TABLE IF NOT EXISTS agent_exceptions (

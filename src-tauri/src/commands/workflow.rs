@@ -648,16 +648,28 @@ async fn build_coordinator_v2(
     ));
 
     let coordinator = Arc::new(Coordinator::new());
+
+    // §15 构建 web_search 工具（供工作流角色使用，对齐 V1 build_coordinator）
+    let search_config = crate::commands::search::get_search_config(pool).await;
+    let search_service = std::sync::Arc::new(
+        crate::core::search::service::SearchService::from_config(&search_config)
+    );
+
     for role in roles {
         let system_prompt = format!(
             "你是一个「{role}」角色的专业助手。请严格按照任务提示完成工作，只输出结果内容本身。"
         );
+        let mut registry = ToolRegistry::new();
+        // 注册 web_search 工具
+        registry.register(Box::new(
+            crate::core::search::web_search::WebSearchTool::new(search_service.clone())
+        ));
         let actor = Arc::new(GenericActor::new(
             role.clone(),
             role,
             provider.clone(),
             system_prompt,
-            ToolRegistry::new(),
+            registry,
         ));
         coordinator.register(actor).await;
     }
