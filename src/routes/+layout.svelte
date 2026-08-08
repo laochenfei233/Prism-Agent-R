@@ -163,6 +163,7 @@
 </script>
 
 <div class="app">
+	{#if $page.url.pathname === '/'}
 	<!-- Sidebar -->
 	<aside class="sidebar">
 		<!-- Sidebar Header -->
@@ -293,6 +294,7 @@
 			</div>
 		</div>
 	</aside>
+	{/if}
 
 	<!-- Main Content -->
 	<main class="content">
