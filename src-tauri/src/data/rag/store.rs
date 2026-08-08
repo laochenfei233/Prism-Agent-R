@@ -14,6 +14,13 @@ pub async fn insert_document(
 }
 
 /// 项目级索引（§10.2.1）：额外记录 file_path（相对工作目录）+ fingerprint（mtime:size）
+///
+/// §16.6 幂等导入：
+/// - 有 file_path + fingerprint 时，检查是否已存在
+/// - 存在且指纹相同 → 跳过（返回既有 doc_id）
+/// - 存在且指纹不同 → 删除旧文档后重新入库
+/// - 不存在 → 正常入库
+/// - 无 file_path 的导入不触发幂等（保持原行为）
 pub async fn insert_document_with_meta(
     db: &Database,
     wiki_id: &str,
@@ -23,6 +30,27 @@ pub async fn insert_document_with_meta(
     file_path: Option<&str>,
     fingerprint: Option<&str>,
 ) -> Result<String, AppError> {
+    // 幂等检查：有 file_path + fingerprint 时才触发
+    if let (Some(fp), Some(finger)) = (file_path, fingerprint) {
+        if let Some(existing_id) = find_document_by_path(db, wiki_id, fp).await? {
+            let existing_fp = fingerprint_of_document(db, &existing_id).await?;
+            match existing_fp {
+                Some(ref efp) if efp == finger => {
+                    // 指纹相同，跳过导入
+                    return Ok(existing_id);
+                }
+                Some(_) => {
+                    // 指纹不同，删除旧文档后重新入库
+                    delete_document_by_path(db, wiki_id, fp).await?;
+                }
+                None => {
+                    // 旧文档无指纹，删除后重新入库
+                    delete_document_by_path(db, wiki_id, fp).await?;
+                }
+            }
+        }
+    }
+
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
     sqlx::query(

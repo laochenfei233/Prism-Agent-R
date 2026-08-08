@@ -211,6 +211,9 @@ pub fn run() {
             commands::tts::tts_stop,
             commands::tts::tts_voices,
             commands::dashboard::dashboard_overview,
+            commands::search::search_config,
+            commands::search::search_config_save,
+            commands::search::search_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -190,6 +190,17 @@ pub async fn chat_send(
         }
     }
 
+    // §15 注册内置 web_search 工具
+    {
+        let search_config = crate::commands::search::get_search_config(&state.db.pool).await;
+        let search_service = std::sync::Arc::new(
+            crate::core::search::service::SearchService::from_config(&search_config)
+        );
+        registry.register(Box::new(
+            crate::core::search::web_search::WebSearchTool::new(search_service)
+        ));
+    }
+
     // ── 构建 Agent 运行时（护栏 + 路由 + 反思 + 轨迹） ──
     let mut agent = RigAgent::new(provider, system_prompt, registry)
         .with_approval_store(state.approval_store.clone())

@@ -2,6 +2,7 @@ pub mod chunker;
 pub mod contextualize;
 pub mod embedding;
 pub mod eval;
+pub mod hyde;
 pub mod parser;
 pub mod rerank;
 pub mod search;

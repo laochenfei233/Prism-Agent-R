@@ -8,6 +8,7 @@ pub mod mcp;
 pub mod memory;
 pub mod model;
 pub mod rag;
+pub mod search;
 pub mod session;
 pub mod settings;
 pub mod skill;
