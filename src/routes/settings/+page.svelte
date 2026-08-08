@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { invoke, listen } from '$lib/api/client';
 	import { agentApi, asrApi, mcpApi, memoryApi, settingsApi, skillApi } from '$lib/api';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
@@ -10,7 +11,9 @@
 	let skills = $state<any[]>([]);
 	let msg = $state('');
 	// 当前激活的设置分类（Cherry Studio 风格左导航）
-	let section = $state<'providers' | 'models' | 'asr' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
+	let section = $state<'providers' | 'asr' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
+	// 当前选中的 Provider（Cherry Studio 风格：左侧列表 + 右侧详情）
+	let selectedProviderId = $state<string | null>(null);
 
 	// Provider/Model
 	let pName = $state('');
@@ -24,6 +27,15 @@
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
+
+	// 切换 Provider 分类时自动选中第一个
+	$effect(() => {
+		if (section === 'providers') {
+			if (!selectedProviderId && providers.length > 0) {
+				selectedProviderId = providers[0].id;
+			}
+		}
+	});
 
 	// ASR 语音识别（从会议页移入）
 	let asrBackends = $state<any[]>([]);
@@ -142,10 +154,12 @@
 	}
 
 	async function saveModel() {
-		if (!mProvider || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
+		// 优先用当前选中的 Provider，其次用下拉框选择
+		const providerId = mProvider || selectedProviderId;
+		if (!providerId || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
 		try {
 			await invoke('settings_add_model', {
-				providerId: mProvider, modelId: mModelId.trim(),
+				providerId, modelId: mModelId.trim(),
 				displayName: null, isDefault: true
 			});
 			mModelId = '';
@@ -246,16 +260,17 @@
 <div class="settings-shell">
 	<!-- 左侧分类导航 -->
 	<aside class="settings-nav">
-		<div class="nav-header">设置</div>
+		<div class="nav-header">
+			<button class="nav-back" onclick={() => goto('/')} title="返回聊天" aria-label="返回聊天">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+			</button>
+			<span>设置</span>
+		</div>
 		<div class="nav-scroll">
 			<div class="nav-group-title">模型</div>
 			<button class="nav-item" class:active={section === 'providers'} onclick={() => section = 'providers'}>
 				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-				<span>Provider</span>
-			</button>
-			<button class="nav-item" class:active={section === 'models'} onclick={() => section = 'models'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M22 12A10 10 0 0 1 12 22"/></svg>
-				<span>模型</span>
+				<span>Provider & 模型</span>
 			</button>
 
 			<div class="nav-group-title">能力</div>
@@ -291,103 +306,129 @@
 	<!-- 右侧内容 -->
 	<main class="settings-content">
 		{#if section === 'providers'}
-			<div class="content-header">
-				<h2 class="content-title">Provider</h2>
-				<p class="content-desc">配置模型服务商与连接参数</p>
-			</div>
-			<div class="card">
-				<div class="card-head">
-					<div class="form-row">
-						<select bind:value={pKind}>
-							<option value="openai">OpenAI 兼容</option>
-							<option value="ollama">Ollama</option>
-						</select>
-						<input bind:value={pName} placeholder="名称" />
+			{@const sel = providers.find(p => p.id === selectedProviderId) ?? null}
+			<div class="provider-shell">
+				<!-- Provider 列表（Cherry Studio 风格左子栏） -->
+				<div class="provider-list-pane">
+					<div class="pane-title">Provider</div>
+					<button class="add-provider-btn" onclick={() => { pName = ''; pUrl = ''; pKey = ''; pKind = 'openai'; }}>
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+						添加 Provider
+					</button>
+					<div class="pane-list">
+						{#each providers as p}
+							<button
+								class="pane-item"
+								class:active={selectedProviderId === p.id}
+								onclick={() => selectedProviderId = p.id}
+							>
+								<span class="pane-item-name">{p.name}</span>
+								<span class="pane-item-kind">{p.kind}</span>
+							</button>
+						{/each}
+						{#if providers.length === 0}
+							<div class="pane-empty">暂无 Provider</div>
+						{/if}
 					</div>
-					<div class="form-row">
-						<input bind:value={pUrl} placeholder="Base URL" />
-						<input bind:value={pKey} type="password" placeholder="API Key" />
-					</div>
-					<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
 				</div>
 
-				{#if providers.length > 0}
-					<div class="divider"></div>
-					{#each providers as p}
-						<div class="config-row">
-							<div class="config-info">
-								<span class="config-name">{p.name}</span>
-								<span class="config-badge">{p.kind}</span>
+				<!-- Provider 详情（连接 + 模型管理） -->
+				<div class="provider-detail-pane">
+					{#if sel}
+						<div class="content-header">
+							<h2 class="content-title">{sel.name}</h2>
+							<p class="content-desc">配置连接参数并管理该服务商的模型</p>
+						</div>
+
+						<!-- 连接设置 -->
+						<div class="card detail-card">
+							<div class="section-title">连接设置</div>
+							<div class="form-row">
+								<input value={sel.base_url || ''} disabled placeholder="Base URL" />
 							</div>
-							<div class="config-actions">
-								{#if editKeyProviderId === p.id}
-									<input
-										class="key-input"
-										bind:value={editKeyValue}
-										type="password"
-										placeholder="新 API Key"
-										onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(p.id); }}
-										disabled={keySaving}
-									/>
-									<button class="btn-sm" onclick={() => saveProviderKey(p.id)} disabled={keySaving || !editKeyValue.trim()}>
-										{keySaving ? '保存中…' : '保存'}
-									</button>
-									<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
-								{:else}
-									<button class="btn-sm" onclick={() => startEditKey(p.id)}>编辑 Key</button>
-								{/if}
+							<div class="config-row">
+								<div class="config-info">
+									<span class="config-name">API Key</span>
+									{#if editKeyProviderId === sel.id}
+										<input
+											class="key-input"
+											bind:value={editKeyValue}
+											type="password"
+											placeholder="新 API Key"
+											onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(sel.id); }}
+											disabled={keySaving}
+										/>
+										<button class="btn-sm" onclick={() => saveProviderKey(sel.id)} disabled={keySaving || !editKeyValue.trim()}>
+											{keySaving ? '保存中…' : '保存'}
+										</button>
+										<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
+									{:else}
+										<button class="btn-sm" onclick={() => startEditKey(sel.id)}>编辑 Key</button>
+									{/if}
+								</div>
 							</div>
 						</div>
-					{/each}
-				{/if}
-			</div>
 
-		{:else if section === 'models'}
-			<div class="content-header">
-				<h2 class="content-title">模型</h2>
-				<p class="content-desc">管理已添加的模型与默认模型</p>
-			</div>
-			<div class="card">
-				{#if providers.length === 0}
-					<p class="hint">请先添加 Provider</p>
-				{:else}
-					<div class="form-row">
-						<select bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
-							<option value="">选择 Provider</option>
-							{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
-						</select>
-					</div>
-					{#if mProvider}
-						<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
-							{loadingModels ? '拉取中...' : '拉取可用模型'}
-						</button>
-					{/if}
-					{#if availableModels.length > 0}
-						<div class="form-row">
-							<select bind:value={mModelId}>
-								<option value="">选择模型</option>
-								{#each availableModels as m}<option value={m}>{m}</option>{/each}
-							</select>
+						<!-- 模型管理 -->
+						<div class="card detail-card">
+							<div class="section-title">模型</div>
+							<div class="form-row">
+								<select bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
+									<option value="">选择 Provider</option>
+									{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
+								</select>
+								<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" />
+								<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
+									{loadingModels ? '拉取中...' : '拉取'}
+								</button>
+								<button class="btn-primary" onclick={saveModel}>添加</button>
+							</div>
+							{#if availableModels.length > 0}
+								<div class="form-row">
+									<select bind:value={mModelId}>
+										<option value="">选择模型</option>
+										{#each availableModels as m}<option value={m}>{m}</option>{/each}
+									</select>
+								</div>
+							{/if}
+
+							<div class="divider"></div>
+							{#if models.filter(m => m.provider_id === sel.id).length === 0}
+								<p class="hint">该服务商暂无模型，请在上面添加</p>
+							{:else}
+								{#each models.filter(m => m.provider_id === sel.id) as m}
+									<div class="config-row">
+										<div class="config-info">
+											<span class="config-name">{m.display_name || m.model_id}</span>
+											{#if m.is_default}<span class="config-badge default">默认</span>{/if}
+										</div>
+									</div>
+								{/each}
+							{/if}
 						</div>
 					{:else}
-						<div class="form-row">
-							<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" />
+						<!-- 无选中：显示添加表单 -->
+						<div class="content-header">
+							<h2 class="content-title">Provider & 模型</h2>
+							<p class="content-desc">添加模型服务商并配置其模型</p>
+						</div>
+						<div class="card detail-card">
+							<div class="section-title">添加 Provider</div>
+							<div class="form-row">
+								<select bind:value={pKind}>
+									<option value="openai">OpenAI 兼容</option>
+									<option value="ollama">Ollama</option>
+								</select>
+								<input bind:value={pName} placeholder="名称" />
+							</div>
+							<div class="form-row">
+								<input bind:value={pUrl} placeholder="Base URL" />
+								<input bind:value={pKey} type="password" placeholder="API Key" />
+							</div>
+							<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
 						</div>
 					{/if}
-					<button class="btn-primary" onclick={saveModel}>添加模型</button>
-				{/if}
-
-				{#if models.length > 0}
-					<div class="divider"></div>
-					{#each models as m}
-						<div class="config-row">
-							<div class="config-info">
-								<span class="config-name">{m.display_name || m.model_id}</span>
-								{#if m.is_default}<span class="config-badge default">默认</span>{/if}
-							</div>
-						</div>
-					{/each}
-				{/if}
+				</div>
 			</div>
 
 		{:else if section === 'asr'}
@@ -586,13 +627,30 @@
 		overflow: hidden;
 	}
 	.nav-header {
-		padding: 16px 20px 12px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 14px 16px 12px;
 		font-size: 20px;
 		font-weight: 600;
 		color: var(--color-fg);
 		letter-spacing: -0.41px;
 		border-bottom: 1px solid var(--color-separator);
 	}
+	.nav-back {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+	.nav-back:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
 	.nav-scroll {
 		flex: 1;
 		overflow-y: auto;
@@ -644,6 +702,74 @@
 		color: var(--color-fg-secondary);
 		margin: 0;
 	}
+
+	/* ── Provider 两栏（Cherry Studio 风格） ──── */
+	.provider-shell {
+		display: flex;
+		gap: 16px;
+		height: 100%;
+		min-height: 0;
+	}
+	.provider-list-pane {
+		width: 200px;
+		min-width: 200px;
+		display: flex;
+		flex-direction: column;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-separator);
+		border-radius: 12px;
+		overflow: hidden;
+	}
+	.pane-title {
+		padding: 14px 16px 8px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-fg-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+	}
+	.add-provider-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: 0 8px 8px;
+		padding: 8px 10px;
+		border: none;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--color-accent);
+		font-size: 13px;
+		cursor: pointer;
+		text-align: left;
+		transition: background 0.15s ease;
+	}
+	.add-provider-btn:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+	.pane-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+	.pane-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		width: 100%;
+		padding: 9px 10px;
+		border: none;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--color-fg);
+		font-size: 13px;
+		cursor: pointer;
+		text-align: left;
+		transition: background 0.15s ease;
+	}
+	.pane-item:hover { background: var(--color-bg-tertiary); }
+	.pane-item.active { background: var(--color-bg-tertiary); font-weight: 500; }
+	.pane-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.pane-item-kind { font-size: 11px; color: var(--color-fg-secondary); flex-shrink: 0; }
+	.pane-empty { padding: 16px 10px; font-size: 13px; color: var(--color-fg-tertiary, #8b93a7); }
+	.provider-detail-pane { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
+	.detail-card { margin-bottom: 16px; }
+	.detail-card .form-row .btn-secondary { flex-shrink: 0; }
+	.detail-card .form-row .btn-primary { flex-shrink: 0; }
 	.card {
 		background: var(--color-bg-secondary);
 		border: 1px solid var(--color-separator);
