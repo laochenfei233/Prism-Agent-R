@@ -229,6 +229,15 @@ pub fn run() {
             commands::search::search_config,
             commands::search::search_config_save,
             commands::search::search_test,
+            commands::monitor::budget_get_config,
+            commands::monitor::budget_get_status,
+            commands::monitor::exception_list,
+            commands::monitor::exception_resolve,
+            commands::monitor::monitor_get_budget,
+            commands::monitor::monitor_get_exceptions,
+            commands::monitor::guardrail_check_tool,
+            commands::monitor::orchestrator_start,
+            commands::monitor::orchestrator_get_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

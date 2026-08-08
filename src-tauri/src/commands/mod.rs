@@ -8,6 +8,7 @@ pub mod lsp;
 pub mod mcp;
 pub mod memory;
 pub mod model;
+pub mod monitor;
 pub mod rag;
 pub mod search;
 pub mod session;
