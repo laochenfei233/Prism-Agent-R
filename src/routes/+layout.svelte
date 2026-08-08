@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { contextStore } from '$lib/stores/context.svelte';
@@ -298,8 +299,8 @@
 		{@render children()}
 	</main>
 
-	<!-- Agent Context Sidebar -->
-	{#if agentStore.currentAgent}
+	<!-- Agent Context Sidebar - 仅在聊天页显示 -->
+	{#if agentStore.currentAgent && $page.url.pathname === '/'}
 		<AgentSidebar />
 	{/if}
 </div>

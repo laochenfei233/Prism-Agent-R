@@ -9,6 +9,8 @@
 	let mcpServers = $state<any[]>([]);
 	let skills = $state<any[]>([]);
 	let msg = $state('');
+	// 当前激活的设置分类（Cherry Studio 风格左导航）
+	let section = $state<'providers' | 'models' | 'asr' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
 
 	// Provider/Model
 	let pName = $state('');
@@ -237,378 +239,445 @@
 	});
 </script>
 
-<div class="page">
-	<div class="nav">
-		<button class="nav-back" onclick={() => history.back()}>
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<polyline points="15 18 9 12 15 6"/>
-			</svg>
-			返回
-		</button>
-		<h1 class="nav-title">设置</h1>
-		<div></div>
-	</div>
+{#if msg}
+	<div class="toast" class:error={msg.startsWith('错误')}>{msg}</div>
+{/if}
 
-	{#if msg}
-		<div class="toast" class:error={msg.startsWith('错误')}>{msg}</div>
-	{/if}
+<div class="settings-shell">
+	<!-- 左侧分类导航 -->
+	<aside class="settings-nav">
+		<div class="nav-header">设置</div>
+		<div class="nav-scroll">
+			<div class="nav-group-title">模型</div>
+			<button class="nav-item" class:active={section === 'providers'} onclick={() => section = 'providers'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+				<span>Provider</span>
+			</button>
+			<button class="nav-item" class:active={section === 'models'} onclick={() => section = 'models'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M22 12A10 10 0 0 1 12 22"/></svg>
+				<span>模型</span>
+			</button>
 
-	<!-- Provider -->
-	<div class="group">
-		<div class="group-header">Provider</div>
-		<div class="group-body">
-			<div class="form-row">
-				<select bind:value={pKind}>
-					<option value="openai">OpenAI 兼容</option>
-					<option value="ollama">Ollama</option>
-				</select>
-				<input bind:value={pName} placeholder="名称" />
+			<div class="nav-group-title">能力</div>
+			<button class="nav-item" class:active={section === 'asr'} onclick={() => section = 'asr'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+				<span>语音识别</span>
+			</button>
+			<button class="nav-item" class:active={section === 'agents'} onclick={() => section = 'agents'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+				<span>Agent</span>
+			</button>
+			<button class="nav-item" class:active={section === 'mcp'} onclick={() => section = 'mcp'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+				<span>MCP 服务器</span>
+			</button>
+			<button class="nav-item" class:active={section === 'skills'} onclick={() => section = 'skills'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8z"/></svg>
+				<span>技能</span>
+			</button>
+			<button class="nav-item" class:active={section === 'market'} onclick={() => section = 'market'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg>
+				<span>Market</span>
+			</button>
+
+			<div class="nav-group-title">数据</div>
+			<button class="nav-item" class:active={section === 'memory'} onclick={() => section = 'memory'}>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+				<span>记忆管理</span>
+			</button>
+		</div>
+	</aside>
+
+	<!-- 右侧内容 -->
+	<main class="settings-content">
+		{#if section === 'providers'}
+			<div class="content-header">
+				<h2 class="content-title">Provider</h2>
+				<p class="content-desc">配置模型服务商与连接参数</p>
 			</div>
-			<div class="form-row">
-				<input bind:value={pUrl} placeholder="Base URL" />
-				<input bind:value={pKey} type="password" placeholder="API Key" />
-			</div>
-			<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
+			<div class="card">
+				<div class="card-head">
+					<div class="form-row">
+						<select bind:value={pKind}>
+							<option value="openai">OpenAI 兼容</option>
+							<option value="ollama">Ollama</option>
+						</select>
+						<input bind:value={pName} placeholder="名称" />
+					</div>
+					<div class="form-row">
+						<input bind:value={pUrl} placeholder="Base URL" />
+						<input bind:value={pKey} type="password" placeholder="API Key" />
+					</div>
+					<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
+				</div>
 
-			{#if providers.length > 0}
+				{#if providers.length > 0}
+					<div class="divider"></div>
+					{#each providers as p}
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">{p.name}</span>
+								<span class="config-badge">{p.kind}</span>
+							</div>
+							<div class="config-actions">
+								{#if editKeyProviderId === p.id}
+									<input
+										class="key-input"
+										bind:value={editKeyValue}
+										type="password"
+										placeholder="新 API Key"
+										onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(p.id); }}
+										disabled={keySaving}
+									/>
+									<button class="btn-sm" onclick={() => saveProviderKey(p.id)} disabled={keySaving || !editKeyValue.trim()}>
+										{keySaving ? '保存中…' : '保存'}
+									</button>
+									<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
+								{:else}
+									<button class="btn-sm" onclick={() => startEditKey(p.id)}>编辑 Key</button>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+		{:else if section === 'models'}
+			<div class="content-header">
+				<h2 class="content-title">模型</h2>
+				<p class="content-desc">管理已添加的模型与默认模型</p>
+			</div>
+			<div class="card">
+				{#if providers.length === 0}
+					<p class="hint">请先添加 Provider</p>
+				{:else}
+					<div class="form-row">
+						<select bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
+							<option value="">选择 Provider</option>
+							{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
+						</select>
+					</div>
+					{#if mProvider}
+						<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
+							{loadingModels ? '拉取中...' : '拉取可用模型'}
+						</button>
+					{/if}
+					{#if availableModels.length > 0}
+						<div class="form-row">
+							<select bind:value={mModelId}>
+								<option value="">选择模型</option>
+								{#each availableModels as m}<option value={m}>{m}</option>{/each}
+							</select>
+						</div>
+					{:else}
+						<div class="form-row">
+							<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" />
+						</div>
+					{/if}
+					<button class="btn-primary" onclick={saveModel}>添加模型</button>
+				{/if}
+
+				{#if models.length > 0}
+					<div class="divider"></div>
+					{#each models as m}
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">{m.display_name || m.model_id}</span>
+								{#if m.is_default}<span class="config-badge default">默认</span>{/if}
+							</div>
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+		{:else if section === 'asr'}
+			<div class="content-header">
+				<h2 class="content-title">语音识别 (ASR)</h2>
+				<p class="content-desc">配置会议录音的转写后端与模型</p>
+			</div>
+			<div class="card">
+				<div class="card-head">
+					<div class="section-title">可用后端</div>
+					{#each asrBackends as b}
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">{b.name}</span>
+								<span class="config-badge">{b.languages.join(', ')}</span>
+							</div>
+						</div>
+					{/each}
+				</div>
+
 				<div class="divider"></div>
-				{#each providers as p}
+				<div class="section-title">模型管理</div>
+				{#each asrCatalog as m}
 					<div class="config-row">
 						<div class="config-info">
-							<span class="config-name">{p.name}</span>
-							<span class="config-badge">{p.kind}</span>
+							<span class="config-name">{m.name}</span>
+							<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
 						</div>
 						<div class="config-actions">
-							{#if editKeyProviderId === p.id}
-								<input
-									class="key-input"
-									bind:value={editKeyValue}
-									type="password"
-									placeholder="新 API Key"
-									onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(p.id); }}
-									disabled={keySaving}
-								/>
-								<button class="btn-sm" onclick={() => saveProviderKey(p.id)} disabled={keySaving || !editKeyValue.trim()}>
-									{keySaving ? '保存中…' : '保存'}
-								</button>
-								<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
+							{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
+								<span class="config-badge default">{(asrDownloadProgress[m.id] * 100).toFixed(0)}%</span>
+							{:else if asrInstalled.some(i => i.id === m.id)}
+								<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
 							{:else}
-								<button class="btn-sm" onclick={() => startEditKey(p.id)}>编辑 Key</button>
+								<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
 							{/if}
 						</div>
 					</div>
 				{/each}
-			{/if}
-		</div>
-	</div>
 
-	<!-- Model -->
-	<div class="group">
-		<div class="group-header">模型</div>
-		<div class="group-body">
-			{#if providers.length === 0}
-				<p class="hint">请先添加 Provider</p>
-			{:else}
-				<div class="form-row">
-					<select bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
-						<option value="">选择 Provider</option>
-						{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
-					</select>
-				</div>
-				{#if mProvider}
-					<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
-						{loadingModels ? '拉取中...' : '拉取可用模型'}
-					</button>
+				<div class="divider"></div>
+				<div class="section-title">ASR 配置</div>
+				<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
+				{#if asrShowAddConfig}
+					<div class="asr-form">
+						<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" />
+						<select bind:value={asrNewConfig.kind}>
+							{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
+						</select>
+						<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" />
+						{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
+							<input bind:value={asrNewConfig.api_key} placeholder="API Key" />
+						{/if}
+						<div class="form-row">
+							<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
+							<button class="btn-primary" onclick={asrSaveConfig}>保存</button>
+						</div>
+					</div>
 				{/if}
-				{#if availableModels.length > 0}
+				{#each asrConfigs as c}
+					<div class="config-row">
+						<div class="config-info">
+							<span class="config-name">{c.name}</span>
+							<span class="config-badge">{c.kind}</span>
+							{#if c.model_path}<span class="config-badge">{c.model_path}</span>{/if}
+						</div>
+						<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删</button>
+					</div>
+				{/each}
+				{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}
+			</div>
+
+		{:else if section === 'agents'}
+			<div class="content-header">
+				<h2 class="content-title">Agent</h2>
+				<p class="content-desc">创建与配置对话 Agent</p>
+			</div>
+			<div class="card">
+				<p class="hint">创建一个使用默认模型的通用助手，可在左侧 Agent 列表中管理。</p>
+				<button class="btn-green" onclick={createAgent}>创建默认 Agent</button>
+			</div>
+
+		{:else if section === 'mcp'}
+			<div class="content-header">
+				<h2 class="content-title">MCP 服务器</h2>
+				<p class="content-desc">连接外部工具服务（Model Context Protocol）</p>
+			</div>
+			<div class="card">
+				<div class="card-head">
 					<div class="form-row">
-						<select bind:value={mModelId}>
-							<option value="">选择模型</option>
-							{#each availableModels as m}<option value={m}>{m}</option>{/each}
+						<input bind:value={mcName} placeholder="名称" />
+						<select bind:value={mcType}>
+							<option value="stdio">Stdio</option>
+							<option value="http">HTTP</option>
 						</select>
 					</div>
-				{:else}
-					<div class="form-row">
-						<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" />
-					</div>
-				{/if}
-				<button class="btn-primary" onclick={saveModel}>添加模型</button>
-			{/if}
-
-			{#if models.length > 0}
-				<div class="divider"></div>
-				{#each models as m}
-					<div class="config-row">
-						<div class="config-info">
-							<span class="config-name">{m.display_name || m.model_id}</span>
-							{#if m.is_default}<span class="config-badge default">默认</span>{/if}
+					{#if mcType === 'stdio'}
+						<div class="form-row">
+							<input bind:value={mcCommand} placeholder="命令，如 npx" />
 						</div>
-					</div>
-				{/each}
-			{/if}
-		</div>
-	</div>
-
-	<!-- 语音识别（ASR） -->
-	<div class="group">
-		<div class="group-header">语音识别 (ASR)</div>
-		<div class="group-body">
-			<div class="section-title">可用后端</div>
-			{#each asrBackends as b}
-				<div class="config-row">
-					<div class="config-info">
-						<span class="config-name">{b.name}</span>
-						<span class="config-badge">{b.languages.join(', ')}</span>
-					</div>
-				</div>
-			{/each}
-
-			<div class="divider"></div>
-			<div class="section-title">模型管理</div>
-			{#each asrCatalog as m}
-				<div class="config-row">
-					<div class="config-info">
-						<span class="config-name">{m.name}</span>
-						<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
-					</div>
-					<div class="config-actions">
-						{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
-							<span class="config-badge default">{(asrDownloadProgress[m.id] * 100).toFixed(0)}%</span>
-						{:else if asrInstalled.some(i => i.id === m.id)}
-							<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
-						{:else}
-							<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
-						{/if}
-					</div>
-				</div>
-			{/each}
-
-			<div class="divider"></div>
-			<div class="section-title">ASR 配置</div>
-			<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
-			{#if asrShowAddConfig}
-				<div class="asr-form">
-					<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" />
-					<select bind:value={asrNewConfig.kind}>
-						{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
-					</select>
-					<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" />
-					{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
-						<input bind:value={asrNewConfig.api_key} placeholder="API Key" />
+						<div class="form-row">
+							<input bind:value={mcArgs} placeholder="参数（空格分隔），如 -y @modelcontextprotocol/server-filesystem" />
+						</div>
+					{:else}
+						<div class="form-row">
+							<input bind:value={mcUrl} placeholder="URL，如 http://localhost:3000/sse" />
+						</div>
 					{/if}
+					<button class="btn-primary" onclick={addMcp}>添加 MCP</button>
+				</div>
+
+				{#if mcpServers.length > 0}
+					<div class="divider"></div>
+					{#each mcpServers as mc}
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">{mc.name}</span>
+								<span class="config-badge">{mc.type}</span>
+							</div>
+							<div class="config-actions">
+								<button class="btn-sm" onclick={() => testMcp(mc.id)}>测试</button>
+								<button class="btn-sm danger" onclick={() => removeMcp(mc.id)}>删除</button>
+							</div>
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+		{:else if section === 'skills'}
+			<div class="content-header">
+				<h2 class="content-title">技能</h2>
+				<p class="content-desc">安装与管理 Prompt 技能包</p>
+			</div>
+			<div class="card">
+				<div class="card-head">
 					<div class="form-row">
-						<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
-						<button class="btn-primary" onclick={asrSaveConfig}>保存</button>
+						<input bind:value={skillPath} placeholder="技能目录路径，如 /path/to/my-skill" />
 					</div>
+					<button class="btn-primary" onclick={installSkill}>安装技能</button>
 				</div>
-			{/if}
-			{#each asrConfigs as c}
-				<div class="config-row">
-					<div class="config-info">
-						<span class="config-name">{c.name}</span>
-						<span class="config-badge">{c.kind}</span>
-						{#if c.model_path}<span class="config-badge">{c.model_path}</span>{/if}
-					</div>
-					<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删</button>
-				</div>
-			{/each}
-			{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}
-		</div>
-	</div>
 
-	<!-- Agent -->
-	<div class="group">
-		<div class="group-header">Agent</div>
-		<div class="group-body">
-			<button class="btn-green" onclick={createAgent}>创建默认 Agent</button>
-		</div>
-	</div>
-
-	<!-- MCP -->
-	<div class="group">
-		<div class="group-header">MCP 服务器</div>
-		<div class="group-body">
-			<div class="form-row">
-				<input bind:value={mcName} placeholder="名称" />
-				<select bind:value={mcType}>
-					<option value="stdio">Stdio</option>
-					<option value="http">HTTP</option>
-				</select>
+				{#if skills.length > 0}
+					<div class="divider"></div>
+					{#each skills as skill}
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">{skill.name}</span>
+								<span class="config-badge">{skill.source}</span>
+								{#if skill.is_enabled}<span class="config-badge default">已启用</span>{/if}
+							</div>
+							<button class="btn-sm danger" onclick={() => uninstallSkill(skill.id)}>卸载</button>
+						</div>
+					{/each}
+				{/if}
 			</div>
-			{#if mcType === 'stdio'}
-				<div class="form-row">
-					<input bind:value={mcCommand} placeholder="命令，如 npx" />
-				</div>
-				<div class="form-row">
-					<input bind:value={mcArgs} placeholder="参数（空格分隔），如 -y @modelcontextprotocol/server-filesystem" />
-				</div>
-			{:else}
-				<div class="form-row">
-					<input bind:value={mcUrl} placeholder="URL，如 http://localhost:3000/sse" />
-				</div>
-			{/if}
-			<button class="btn-primary" onclick={addMcp}>添加 MCP</button>
 
-			{#if mcpServers.length > 0}
-				<div class="divider"></div>
-				{#each mcpServers as mc}
-					<div class="config-row">
-						<div class="config-info">
-							<span class="config-name">{mc.name}</span>
-							<span class="config-badge">{mc.type}</span>
-						</div>
-						<div class="config-actions">
-							<button class="btn-sm" onclick={() => testMcp(mc.id)}>测试</button>
-							<button class="btn-sm danger" onclick={() => removeMcp(mc.id)}>删除</button>
-						</div>
-					</div>
-				{/each}
-			{/if}
-		</div>
-	</div>
-
-	<!-- Skill -->
-	<div class="group">
-		<div class="group-header">技能</div>
-		<div class="group-body">
-			<div class="form-row">
-				<input bind:value={skillPath} placeholder="技能目录路径，如 /path/to/my-skill" />
+		{:else if section === 'market'}
+			<div class="content-header">
+				<h2 class="content-title">Market</h2>
+				<p class="content-desc">浏览与安装技能市场</p>
 			</div>
-			<button class="btn-primary" onclick={installSkill}>安装技能</button>
+			<div class="card">
+				<SkillMarket />
+			</div>
 
-			{#if skills.length > 0}
-				<div class="divider"></div>
-				{#each skills as skill}
-					<div class="config-row">
-						<div class="config-info">
-							<span class="config-name">{skill.name}</span>
-							<span class="config-badge">{skill.source}</span>
-							{#if skill.is_enabled}<span class="config-badge default">已启用</span>{/if}
-						</div>
-						<button class="btn-sm danger" onclick={() => uninstallSkill(skill.id)}>卸载</button>
-					</div>
-				{/each}
-			{/if}
-		</div>
-	</div>
-
-	<!-- Skill Market -->
-	<div class="group">
-		<div class="group-header">Market</div>
-		<div class="group-body">
-			<SkillMarket />
-		</div>
-	</div>
-
-	<!-- Memory -->
-	<div class="group">
-		<div class="group-header">记忆管理</div>
-		<div class="group-body">
-			<p class="hint">记忆存储于 global/projects/sessions 目录的 .md 文件，重建索引可回填全文搜索（memory_fts）。</p>
-			<button class="btn-primary" onclick={reconcileMemory} disabled={reconciling}>
-				{reconciling ? '索引中…' : '重建索引'}
-			</button>
-		</div>
-	</div>
+		{:else if section === 'memory'}
+			<div class="content-header">
+				<h2 class="content-title">记忆管理</h2>
+				<p class="content-desc">管理跨会话的持久化记忆</p>
+			</div>
+			<div class="card">
+				<p class="hint">记忆存储于 global/projects/sessions 目录的 .md 文件，重建索引可回填全文搜索（memory_fts）。</p>
+				<button class="btn-primary" onclick={reconcileMemory} disabled={reconciling}>
+					{reconciling ? '索引中…' : '重建索引'}
+				</button>
+			</div>
+		{/if}
+	</main>
 </div>
 
 <style>
-	.page {
-		padding: 0;
-		overflow-y: auto;
+	.settings-shell {
+		display: flex;
 		height: 100%;
-		background: var(--color-bg-secondary);
+		background: var(--color-bg);
 	}
 
-	/* ── Nav ────────────────────────────────────── */
-	.nav {
-		position: sticky;
-		top: 0;
+	/* ── 左侧导航 ─────────────────────────── */
+	.settings-nav {
+		width: 220px;
+		min-width: 220px;
+		background: var(--color-bg-secondary);
+		border-right: 1px solid var(--color-separator);
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 12px 16px;
-		min-height: 52px;
-		background: var(--color-glass);
-		backdrop-filter: saturate(180%) blur(20px);
-		border-bottom: 0.5px solid var(--color-separator);
-		z-index: 100;
+		flex-direction: column;
+		overflow: hidden;
 	}
-	.nav-back {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		padding: 4px 8px;
-		border: none;
-		background: transparent;
-		color: var(--color-accent);
-		font-size: 17px;
-		cursor: pointer;
-		border-radius: 8px;
-	}
-	.nav-back:hover { background: var(--color-bg-hover); }
-	.nav-title {
-		font-size: 17px;
+	.nav-header {
+		padding: 16px 20px 12px;
+		font-size: 20px;
 		font-weight: 600;
 		color: var(--color-fg);
 		letter-spacing: -0.41px;
+		border-bottom: 1px solid var(--color-separator);
+	}
+	.nav-scroll {
+		flex: 1;
+		overflow-y: auto;
+		padding: 8px;
+	}
+	.nav-group-title {
+		padding: 12px 12px 4px;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-fg-tertiary, #8b93a7);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+	}
+	.nav-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 8px 12px;
+		border: none;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--color-fg-secondary);
+		font-size: 14px;
+		cursor: pointer;
+		text-align: left;
+		transition: background 0.15s ease;
+	}
+	.nav-item:hover { background: var(--color-bg-tertiary); }
+	.nav-item.active { background: var(--color-bg-tertiary); color: var(--color-fg); font-weight: 500; }
+	.nav-icon { flex-shrink: 0; opacity: 0.85; }
+
+	/* ── 右侧内容 ─────────────────────────── */
+	.settings-content {
+		flex: 1;
+		min-width: 0;
+		overflow-y: auto;
+		padding: 28px 32px;
+	}
+	.content-header { margin-bottom: 20px; }
+	.content-title {
+		font-size: 18px;
+		font-weight: 600;
+		color: var(--color-fg);
+		margin: 0 0 4px;
+	}
+	.content-desc {
+		font-size: 13px;
+		color: var(--color-fg-secondary);
 		margin: 0;
 	}
-
-	/* ── Toast ──────────────────────────────────── */
-	.toast {
-		padding: 10px 16px;
-		margin: 16px 16px 0;
-		border-radius: 10px;
-		background: var(--color-green);
-		color: #fff;
-		font-size: 15px;
-	}
-	.toast.error { background: var(--color-red); }
-
-	/* ── Group ──────────────────────────────────── */
-	.group {
-		margin: 16px;
-	}
-	.group-header {
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--color-fg-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		padding: 0 0 8px;
-	}
-	.group-body {
-		background: var(--color-bg);
+	.card {
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-separator);
 		border-radius: 12px;
-		padding: 12px;
+		padding: 20px;
 	}
+	.card-head { display: flex; flex-direction: column; gap: 10px; }
 
-	/* ── Form ───────────────────────────────────── */
+	/* ── 表单 ─────────────────────────────── */
 	.form-row {
 		display: flex;
 		gap: 8px;
-		margin-bottom: 10px;
 	}
 	.form-row input,
 	.form-row select {
 		flex: 1;
-		padding: 10px 12px;
-		border-radius: 10px;
+		padding: 9px 12px;
+		border-radius: 8px;
 		border: 1px solid var(--color-separator);
-		background: var(--color-bg-secondary);
+		background: var(--color-bg);
 		color: var(--color-fg);
-		font-size: 15px;
+		font-size: 14px;
 		outline: none;
+		box-sizing: border-box;
 	}
 	.form-row input:focus,
 	.form-row select:focus { border-color: var(--color-accent); }
 
 	.hint {
-		font-size: 14px;
-		color: var(--color-fg-tertiary);
+		font-size: 13px;
+		color: var(--color-fg-tertiary, #8b93a7);
 		margin: 0;
 		padding: 8px 0;
+		line-height: 1.6;
 	}
 
 	.section-title {
@@ -618,6 +687,113 @@
 		margin: 4px 0 8px;
 	}
 
+	.divider {
+		height: 0.5px;
+		background: var(--color-separator);
+		margin: 16px 0;
+	}
+
+	/* ── 配置列表 ─────────────────────────── */
+	.config-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px 0;
+		gap: 8px;
+	}
+	.config-info {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+	.config-name {
+		font-size: 14px;
+		color: var(--color-fg);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.config-badge {
+		padding: 2px 8px;
+		border-radius: 6px;
+		background: var(--color-bg-tertiary);
+		color: var(--color-fg-secondary);
+		font-size: 12px;
+		flex-shrink: 0;
+	}
+	.config-badge.default {
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+		color: var(--color-accent);
+	}
+	.config-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+	.key-input {
+		width: 200px;
+		padding: 6px 10px;
+		border-radius: 8px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg);
+		color: var(--color-fg);
+		font-size: 13px;
+		outline: none;
+	}
+	.key-input:focus { border-color: var(--color-accent); }
+
+	/* ── 按钮 ─────────────────────────────── */
+	.btn-primary {
+		padding: 9px 16px;
+		border-radius: 8px;
+		border: none;
+		background: var(--color-accent);
+		color: #fff;
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+	.btn-primary:hover { background: var(--color-accent-hover, var(--color-accent)); opacity: 0.92; }
+	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.btn-secondary {
+		width: fit-content;
+		padding: 8px 16px;
+		border-radius: 8px;
+		border: 1px solid var(--color-accent);
+		background: transparent;
+		color: var(--color-accent);
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+	.btn-secondary:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.btn-green {
+		padding: 9px 16px;
+		border-radius: 8px;
+		border: none;
+		background: var(--color-green);
+		color: #fff;
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+	.btn-green:hover { opacity: 0.92; }
+
+	.btn-sm {
+		padding: 4px 12px;
+		border-radius: 6px;
+		border: 1px solid var(--color-separator);
+		background: transparent;
+		color: var(--color-fg-secondary);
+		font-size: 13px;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+	.btn-sm:hover { background: var(--color-bg-tertiary); }
+	.btn-sm.danger { color: var(--color-red, #ff453a); border-color: var(--color-red, #ff453a); }
+
+	/* ── ASR 表单 ─────────────────────────── */
 	.asr-form {
 		display: flex;
 		flex-direction: column;
@@ -627,10 +803,10 @@
 	.asr-form input,
 	.asr-form select {
 		width: 100%;
-		padding: 10px 12px;
-		border-radius: 10px;
+		padding: 9px 12px;
+		border-radius: 8px;
 		border: 1px solid var(--color-separator);
-		background: var(--color-bg-secondary);
+		background: var(--color-bg);
 		color: var(--color-fg);
 		font-size: 14px;
 		outline: none;
@@ -638,121 +814,20 @@
 	}
 	.asr-form input:focus,
 	.asr-form select:focus { border-color: var(--color-accent); }
-	.asr-form .btn-primary,
-	.asr-form .btn-secondary {
-		width: auto;
-		padding: 8px 16px;
-		font-size: 14px;
-		margin-bottom: 0;
-	}
-	.asr-form .form-row { align-items: center; }
+	.asr-form .btn-primary { width: fit-content; }
 
-	.divider {
-		height: 0.5px;
-		background: var(--color-separator);
-		margin: 12px 0;
-	}
-
-	/* ── Config List ────────────────────────────── */
-	.config-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 8px 0;
-	}
-	.config-info {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.config-name {
-		font-size: 15px;
-		color: var(--color-fg);
-	}
-	.config-badge {
-		padding: 2px 8px;
-		border-radius: 6px;
-		background: var(--color-bg-secondary);
-		color: var(--color-fg-secondary);
-		font-size: 12px;
-	}
-	.config-badge.default {
-		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-		color: var(--color-accent);
-	}
-	.key-input {
-		width: 180px;
-		padding: 6px 10px;
-		border-radius: 8px;
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg-secondary);
-		color: var(--color-fg);
-		font-size: 13px;
-		outline: none;
-	}
-	.key-input:focus { border-color: var(--color-accent); }
-
-	/* ── Buttons ────────────────────────────────── */
-	.btn-primary {
-		width: 100%;
-		padding: 12px;
-		border-radius: 12px;
-		border: none;
-		background: var(--color-accent);
-		color: #fff;
-		font-size: 17px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-	.btn-primary:hover { background: var(--color-accent-hover); }
-	.btn-primary:active { transform: scale(0.98); }
-
-	.btn-secondary {
-		width: 100%;
-		padding: 10px;
+	/* ── Toast ─────────────────────────────── */
+	.toast {
+		position: fixed;
+		top: 16px;
+		right: 16px;
+		z-index: 200;
+		padding: 10px 16px;
 		border-radius: 10px;
-		border: 1px solid var(--color-accent);
-		background: transparent;
-		color: var(--color-accent);
-		font-size: 15px;
-		font-weight: 500;
-		cursor: pointer;
-		margin-bottom: 10px;
-	}
-	.btn-secondary:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
-	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-	.btn-green {
-		width: 100%;
-		padding: 12px;
-		border-radius: 12px;
-		border: none;
 		background: var(--color-green);
 		color: #fff;
-		font-size: 17px;
-		font-weight: 600;
-		cursor: pointer;
+		font-size: 14px;
+		box-shadow: 0 4px 16px rgba(0,0,0,0.2);
 	}
-	.btn-green:hover { background: color-mix(in srgb, var(--color-green) 85%, #000); }
-	.btn-green:active { transform: scale(0.98); }
-
-	/* ── Small Buttons ────────────────────────── */
-	.config-actions {
-		display: flex;
-		gap: 8px;
-	}
-	.btn-sm {
-		padding: 4px 12px;
-		border-radius: 8px;
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg-secondary);
-		color: var(--color-fg);
-		font-size: 13px;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-	.btn-sm:hover { background: var(--color-bg-hover); }
-	.btn-sm.danger { color: var(--color-red); border-color: var(--color-red); }
-	.btn-sm.danger:hover { background: color-mix(in srgb, var(--color-red) 8%, transparent); }
+	.toast.error { background: var(--color-red, #ff453a); }
 </style>
