@@ -48,7 +48,7 @@ pub enum ToolApprovalResponse {
 
 pub fn assess_risk(tool_name: &str, _args: &serde_json::Value) -> RiskLevel {
     match tool_name {
-        "read_file" | "list_dir" | "glob" | "grep" | "lsp:diagnostics" => RiskLevel::Low,
+        "read_file" | "list_dir" | "glob" | "grep" | "lsp:diagnostics" | "web_search" => RiskLevel::Low,
         "write_file" | "edit_file" => RiskLevel::Medium,
         "delete_file" | "run_command" | "http_request" => RiskLevel::High,
         "rm_rf" | "database_drop" | "send_message" => RiskLevel::Critical,

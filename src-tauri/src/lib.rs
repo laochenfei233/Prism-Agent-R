@@ -12,6 +12,8 @@ use tokio_util::sync::CancellationToken;
 
 use mcp::McpRuntime;
 use core::adk::tool::ToolApprovalStore;
+use core::autoagents::loop_scheduler::LoopScheduler;
+use core::session::state::SessionStateManager;
 use data::services::meeting::AudioStreamManager;
 
 pub struct AppState {
@@ -20,6 +22,8 @@ pub struct AppState {
     pub mcp_runtime: std::sync::Arc<McpRuntime>,
     pub approval_store: std::sync::Arc<ToolApprovalStore>,
     pub audio_streams: std::sync::Arc<AudioStreamManager>,
+    pub session_state: std::sync::Arc<SessionStateManager>,
+    pub loop_scheduler: std::sync::Arc<LoopScheduler>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -65,6 +69,8 @@ pub fn run() {
                 mcp_runtime,
                 approval_store: std::sync::Arc::new(ToolApprovalStore::new()),
                 audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
+                session_state: std::sync::Arc::new(SessionStateManager::new()),
+                loop_scheduler: std::sync::Arc::new(LoopScheduler::new()),
             });
             Ok(())
         })
@@ -81,6 +87,11 @@ pub fn run() {
             commands::session::session_rename,
             commands::session::session_delete,
             commands::session::session_search,
+            commands::session::session_init,
+            commands::session::session_state_query,
+            commands::session::session_cleanup,
+            commands::session::session_fork,
+            commands::session::session_approve,
             commands::chat::chat_history,
             commands::chat::chat_send,
             commands::chat::chat_abort,
@@ -121,6 +132,9 @@ pub fn run() {
             commands::workflow::task_validate,
             commands::workflow::task_rerun,
             commands::workflow::goal_evaluate,
+            commands::loop_cmd::loop_start,
+            commands::loop_cmd::loop_stop,
+            commands::loop_cmd::loop_list,
             commands::workspace::workspace_get,
             commands::workspace::workspace_set,
             commands::workspace::workspace_tree,
@@ -199,6 +213,7 @@ pub fn run() {
             commands::asr::meeting_audio_chunk,
             commands::asr::meeting_stop_recording,
             commands::trace::trace_list,
+            commands::trace::trace_grade,
             commands::router::router_route,
             commands::router::router_index_status,
             commands::agent_eval::agent_judge_evaluate,
@@ -211,6 +226,9 @@ pub fn run() {
             commands::tts::tts_stop,
             commands::tts::tts_voices,
             commands::dashboard::dashboard_overview,
+            commands::search::search_config,
+            commands::search::search_config_save,
+            commands::search::search_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
