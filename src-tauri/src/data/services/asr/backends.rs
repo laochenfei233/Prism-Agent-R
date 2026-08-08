@@ -10,7 +10,11 @@ pub fn builtin_register() {
     register_backend("MiMoHttp", |cfg| Box::new(OpenAiCompatibleBackend::new(cfg)));
     register_backend("Custom", |cfg| Box::new(OpenAiCompatibleBackend::new(cfg)));
     register_backend("WhisperApi", |cfg| Box::new(WhisperApiBackend::new(cfg)));
+    // SherpaOnnx：启用 `sherpa-native` feature 时走真实本地推理；否则骨架（校验模型路径，提示安装）
+    #[cfg(feature = "sherpa-native")]
     register_backend("SherpaOnnx", |cfg| Box::new(SherpaOnnxBackend::new(cfg)));
+    #[cfg(not(feature = "sherpa-native"))]
+    register_backend("SherpaOnnx", |cfg| Box::new(LocalNativeBackend::sherpa(cfg)));
     register_backend("LocalFunasrWs", |cfg| Box::new(LocalFunasrWsBackend::new(cfg)));
     register_backend("Vosk", |cfg| Box::new(LocalNativeBackend::vosk(cfg)));
     register_backend("AzureSpeech", |cfg| Box::new(AzureSpeechBackend::new(cfg)));
@@ -635,14 +639,18 @@ impl AsrBackend for LocalFunasrWsBackend {
 
 // ── SherpaOnnxBackend（真实本地推理：SenseVoice + Silero VAD） ──
 // 使用 sherpa-rs crate（onnxruntime 由 download-binaries feature 自动下载）。
+// 仅当启用 `sherpa-native` feature 时编译（需本机 libclang + 网络下载 onnxruntime）；
+// 默认构建下 SherpaOnnx 由 LocalNativeBackend 骨架承接（见 builtin_register）。
 // 模型：model_path 指向含 model.int8.onnx + tokens.txt 的任意目录（自动递归查找），
 // 不限定内置清单；Silero VAD 可选（silero_vad.onnx 与模型同目录或上级目录）。
 
+#[cfg(feature = "sherpa-native")]
 pub struct SherpaOnnxBackend {
     model_path: Option<String>,
     langs: Vec<String>,
 }
 
+#[cfg(feature = "sherpa-native")]
 impl SherpaOnnxBackend {
     pub fn new(cfg: &AsrBackendConfig) -> Self {
         Self {
@@ -686,6 +694,7 @@ impl SherpaOnnxBackend {
     }
 }
 
+#[cfg(feature = "sherpa-native")]
 #[async_trait::async_trait]
 impl AsrBackend for SherpaOnnxBackend {
     fn kind(&self) -> AsrKind { AsrKind::SherpaOnnx }
@@ -837,6 +846,7 @@ impl AsrBackend for SherpaOnnxBackend {
     }
 }
 
+#[cfg(feature = "sherpa-native")]
 fn find_file_recursive(dir: &std::path::Path, names: &[&str], depth: usize) -> Option<std::path::PathBuf> {
     if depth == 0 {
         return None;

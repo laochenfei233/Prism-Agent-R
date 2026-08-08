@@ -9,6 +9,13 @@ edition = "2021"
 name = "prism_agent_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# sherpa-rs 本地推理（SenseVoice/Paraformer/Whisper onnx）为可选能力：
+# 启用需要本机 libclang（bindgen 编译）+ 网络下载 onnxruntime 预编译库（约 200MB）。
+# 默认关闭——应用核心（Agent/Wiki/RAG/会议云端 ASR/翻译/OCR 等）不依赖它即可构建运行，
+# SherpaOnnx 后端降级为模型路径校验骨架（提示安装模型与启用该 feature）。
+sherpa-native = ["dep:sherpa-rs"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -32,7 +39,7 @@ tokio-util = "0.7"
 tokio-tungstenite = "0.24"
 http = "1"
 urlencoding = "2"
-sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"] }
+sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"], optional = true }
 aes-gcm = "0.10"
 base64 = "0.22"
 rand = "0.8"

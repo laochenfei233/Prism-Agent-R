@@ -36,28 +36,19 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          # sherpa-rs-sys 的 download-binaries 把库解压到 ~/.cache/sherpa-rs；
-          # 必须与构建产物一同缓存，否则缓存恢复后 build script 跳过下载但库缺失 → 链接失败
-          cache-directories: |
-            ~/.cache/sherpa-rs          # Linux
-            ~/Library/Caches/sherpa-rs   # macOS
-            ~/AppData/Local/sherpa-rs   # Windows
 
       - name: Install system deps
         timeout-minutes: 10
         run: |
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=60
-          sudo apt-get install -y -o Acquire::Retries=5 libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-14-dev
+          sudo apt-get install -y -o Acquire::Retries=5 build-essential curl wget file libssl-dev
 
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Run Rust tests (含 RAG 五维评测回归门槛)
         run: cargo test --manifest-path src-tauri/Cargo.toml
-        env:
-          LIBCLANG_PATH: /usr/lib/llvm-14/lib
 
       - name: SvelteKit sync (生成 .svelte-kit 类型文件，svelte-check 依赖)
         run: npx svelte-kit sync
@@ -73,10 +64,15 @@ jobs:
         include:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
+            bundles: ''
           - platform: macos-latest
             target: aarch64-apple-darwin
+            bundles: ''
+          # Linux 交付 deb+rpm；AppImage 需 FUSE，GitHub Actions ubuntu runner 无 /dev/fuse
+          # 且 linuxdeploy AppImage 在 extract-and-run 下运行异常 → 暂缓，后续单独处理
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            bundles: '--bundles deb,rpm'
 
     runs-on: ${{ matrix.platform }}
 
@@ -98,10 +94,6 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-          cache-directories: |
-            ~/.cache/sherpa-rs          # Linux
-            ~/Library/Caches/sherpa-rs   # macOS
-            ~/AppData/Local/sherpa-rs   # Windows
 
       - name: Install system deps (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -110,43 +102,18 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=60
           sudo apt-get install -y -o Acquire::Retries=5 libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-14-dev rpm \
-            libfuse2 patchelf zsync
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev rpm
 
       - name: Install frontend dependencies
         run: npm ci
-
-      # LIBCLANG_PATH 是平台特定路径：写 Linux 专用的 .cargo/config.toml（与本机做法一致），
-      # 不能放进共享 env——Windows/macOS runner 上不存在 /usr/lib/llvm-14/lib，bindgen 会失败
-      - name: Configure LIBCLANG_PATH (Linux)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          mkdir -p src-tauri/.cargo
-          printf '[env]\nLIBCLANG_PATH = "/usr/lib/llvm-14/lib"\n' > src-tauri/.cargo/config.toml
-
-      - name: Debug linuxdeploy (Linux AppImage)
-        if: matrix.platform == 'ubuntu-22.04'
-        continue-on-error: true
-        timeout-minutes: 5
-        run: |
-          curl -sL --retry 3 -o /tmp/linuxdeploy.AppImage \
-            https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy/linuxdeploy-x86_64.AppImage
-          chmod +x /tmp/linuxdeploy.AppImage
-          echo "--- extract mode (timeout 60) ---"
-          cd /tmp && timeout 60 env APPIMAGE_EXTRACT_AND_RUN=1 /tmp/linuxdeploy.AppImage --version 2>&1 || echo "extract-mode FAILED exit=$?"
-          echo "--- manual extract + AppRun (timeout 60) ---"
-          cd /tmp && /tmp/linuxdeploy.AppImage --appimage-extract >/dev/null 2>&1 && timeout 60 /tmp/squashfs-root/AppRun --version 2>&1 || echo "manual-extract FAILED exit=$?"
-          ls /tmp/squashfs-root/AppRun 2>&1
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GitHub Actions ubuntu runner 无 /dev/fuse（2024 起移除），linuxdeploy 必须走 extract 模式
-          APPIMAGE_EXTRACT_AND_RUN: '1'
         with:
           tauriScript: npx tauri
-          args: --target ${{ matrix.target }} --verbose
+          args: --target ${{ matrix.target }} ${{ matrix.bundles }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

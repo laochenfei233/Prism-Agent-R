@@ -2181,7 +2181,7 @@ CREATE VIRTUAL TABLE translate_fts USING fts5(
 
 > 本文档为实现进度的跟踪记录，供后续会话继续完成时查阅。
 > 分支：`master`（feat/phase3-extend 已合并）· 收尾提交：`eac08bd` + 评审修复 `19606ef`
-> 构建依赖：`LIBCLANG_PATH` 已写入 `src-tauri/.cargo/config.toml`（VS Build Tools x64 LLVM，sherpa-rs bindgen 需要，gitignored）；`sherpa-rs` 需 `download-binaries` feature。
+> 构建依赖：`sherpa-rs` 本地推理为**可选 feature `sherpa-native`**（默认关闭，Agent 核心不依赖它即可构建运行；启用需本机 libclang + 网络下载 onnxruntime，见 §10.3）。未启用时 SherpaOnnx 后端为模型路径校验骨架。
 
 ### ✅ 已完整实现（编译零错误零警告 · cargo test 49 passed · svelte-check 0 errors）
 
@@ -2206,7 +2206,8 @@ CREATE VIRTUAL TABLE translate_fts USING fts5(
 ### 🔶 打包验证（T18）
 
 - Windows：`npx tauri build` 本机验证成功（release 5m17s）→ `Prism Agent_0.1.0_x64_en-US.msi` + `Prism Agent_0.1.0_x64-setup.exe`
-- macOS dmg / Linux deb+rpm+AppImage：由 CI 三平台矩阵保证（build.yml 已补 Linux webkit2gtk/libclang/rpm 系统依赖；首次 push 触发 CI 后闭环）
+- macOS dmg / Linux deb+rpm：由 CI 三平台矩阵保证（已跑通：Windows MSI+NSIS / macOS dmg / Linux deb+rpm）
+- **Linux AppImage 暂缓**：GitHub Actions ubuntu runner 无 /dev/fuse，linuxdeploy AppImage 在 extract-and-run 下运行异常（deb/rpm 已覆盖 Linux 分发；本机有 FUSE 的环境可 `npx tauri build` 打出 AppImage）
 - CI test job（`needs: test` 门控）：`cargo test`（含 eval_gate 回归门槛）+ `svelte-check`；建议在分支保护中将 test 设为 required check
 
 ### 📋 未完成（无阻塞项；均为可选增强）
