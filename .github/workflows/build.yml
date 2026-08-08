@@ -36,6 +36,10 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          # sherpa-rs-sys 的 download-binaries 把库解压到 ~/.cache/sherpa-rs；
+          # 必须与构建产物一同缓存，否则缓存恢复后 build script 跳过下载但库缺失 → 链接失败
+          cache-directories: |
+            ~/.cache/sherpa-rs
 
       - name: Install system deps
         timeout-minutes: 10
@@ -47,9 +51,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
-
-      - name: Clean sherpa-rs download cache (防损坏缓存导致 -lonnxruntime 链接失败)
-        run: rm -rf "$HOME/.cache/sherpa-rs"
 
       - name: Run Rust tests (含 RAG 五维评测回归门槛)
         run: cargo test --manifest-path src-tauri/Cargo.toml
@@ -95,6 +96,8 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          cache-directories: |
+            ~/.cache/sherpa-rs
 
       - name: Install system deps (Linux)
         if: matrix.platform == 'ubuntu-22.04'
