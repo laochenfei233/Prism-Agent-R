@@ -13,7 +13,6 @@
 	import McpOverviewCard from '$lib/components/dashboard/McpOverviewCard.svelte';
 	import OrchestratorPanel from '$lib/components/dashboard/OrchestratorPanel.svelte';
 	import RecentSessionsCard from '$lib/components/dashboard/RecentSessionsCard.svelte';
-	import TaskDesigner from '$lib/components/task/TaskDesigner.svelte';
 
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
@@ -68,12 +67,7 @@
 			<OrchestratorPanel />
 		</div>
 
-		<!-- Row 2: Task Designer（手动任务设计器） -->
-		<div class="section-row">
-			<TaskDesigner />
-		</div>
-
-		<!-- Row 3: Agent Launcher + Usage Trend -->
+		<!-- Row 2: Agent Launcher + Usage Trend -->
 		<div class="section-row two-col">
 			<div class="col-main">
 				<AgentLauncher
@@ -91,14 +85,14 @@
 			</div>
 		</div>
 
-		<!-- Row 4: Stats + Skill + MCP（三列紧凑布局） -->
+		<!-- Row 3: Stats + Skill + MCP（三列紧凑布局） -->
 		<div class="section-row three-col">
 			<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
 			<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
 			<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
 		</div>
 
-		<!-- Row 5: Recent Sessions -->
+		<!-- Row 4: Recent Sessions -->
 		<RecentSessionsCard
 			sessions={dashboardStore.overview?.recent_sessions ?? []}
 			onOpenSession={handleOpenSession}
