@@ -1,14 +1,20 @@
 ---
 feature: panel-compose-flow
-status: designed
+status: delivered
 updated: 2026-08-09
 branch: feat/panel-compose-flow
-commits: <base-sha>..<head-sha> # filled at delivery
+commits: 983075d..a051f62
 ---
 
 # 面板自主编排流（Panel Compose Flow）
 
 ## Report
+
+**What was built** — 面板首页（`src/routes/+page.svelte`）顶部新增自主编排主入口：`OrchestratorPanel` 以 560px 大卡片置顶（需求输入 → SPEC → 执行 → 审查四 Tab），`TaskDesigner` 下移至第二区块，其余面板区块不变。该组件此前是孤儿组件且全部使用本项目并不存在的 Tailwind 死样式，本次全量重写为 iOS 18 设计令牌（`--color-*`/`--spacing-*`/`--radius-*`），浅深色主题自动适配。执行 Tab 升级为事件驱动的子任务状态卡片：由 `session.plan.groups` 展开，每卡显示任务 id、子 Agent 角色、模型、状态徽标（待运行/运行中/已完成/失败）、耗时、token、输出摘要（截断）与失败错误；顶部总进度条（完成数/总任务数）。后端 `OrchestratorEngine` 在执行循环中补发任务级事件（`task_started` / `task_finished`，data 携带 task_id/role/model_id/group_id/status/duration_ms/tokens_used/output_summary/error），经 `orchestrator:event` IPC 透传（修复了桥接闭包原本丢弃 `data` 的问题）。`GroupKind` 序列化改为 snake_case 并兼容旧 PascalCase 持久化数据。
+
+**Verification** — `cargo check`（src-tauri）: PASS，exit 0（含任务级事件、IPC 桥、GroupKind 改动后各轮复验）。`npm run check`（worktree 根）: 本改动涉及文件零诊断；全局 1 error + 8 warnings 均为 PRE-EXISTING 基线（`src/routes/settings/+page.svelte:10` onMount/listen 类型、`TaskNodeInspector.svelte`，经 git stash 对照基线确认，未触碰）。两轮独立审查（全量审查 + 修复复审）通过：1 critical（IPC 桥丢 data）+ 1 major（GroupKind 大小写不匹配）+ 1 minor（事件 key 同毫秒冲突）均已修复并复验。
+
+**Journey log** — ① OrchestratorPanel 从未被接线的原因之一是它用了项目不存在的 Tailwind 类——重写为设计令牌是接入的必经步骤，不是可选美化。② `orchestrator:event` IPC 桥（`monitor.rs build_orchestrator_engine`）只序列化 3 个字段，任何新增事件 `data` 必须同步修改此处，否则前端静默拿不到。③ Rust serde 枚举默认 PascalCase 序列化，前端 `=== 'parallel'` 这类比较是无用功；契约应明确 snake_case + 旧数据 alias。④ 并行组任务事件可能同毫秒时间戳，`#each` key 用复合值（timestamp+type+message）。⑤ 项目 `npm run check` 基线不过（settings/+page.svelte），验收判定以「不引入新报错」为准。
 
 ## [S1] Problem
 
@@ -35,10 +41,12 @@ commits: <base-sha>..<head-sha> # filled at delivery
 
 实现方式：
 
-- 新增私有方法 `emit_task_event(&self, event_type: &str, message: &str, data: serde_json::Value)`，内部构造 `OrchestratorEvent` 并调用现有 `on_event` 回调（与 `emit_event` 同路径，事件经 `orchestrator:event` IPC 推送到前端）。
-- 在 `execute_task`（`engine.rs`）开头发 `task_started`、结束时发 `task_finished`。`execute_task` 已持有 `task: &PlannedTask`（含 `spec_task_id`、`agent_config.role`、`agent_config.model_id`）与计算结果，无需改签名。
+- 新增私有方法 `emit_task_event(&self, event_type: &str, message: String, data: serde_json::Value)`，内部构造 `OrchestratorEvent` 并调用现有 `on_event` 回调。
+- 在 `execute_plan` 内通过新增的 `run_group_task` 包装器（并行与顺序分支共用）在 `execute_task` 前后发 `task_started` / `task_finished`，不改 `execute_task` 签名；`group_id` 来自所属 `ExecutionGroup.id`。
 - `output_summary` 取 `response.text` 前 200 字符（`chars().take(200)`），完整输出仍存于 `TaskResult.output` 供审查使用。
-- 不修改会话级事件、不改 `TaskStatus` 的 serde 序列化、不改 `OrchestratorSession` 持久化结构（`task_results` 不持久化是既有已知限制，见 S3）。
+- IPC 桥：`monitor.rs build_orchestrator_engine` 的 `on_event` 闭包必须透传 `"data": event.data`（此前只序列化 3 个字段）。
+- `GroupKind` 序列化契约：`#[serde(rename_all = "snake_case")]` → `"parallel" / "sequential"`，并为旧数据加 `#[serde(alias = "Parallel")]` 等兼容。
+- 不修改会话级事件、不改 `TaskStatus` 的 serde 序列化、不改 `OrchestratorSession` 持久化结构。
 
 ### 2.2 面板首页布局（前端）
 
@@ -55,11 +63,11 @@ commits: <base-sha>..<head-sha> # filled at delivery
 - **任务列表**：由 `session.plan.groups` 展开为卡片列表，按组标注 `并行` / `顺序`；每卡片显示：
   - 任务 id（`spec_task_id`）
   - 所属子 Agent 角色（`agent_config.role`）与模型（`agent_config.model_id`）
-  - 状态徽标与文案：`待运行`（slate）、`运行中`（blue）、`完成`（emerald）、`失败`（red）
+  - 状态徽标与文案：`待运行`（neutral）、`运行中`（accent）、`已完成`（green）、`失败`（red）
   - 完成/失败后显示：耗时（`duration_ms`）、token（`tokens_used`）、输出摘要（截断）、错误信息（失败时）
-- **状态来源**：组件内从 `orchestratorStore.events` 派生 —— 以 `task_started` / `task_finished` 事件的 `data.task_id` 为键，后到的事件覆盖先到者（`task_finished` 覆盖 `task_started`）。未出现在任何事件中的任务显示为 `待运行`。
-- **总进度**：执行区块顶部进度条，`完成数 / 总任务数`（总任务数取 `plan.total_tasks` 或展开组内任务数）。
-- **数据流**：`events.data` 类型为 `any`，store 无需改动；派生逻辑全部在组件内 `$derived`。
+- **状态来源**：组件内从 `orchestratorStore.events` 派生 —— 以 `task_started` / `task_finished` 事件的 `data.task_id` 为键，后到的事件覆盖先到者（`task_finished` 覆盖 `task_started`；事件数组最新在前，需倒序遍历）。未出现在任何事件中的任务显示为 `待运行`。
+- **总进度**：执行区块顶部进度条，`完成数 / 总任务数`（完成数 = `status==='completed'` 的 task_finished 去重计数，总数取 `plan.total_tasks`）。
+- **样式**：全组件改用项目 iOS 18 设计令牌（项目无 Tailwind，原 slate-* 类为死样式）；事件列表 `#each` key 使用复合值（timestamp+event_type+message）避免并行任务同毫秒冲突。
 
 ### 2.4 不改动的部分
 
@@ -80,5 +88,5 @@ commits: <base-sha>..<head-sha> # filled at delivery
 - [ ] T1: 编写本 spec 并建立 worktree — acceptance: `docs/compose/specs/panel-compose-flow.md` 存在，`.worktrees/panel-compose-flow` 分支可用（covers: S1 S2）
 - [ ] T2: 后端任务级事件 — acceptance: `cargo check` 通过；`execute_task` 前后分别发出 `task_started`/`task_finished`，事件 `data` 含 task_id/status/duration_ms/tokens_used/output_summary（covers: S2.1；depends: T1）
 - [ ] T3: 面板首页接入 OrchestratorPanel 置顶 — acceptance: `+page.svelte` 顶部渲染需求输入主入口，TaskDesigner 位于其下，`npm run check` 通过（covers: S2.2；depends: T1）
-- [ ] T4: 执行 Tab 子任务状态卡片 — acceptance: 卡片由 plan 展开并随事件更新（待运行→运行中→完成/失败），显示耗时/输出摘要/所属 Agent，顶部有总进度条，`npm run check` 通过（covers: S2.3；depends: T2 T3）
-- [ ] T5: 验证与审查 — acceptance: 全部验证命令通过（cargo build + npm run check），审查无 critical 发现，spec finalize（covers: S2；depends: T2 T3 T4）
+- [x] T4: 执行 Tab 子任务状态卡片 — acceptance: 卡片由 plan 展开并随事件更新（待运行→运行中→完成/失败），显示耗时/输出摘要/所属 Agent，顶部有总进度条，`npm run check` 通过（covers: S2.3；depends: T2 T3）
+- [x] T5: 验证与审查 — acceptance: 全部验证命令通过（cargo check + npm run check），审查无 critical 发现，spec finalize（covers: S2；depends: T2 T3 T4）
