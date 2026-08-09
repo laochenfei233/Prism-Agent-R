@@ -7,12 +7,17 @@ use crate::utils::error::AppError;
 #[tauri::command]
 pub async fn ocr_recognize(
     state: State<'_, crate::AppState>,
-    image_path: String,
+    image_path: Option<String>,
+    image_data: Option<String>,
     lang: Option<String>,
     provider: Option<String>,
 ) -> Result<OcrResultDto, AppError> {
     let svc = OcrService::new(state.db.pool.clone());
-    let result = svc.recognize(&image_path, lang.as_deref(), provider.as_deref()).await?;
+    // data URL 优先（前端 FileReader 场景）；否则用磁盘路径
+    let input = image_data
+        .or(image_path)
+        .ok_or_else(|| AppError::Validation("缺少图片输入：image_data 或 image_path 至少一个".into()))?;
+    let result = svc.recognize_input(&input, lang.as_deref(), provider.as_deref()).await?;
     Ok(OcrResultDto {
         text: result.text,
         lang: result.lang,

@@ -1,0 +1,215 @@
+source_lang,target_lang,source_term,target_term,category
+en,zh,Lathe,车床,机械设备
+en,zh,Milling Machine,铣床,机械设备
+en,zh,Grinding Machine,磨床,机械设备
+en,zh,Drilling Machine,钻床,机械设备
+en,zh,CNC Machine,数控机床,机械设备
+en,zh,CNC (Computer Numerical Control),计算机数控,机械设备
+en,zh,Machining Center,加工中心,机械设备
+en,zh,Turning Center,车削中心,机械设备
+en,zh,Lathe Chuck,卡盘,机械设备
+en,zh,Tool Holder,刀架,机械设备
+en,zh,Cutting Tool,切削刀具,机械设备
+en,zh,Cutting Fluid,切削液,机械设备
+en,zh,Workpiece,工件,机械设备
+en,zh,Fixture,夹具,机械设备
+en,zh,Jig,钻模,机械设备
+en,zh,Mold,模具,机械设备
+en,zh,Die,模具,机械设备
+en,zh,Injection Molding,注塑成型,机械设备
+en,zh,Injection Molding Machine,注塑机,机械设备
+en,zh,Extrusion,挤出成型,机械设备
+en,zh,Stamping,冲压,机械设备
+en,zh,Pressing,冲压成型,机械设备
+en,zh,Forging,锻造,机械设备
+en,zh,Casting,铸造,机械设备
+en,zh,Welding,焊接,机械设备
+en,zh,Arc Welding,电弧焊,机械设备
+en,zh,TIG Welding,钨极氩弧焊,机械设备
+en,zh,MIG Welding,熔化极气体保护焊,机械设备
+en,zh,Spot Welding,点焊,机械设备
+en,zh,Laser Welding,激光焊接,机械设备
+en,zh,Soldering,钎焊,机械设备
+en,zh,Brazing,硬钎焊,机械设备
+en,zh,Bearing,轴承,机械零件
+en,zh,Ball Bearing,滚珠轴承,机械零件
+en,zh,Roller Bearing,滚子轴承,机械零件
+en,zh,Gear,齿轮,机械零件
+en,zh,Helical Gear,斜齿轮,机械零件
+en,zh,Bevel Gear,锥齿轮,机械零件
+en,zh,Worm Gear,蜗轮蜗杆,机械零件
+en,zh,Gearbox,齿轮箱,机械零件
+en,zh,Gear Ratio,传动比,机械零件
+en,zh,Transmission,传动装置,机械零件
+en,zh,Belt Drive,带传动,机械零件
+en,zh,Chain Drive,链传动,机械零件
+en,zh,Gear Drive,齿轮传动,机械零件
+en,zh,Shaft,轴,机械零件
+en,zh,Axle,车轴,机械零件
+en,zh,Spindle,主轴,机械零件
+en,zh,Coupling,联轴器,机械零件
+en,zh,Clutch,离合器,机械零件
+en,zh,Brake,制动器,机械零件
+en,zh,Spring,弹簧,机械零件
+en,zh,Coil Spring,螺旋弹簧,机械零件
+en,zh,Seal,密封件,机械零件
+en,zh,O-Ring,O型圈,机械零件
+en,zh,Gasket,垫片,机械零件
+en,zh,Piston,活塞,机械零件
+en,zh,Piston Ring,活塞环,机械零件
+en,zh,Cylinder,气缸,机械零件
+en,zh,Hydraulic Cylinder,液压缸,机械零件
+en,zh,Hydraulic System,液压系统,机械零件
+en,zh,Pneumatic System,气动系统,机械零件
+en,zh,Valve,阀门,机械零件
+en,zh,Check Valve,单向阀,机械零件
+en,zh,Solenoid Valve,电磁阀,机械零件
+en,zh,Butterfly Valve,蝶阀,机械零件
+en,zh,Ball Valve,球阀,机械零件
+en,zh,Pump,泵,机械零件
+en,zh,Centrifugal Pump,离心泵,机械零件
+en,zh,Gear Pump,齿轮泵,机械零件
+en,zh,Hydraulic Pump,液压泵,机械零件
+en,zh,Compressor,压缩机,机械零件
+en,zh,Air Compressor,空气压缩机,机械零件
+en,zh,Motor,电动机,机械零件
+en,zh,Electric Motor,电机,机械零件
+en,zh,Servo Motor,伺服电机,机械零件
+en,zh,Stepper Motor,步进电机,机械零件
+en,zh,Reducer,减速机,机械零件
+en,zh,Actuator,执行器,机械零件
+en,zh,Linear Actuator,直线执行器,机械零件
+en,zh,Conveyor,输送机,机械零件
+en,zh,Conveyor Belt,输送带,机械零件
+en,zh,Elevator,升降机,机械零件
+en,zh,Hoist,起重葫芦,机械零件
+en,zh,Crane,起重机,机械零件
+en,zh,Forklift,叉车,机械零件
+en,zh,Chain Sprocket,链轮,机械零件
+en,zh,Pulley,带轮,机械零件
+en,zh,V-Belt,三角带,机械零件
+en,zh,Fan,风扇,机械零件
+en,zh,Blower,鼓风机,机械零件
+en,zh,Impeller,叶轮,机械零件
+en,zh,Nozzle,喷嘴,机械零件
+en,zh,Hose,软管,机械零件
+en,zh,Hydraulic Hose,液压软管,机械零件
+en,zh,Tube,管材,机械零件
+en,zh,Flange,法兰,机械零件
+en,zh,Nut,螺母,机械零件
+en,zh,Bolt,螺栓,机械零件
+en,zh,Screw,螺钉,机械零件
+en,zh,Washer,垫圈,机械零件
+en,zh,Key,键,机械零件
+en,zh,Pin,销,机械零件
+en,zh,Mechanical Seal,机械密封,机械零件
+en,zh,Oil Seal,油封,机械零件
+en,zh,Dust Cover,防尘罩,机械零件
+en,zh,Guide Rail,导轨,机械零件
+en,zh,Linear Guide,直线导轨,机械零件
+en,zh,Ball Screw,滚珠丝杠,机械零件
+en,zh,Lead Screw,丝杠,机械零件
+en,zh,Chassis,底盘,机械零件
+en,zh,Frame,机架,机械零件
+en,zh,Base Plate,底板,机械零件
+en,zh,Structure,结构件,机械零件
+en,zh,Stainless Steel,不锈钢,机械材料
+en,zh,Carbon Steel,碳钢,机械材料
+en,zh,Alloy Steel,合金钢,机械材料
+en,zh,Cast Iron,铸铁,机械材料
+en,zh,Aluminum Alloy,铝合金,机械材料
+en,zh,Copper Alloy,铜合金,机械材料
+en,zh,Brass,黄铜,机械材料
+en,zh,Bronze,青铜,机械材料
+en,zh,Titanium Alloy,钛合金,机械材料
+en,zh,Plastic,塑料,机械材料
+en,zh,Engineering Plastic,工程塑料,机械材料
+en,zh,ABS (Acrylonitrile Butadiene Styrene),丙烯腈-丁二烯-苯乙烯共聚物,机械材料
+en,zh,POM (Polyoxymethylene),聚甲醛,机械材料
+en,zh,PA (Polyamide),聚酰胺（尼龙）,机械材料
+en,zh,PC (Polycarbonate),聚碳酸酯,机械材料
+en,zh,PVC (Polyvinyl Chloride),聚氯乙烯,机械材料
+en,zh,PE (Polyethylene),聚乙烯,机械材料
+en,zh,PP (Polypropylene),聚丙烯,机械材料
+en,zh,PTFE (Polytetrafluoroethylene),聚四氟乙烯,机械材料
+en,zh,Rubber,橡胶,机械材料
+en,zh,Silicone,硅胶,机械材料
+en,zh,Heat Treatment,热处理,机械工艺
+en,zh,Annealing,退火,机械工艺
+en,zh,Quenching,淬火,机械工艺
+en,zh,Tempering,回火,机械工艺
+en,zh,Normalizing,正火,机械工艺
+en,zh,Carburizing,渗碳,机械工艺
+en,zh,Nitriding,渗氮,机械工艺
+en,zh,Surface Treatment,表面处理,机械工艺
+en,zh,Anodizing,阳极氧化,机械工艺
+en,zh,Galvanizing,镀锌,机械工艺
+en,zh,Electroplating,电镀,机械工艺
+en,zh,Painting,喷漆,机械工艺
+en,zh,Powder Coating,粉末喷涂,机械工艺
+en,zh,Polishing,抛光,机械工艺
+en,zh,Blasting,喷砂,机械工艺
+en,zh,Shot Blasting,抛丸,机械工艺
+en,zh,Tolerance,公差,机械术语
+en,zh,Dimensional Tolerance,尺寸公差,机械术语
+en,zh,Fit,配合,机械术语
+en,zh,Clearance Fit,间隙配合,机械术语
+en,zh,Interference Fit,过盈配合,机械术语
+en,zh,Transition Fit,过渡配合,机械术语
+en,zh,Surface Roughness,表面粗糙度,机械术语
+en,zh,Precision,精度,机械术语
+en,zh,Accuracy,准确度,机械术语
+en,zh,RPM (Revolutions Per Minute),每分钟转数,机械术语
+en,zh,Torque,扭矩,机械术语
+en,zh,Power,功率,机械术语
+en,zh,Horsepower,马力,机械术语
+en,zh,Load,负载,机械术语
+en,zh,Maximum Load,最大负载,机械术语
+en,zh,Rated Power,额定功率,机械术语
+en,zh,Voltage,电压,机械术语
+en,zh,Current,电流,机械术语
+en,zh,Frequency,频率,机械术语
+en,zh,Phase,相数,机械术语
+en,zh,Three-Phase,三相,机械术语
+en,zh,Single-Phase,单相,机械术语
+en,zh,Industrial Standard,工业标准,机械术语
+en,zh,ISO Standard,ISO标准,机械术语
+en,zh,GB Standard,国标,机械术语
+en,zh,CE Certification,CE认证,机械术语
+en,zh,UL Certification,UL认证,机械术语
+en,zh,RoHS Compliance,RoHS合规,机械术语
+en,zh,REACH Compliance,REACH合规,机械术语
+en,zh,CE Marking,CE标志,机械术语
+en,zh,Safety Guard,安全防护罩,机械安全
+en,zh,Emergency Stop,急停,机械安全
+en,zh,Emergency Stop Button,急停按钮,机械安全
+en,zh,Safety Switch,安全开关,机械安全
+en,zh,Interlock,联锁装置,机械安全
+en,zh,Protective Cover,防护罩,机械安全
+en,zh,Safety Certificate,安全证书,机械安全
+en,zh,Machine Guard,机器防护装置,机械安全
+en,zh,Risk Assessment,风险评估,机械安全
+en,zh,Operating Manual,操作手册,机械文档
+en,zh,User Manual,用户手册,机械文档
+en,zh,Installation Manual,安装手册,机械文档
+en,zh,Maintenance Manual,维护手册,机械文档
+en,zh,Spare Parts,备件,机械文档
+en,zh,Wear Parts,易损件,机械文档
+en,zh,Consumables,耗材,机械文档
+en,zh,Warranty,保修,机械文档
+en,zh,After-Sales Service,售后服务,机械文档
+en,zh,Technical Support,技术支持,机械文档
+en,zh,Installation,安装,机械文档
+en,zh,Commissioning,调试,机械文档
+en,zh,Maintenance,维护,机械文档
+en,zh,Inspection,检验,机械文档
+en,zh,Calibration,校准,机械文档
+en,zh,Troubleshooting,故障排除,机械文档
+en,zh,Fault Diagnosis,故障诊断,机械文档
+en,zh,Spare Parts List,备件清单,机械文档
+en,zh,Drawing Number,图号,机械文档
+en,zh,Part Number,零件号,机械文档
+en,zh,Technical Drawing,技术图纸,机械文档
+en,zh,CAD Drawing,CAD图纸,机械文档
+en,zh,Schematic,原理图,机械文档
+en,zh,Assembly Drawing,装配图,机械文档

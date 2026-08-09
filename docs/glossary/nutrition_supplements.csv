@@ -1,0 +1,166 @@
+source_lang,target_lang,source_term,target_term,category
+en,zh,Vitamin A,维生素A,营养品成分
+en,zh,Vitamin B1 (Thiamine),维生素B1（硫胺素）,营养品成分
+en,zh,Vitamin B2 (Riboflavin),维生素B2（核黄素）,营养品成分
+en,zh,Vitamin B3 (Niacin),维生素B3（烟酸）,营养品成分
+en,zh,Vitamin B5 (Pantothenic Acid),维生素B5（泛酸）,营养品成分
+en,zh,Vitamin B6 (Pyridoxine),维生素B6（吡哆醇）,营养品成分
+en,zh,Vitamin B7 (Biotin),维生素B7（生物素）,营养品成分
+en,zh,Vitamin B9 (Folic Acid),维生素B9（叶酸）,营养品成分
+en,zh,Vitamin B12 (Cobalamin),维生素B12（钴胺素）,营养品成分
+en,zh,Vitamin C (Ascorbic Acid),维生素C（抗坏血酸）,营养品成分
+en,zh,Vitamin D,维生素D,营养品成分
+en,zh,Vitamin D3 (Cholecalciferol),维生素D3（胆钙化醇）,营养品成分
+en,zh,Vitamin E (Tocopherol),维生素E（生育酚）,营养品成分
+en,zh,Vitamin K,维生素K,营养品成分
+en,zh,Calcium,钙,营养品成分
+en,zh,Iron,铁,营养品成分
+en,zh,Zinc,锌,营养品成分
+en,zh,Magnesium,镁,营养品成分
+en,zh,Potassium,钾,营养品成分
+en,zh,Sodium,钠,营养品成分
+en,zh,Copper,铜,营养品成分
+en,zh,Manganese,锰,营养品成分
+en,zh,Selenium,硒,营养品成分
+en,zh,Chromium,铬,营养品成分
+en,zh,Iodine,碘,营养品成分
+en,zh,Molybdenum,钼,营养品成分
+en,zh,Phosphorus,磷,营养品成分
+en,zh,DHA (Docosahexaenoic Acid),二十二碳六烯酸,营养品成分
+en,zh,EPA (Eicosapentaenoic Acid),二十碳五烯酸,营养品成分
+en,zh,Omega-3 Fatty Acids,欧米伽-3脂肪酸,营养品成分
+en,zh,Omega-6 Fatty Acids,欧米伽-6脂肪酸,营养品成分
+en,zh,Omega-9 Fatty Acids,欧米伽-9脂肪酸,营养品成分
+en,zh,Fish Oil,鱼油,营养品成分
+en,zh,Krill Oil,磷虾油,营养品成分
+en,zh,Flaxseed Oil,亚麻籽油,营养品成分
+en,zh,Algal Oil,藻油,营养品成分
+en,zh,Coenzyme Q10,辅酶Q10,营养品成分
+en,zh,Lutein,叶黄素,营养品成分
+en,zh,Zeaxanthin,玉米黄质,营养品成分
+en,zh,Probiotics,益生菌,营养品成分
+en,zh,Prebiotics,益生元,营养品成分
+en,zh,Lactobacillus,乳酸杆菌,营养品成分
+en,zh,Bifidobacterium,双歧杆菌,营养品成分
+en,zh,Collagen,胶原蛋白,营养品成分
+en,zh,Collagen Peptides,胶原蛋白肽,营养品成分
+en,zh,Gelatin,明胶,营养品成分
+en,zh,Glucosamine,氨基葡萄糖,营养品成分
+en,zh,Chondroitin,硫酸软骨素,营养品成分
+en,zh,MSM (Methylsulfonylmethane),二甲基砜,营养品成分
+en,zh,Creatine,肌酸,营养品成分
+en,zh,BCAA (Branched-Chain Amino Acids),支链氨基酸,营养品成分
+en,zh,Whey Protein,乳清蛋白,营养品成分
+en,zh,Casein Protein,酪蛋白,营养品成分
+en,zh,Soy Protein,大豆蛋白,营养品成分
+en,zh,Pea Protein,豌豆蛋白,营养品成分
+en,zh,Melatonin,褪黑素,营养品成分
+en,zh,Ginseng,人参,营养品成分
+en,zh,Ginkgo Biloba,银杏叶提取物,营养品成分
+en,zh,Ganoderma Lucidum,灵芝,营养品成分
+en,zh,Cordyceps,冬虫夏草,营养品成分
+en,zh,Rhodiola,红景天,营养品成分
+en,zh,Ashwagandha,南非醉茄,营养品成分
+en,zh,Maca,玛卡,营养品成分
+en,zh,Green Tea Extract,绿茶提取物,营养品成分
+en,zh,EGCG (Epigallocatechin Gallate),表没食子儿茶素没食子酸酯,营养品成分
+en,zh,Grape Seed Extract,葡萄籽提取物,营养品成分
+en,zh,Resveratrol,白藜芦醇,营养品成分
+en,zh,Lycopene,番茄红素,营养品成分
+en,zh,Beta-Carotene,β-胡萝卜素,营养品成分
+en,zh,Astaxanthin,虾青素,营养品成分
+en,zh,Curcumin,姜黄素,营养品成分
+en,zh,Quercetin,槲皮素,营养品成分
+en,zh,Carnitine,左旋肉碱,营养品成分
+en,zh,L-Arginine,L-精氨酸,营养品成分
+en,zh,L-Lysine,L-赖氨酸,营养品成分
+en,zh,Taurine,牛磺酸,营养品成分
+en,zh,Inositol,肌醇,营养品成分
+en,zh,Lecithin,卵磷脂,营养品成分
+en,zh,Choline,胆碱,营养品成分
+en,zh,Alpha-Lipoic Acid,硫辛酸,营养品成分
+en,zh,Hyaluronic Acid,透明质酸,营养品成分
+en,zh,Fiber,膳食纤维,营养品成分
+en,zh,Pectin,果胶,营养品成分
+en,zh,Inulin,菊粉,营养品成分
+en,zh,Spirulina,螺旋藻,营养品成分
+en,zh,Chlorella,小球藻,营养品成分
+en,zh,Bee Pollen,蜂花粉,营养品成分
+en,zh,Royal Jelly,蜂王浆,营养品成分
+en,zh,Propolis,蜂胶,营养品成分
+en,zh,Recommended Daily Intake,每日推荐摄入量,营养品术语
+en,zh,Recommended Dietary Allowance,膳食营养素参考摄入量,营养品术语
+en,zh,Daily Value,每日参考值,营养品术语
+en,zh,Reference Intake,参考摄入量,营养品术语
+en,zh,Tolerable Upper Intake Level,可耐受最高摄入量,营养品术语
+en,zh,Supplement Facts,营养成分表,营养品术语
+en,zh,Nutrition Facts,营养标签,营养品术语
+en,zh,Ingredients List,配料表,营养品术语
+en,zh,Serving Size,食用份量,营养品术语
+en,zh,Servings Per Container,每瓶食用份数,营养品术语
+en,zh,Calories,卡路里,营养品术语
+en,zh,Total Fat,总脂肪,营养品术语
+en,zh,Saturated Fat,饱和脂肪,营养品术语
+en,zh,Trans Fat,反式脂肪,营养品术语
+en,zh,Unsaturated Fat,不饱和脂肪,营养品术语
+en,zh,Monounsaturated Fat,单不饱和脂肪,营养品术语
+en,zh,Polyunsaturated Fat,多不饱和脂肪,营养品术语
+en,zh,Cholesterol,胆固醇,营养品术语
+en,zh,Total Carbohydrates,总碳水化合物,营养品术语
+en,zh,Dietary Fiber,膳食纤维,营养品术语
+en,zh,Sugars,糖,营养品术语
+en,zh,Added Sugars,添加糖,营养品术语
+en,zh,Protein,蛋白质,营养品术语
+en,zh,Energy Value,能量值,营养品术语
+en,zh,Expiration Date,保质期,营养品术语
+en,zh,Best Before Date,最佳食用日期,营养品术语
+en,zh,Manufacturing Date,生产日期,营养品术语
+en,zh,Lot Number,批号,营养品术语
+en,zh,Dietary Supplement,膳食补充剂,营养品术语
+en,zh,Health Supplement,保健食品,营养品术语
+en,zh,Fortified,强化,营养品术语
+en,zh,Natural Flavor,天然香料,营养品术语
+en,zh,Artificial Flavor,人工香料,营养品术语
+en,zh,Preservatives,防腐剂,营养品术语
+en,zh,Additives,添加剂,营养品术语
+en,zh,Sweeteners,甜味剂,营养品术语
+en,zh,Stevia,甜菊糖苷,营养品术语
+en,zh,Aspartame,阿斯巴甜,营养品术语
+en,zh,Xylitol,木糖醇,营养品术语
+en,zh,Maltodextrin,麦芽糊精,营养品术语
+en,zh,Microcrystalline Cellulose,微晶纤维素,营养品术语
+en,zh,Magnesium Stearate,硬脂酸镁,营养品术语
+en,zh,Silicon Dioxide,二氧化硅,营养品术语
+en,zh,Capsule,胶囊,营养品剂型
+en,zh,Softgel,软胶囊,营养品剂型
+en,zh,Tablet,片剂,营养品剂型
+en,zh,Chewable Tablet,咀嚼片,营养品剂型
+en,zh,Effervescent Tablet,泡腾片,营养品剂型
+en,zh,Powder,粉剂,营养品剂型
+en,zh,Gummy,软糖,营养品剂型
+en,zh,Liquid,液体,营养品剂型
+en,zh,Drops,滴剂,营养品剂型
+en,zh,Spray,喷雾剂,营养品剂型
+en,zh,Vegetarian Capsule,素食胶囊,营养品剂型
+en,zh,Enteric-Coated,肠溶包衣,营养品剂型
+en,zh,Sustained Release,缓释,营养品剂型
+en,zh,Time-Release,定时释放,营养品剂型
+en,zh,Label Claim,标签声称,营养品法规
+en,zh,Health Claim,健康声称,营养品法规
+en,zh,Structure-Function Claim,结构功能声称,营养品法规
+en,zh,Nutritional Claim,营养声称,营养品法规
+en,zh,GRAS (Generally Recognized as Safe),公认安全,营养品法规
+en,zh,USP (United States Pharmacopeia),美国药典,营养品法规
+en,zh,FDA Registration,FDA注册,营养品法规
+en,zh,NSF Certification,NSF认证,营养品法规
+en,zh,GMP (Good Manufacturing Practice),良好生产规范,营养品法规
+en,zh,Third-Party Testing,第三方检测,营养品法规
+en,zh,Free of Gluten,无麸质,营养品宣称
+en,zh,Non-GMO,非转基因,营养品宣称
+en,zh,Organic,有机,营养品宣称
+en,zh,Vegan,纯素,营养品宣称
+en,zh,Vegetarian,素食,营养品宣称
+en,zh,Sugar-Free,无糖,营养品宣称
+en,zh,Low Sodium,低钠,营养品宣称
+en,zh,Allergen-Free,无过敏原,营养品宣称
+en,zh,Contains Nuts,含坚果,营养品宣称

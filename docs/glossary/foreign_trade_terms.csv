@@ -1,0 +1,120 @@
+source_lang,target_lang,source_term,target_term,category
+en,zh,Incoterms,国际贸易术语通则,外贸术语
+en,zh,EXW (Ex Works),工厂交货,外贸术语
+en,zh,FCA (Free Carrier),货交承运人,外贸术语
+en,zh,CPT (Carriage Paid To),运费付至,外贸术语
+en,zh,CIP (Carriage and Insurance Paid To),运费和保险费付至,外贸术语
+en,zh,DAP (Delivered at Place),目的地交货,外贸术语
+en,zh,DPU (Delivered at Place Unloaded),卸货地交货,外贸术语
+en,zh,DDP (Delivered Duty Paid),完税后交货,外贸术语
+en,zh,FAS (Free Alongside Ship),船边交货,外贸术语
+en,zh,FOB (Free on Board),船上交货,外贸术语
+en,zh,CFR (Cost and Freight),成本加运费,外贸术语
+en,zh,CIF,成本保险费加运费,外贸术语
+en,zh,Cost Insurance and Freight,成本保险费加运费,外贸术语
+en,zh,Bill of Lading,提单,外贸术语
+en,zh,Bill of Lading (B/L),海运提单,外贸术语
+en,zh,Air Waybill,空运单,外贸术语
+en,zh,Commercial Invoice,商业发票,外贸术语
+en,zh,Proforma Invoice,形式发票,外贸术语
+en,zh,Packing List,装箱单,外贸术语
+en,zh,Certificate of Origin,原产地证书,外贸术语
+en,zh,Letter of Credit,信用证,外贸术语
+en,zh,Telegraphic Transfer,电汇,外贸术语
+en,zh,Payment Terms,付款条件,外贸术语
+en,zh,Down Payment,预付款,外贸术语
+en,zh,Balance Payment,尾款,外贸术语
+en,zh,Deposit,定金,外贸术语
+en,zh,Open Account,赊账,外贸术语
+en,zh,Documents Against Payment,付款交单,外贸术语
+en,zh,Documents Against Acceptance,承兑交单,外贸术语
+en,zh,Customs Clearance,清关,外贸术语
+en,zh,Customs Duty,关税,外贸术语
+en,zh,Tariff,关税,外贸术语
+en,zh,Import Duty,进口关税,外贸术语
+en,zh,Export License,出口许可证,外贸术语
+en,zh,Import License,进口许可证,外贸术语
+en,zh,HS Code,海关编码,外贸术语
+en,zh,Harmonized System,协调制度,外贸术语
+en,zh,Incoterms 2020,国际贸易术语解释通则2020,外贸术语
+en,zh,Incoterms 2010,国际贸易术语解释通则2010,外贸术语
+en,zh,Shipping Mark,唛头,外贸术语
+en,zh,Net Weight,净重,外贸术语
+en,zh,Gross Weight,毛重,外贸术语
+en,zh,CBM (Cubic Meter),立方米,外贸术语
+en,zh,Cubic Meter,立方米,外贸术语
+en,zh,Container Load,整柜,外贸术语
+en,zh,Full Container Load,整箱装运,外贸术语
+en,zh,Less Than Container Load,拼箱装运,外贸术语
+en,zh,Demurrage,滞箱费,外贸术语
+en,zh,Detention,超期使用费,外贸术语
+en,zh,Insurance Premium,保险费,外贸术语
+en,zh,Forwarder,货代,外贸术语
+en,zh,Freight Forwarder,货运代理,外贸术语
+en,zh,Inspection Certificate,检验证书,外贸术语
+en,zh,Quality Inspection,质检,外贸术语
+en,zh,Third Party Inspection,第三方验货,外贸术语
+en,zh,Sample Order,样品单,外贸术语
+en,zh,Trial Order,试单,外贸术语
+en,zh,Bulk Order,大货订单,外贸术语
+en,zh,Repeat Order,翻单,外贸术语
+en,zh,Minimum Order Quantity,最小起订量,外贸术语
+en,zh,Lead Time,交期,外贸术语
+en,zh,Production Lead Time,生产周期,外贸术语
+en,zh,Delivery Time,交货时间,外贸术语
+en,zh,Time of Delivery,交货期,外贸术语
+en,zh,Port of Loading,装运港,外贸术语
+en,zh,Port of Discharge,卸货港,外贸术语
+en,zh,Destination Port,目的港,外贸术语
+en,zh,Place of Delivery,交货地点,外贸术语
+en,zh,Incoterms Clause,贸易术语条款,外贸术语
+en,zh,Charter Party,租船合同,外贸术语
+en,zh,Partial Shipment,分批装运,外贸术语
+en,zh,Transshipment,转运,外贸术语
+en,zh,Direct Shipment,直运,外贸术语
+en,zh,ETA (Estimated Time of Arrival),预计到达时间,外贸术语
+en,zh,ETD (Estimated Time of Departure),预计离港时间,外贸术语
+en,zh,Consignee,收货人,外贸术语
+en,zh,Shipper,发货人,外贸术语
+en,zh,Notify Party,通知方,外贸术语
+en,zh,Beneficiary,受益人,外贸术语
+en,zh,Issuing Bank,开证行,外贸术语
+en,zh,Confirming Bank,保兑行,外贸术语
+en,zh,Draft,汇票,外贸术语
+en,zh,Bill of Exchange,汇票,外贸术语
+en,zh,Currency of Settlement,结算货币,外贸术语
+en,zh,Exchange Rate,汇率,外贸术语
+en,zh,Anti-dumping Duty,反倾销税,外贸术语
+en,zh,Value Added Tax,增值税,外贸术语
+en,zh,Free Trade Agreement,自由贸易协定,外贸术语
+en,zh,Trade Barrier,贸易壁垒,外贸术语
+en,zh,Non-tariff Barrier,非关税壁垒,外贸术语
+en,zh,CE Marking,CE标志,外贸术语
+en,zh,Declaration Form,报关单,外贸术语
+en,zh,Export Declaration,出口报关,外贸术语
+en,zh,Import Declaration,进口报关,外贸术语
+en,zh,Commodity Inspection,商检,外贸术语
+en,zh,Inspection and Quarantine,检验检疫,外贸术语
+en,zh,Sanitary Certificate,卫生证书,外贸术语
+en,zh,Phytosanitary Certificate,植物检疫证书,外贸术语
+en,zh,Fumigation Certificate,熏蒸证书,外贸术语
+en,zh,Health Certificate,健康证书,外贸术语
+en,zh,Insurance Certificate,保险凭证,外贸术语
+en,zh,Marine Insurance,海运保险,外贸术语
+en,zh,Cargo Insurance,货物保险,外贸术语
+en,zh,All Risks,一切险,外贸术语
+en,zh,With Average,水渍险,外贸术语
+en,zh,Free From Particular Average,平安险,外贸术语
+en,zh,Force Majeure,不可抗力,外贸术语
+en,zh,Arbitration,仲裁,外贸术语
+en,zh,Dispute Resolution,争议解决,外贸术语
+en,zh,Settlement of Disputes,争议解决,外贸术语
+en,zh,Contract of Sale,销售合同,外贸术语
+en,zh,Purchase Order,采购订单,外贸术语
+en,zh,Sales Confirmation,销售确认书,外贸术语
+en,zh,Terms and Conditions,条款与条件,外贸术语
+en,zh,Incoterms Group,贸易术语组别,外贸术语
+en,zh,Free Trade Zone,自由贸易区,外贸术语
+en,zh,Duty Free,免税,外贸术语
+en,zh,Tax Refund,退税,外贸术语
+en,zh,Export Rebate,出口退税,外贸术语

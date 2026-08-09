@@ -1,0 +1,177 @@
+source_lang,target_lang,source_term,target_term,category
+en,zh,E-commerce,电子商务,电商术语
+en,zh,Online Store,网店,电商术语
+en,zh,Marketplace,电商平台,电商术语
+en,zh,B2B (Business to Business),企业对企业,电商术语
+en,zh,B2C (Business to Consumer),企业对消费者,电商术语
+en,zh,C2C (Consumer to Consumer),消费者对消费者,电商术语
+en,zh,Cross-border E-commerce,跨境电商,电商术语
+en,zh,Listing,商品上架,电商术语
+en,zh,Product Listing,商品列表,电商术语
+en,zh,SKU (Stock Keeping Unit),库存量单位,电商术语
+en,zh,SKU,单品编码,电商术语
+en,zh,ASIN (Amazon Standard Identification Number),亚马逊标准识别号,电商术语
+en,zh,UPC (Universal Product Code),通用产品代码,电商术语
+en,zh,EAN (European Article Number),欧洲商品编码,电商术语
+en,zh,GTIN (Global Trade Item Number),全球贸易项目代码,电商术语
+en,zh,MPN (Manufacturer Part Number),制造商零件编号,电商术语
+en,zh,Product Title,商品标题,电商术语
+en,zh,Product Description,商品描述,电商术语
+en,zh,Bullet Points,商品卖点,电商术语
+en,zh,Product Image,商品图片,电商术语
+en,zh,Main Image,主图,电商术语
+en,zh,Product Attributes,商品属性,电商术语
+en,zh,Product Variation,商品变体,电商术语
+en,zh,Product Variant,商品款式,电商术语
+en,zh,Category,类目,电商术语
+en,zh,Subcategory,子类目,电商术语
+en,zh,Search Term,搜索词,电商术语
+en,zh,Keyword,关键词,电商术语
+en,zh,Product Search,商品搜索,电商术语
+en,zh,Search Ranking,搜索排名,电商术语
+en,zh,Search Engine Optimization,搜索引擎优化,电商术语
+en,zh,Sponsored Product,赞助商品广告,电商术语
+en,zh,PPC (Pay Per Click),按点击付费,电商术语
+en,zh,Conversion Rate,转化率,电商术语
+en,zh,Conversion,转化,电商术语
+en,zh,Click-Through Rate,点击率,电商术语
+en,zh,Impressions,曝光量,电商术语
+en,zh,Views,浏览量,电商术语
+en,zh,Page Views,页面浏览量,电商术语
+en,zh,Traffic,流量,电商术语
+en,zh,Organic Traffic,自然流量,电商术语
+en,zh,Return on Investment,投资回报率,电商术语
+en,zh,Cart Abandonment,购物车放弃,电商术语
+en,zh,Add to Cart,加入购物车,电商术语
+en,zh,Checkout,结账,电商术语
+en,zh,Payment,支付,电商术语
+en,zh,Online Payment,在线支付,电商术语
+en,zh,PayPal,贝宝,电商术语
+en,zh,Payment Gateway,支付网关,电商术语
+en,zh,Refund,退款,电商术语
+en,zh,Return,退货,电商术语
+en,zh,Return Policy,退货政策,电商术语
+en,zh,Exchange,换货,电商术语
+en,zh,Shipping,配送,电商术语
+en,zh,Free Shipping,包邮,电商术语
+en,zh,Shipping Cost,运费,电商术语
+en,zh,Shipping Fee,配送费,电商术语
+en,zh,Delivery Time,配送时间,电商术语
+en,zh,Tracking Number,物流单号,电商术语
+en,zh,Order Tracking,订单跟踪,电商术语
+en,zh,Estimated Delivery,预计送达,电商术语
+en,zh,Fulfillment,订单履约,电商术语
+en,zh,FBA (Fulfillment by Amazon),亚马逊物流,电商术语
+en,zh,Third-Party Logistics,第三方物流,电商术语
+en,zh,Warehouse,仓库,电商术语
+en,zh,Inventory,库存,电商术语
+en,zh,Stock,库存,电商术语
+en,zh,Out of Stock,缺货,电商术语
+en,zh,In Stock,有货,电商术语
+en,zh,Backorder,缺货登记,电商术语
+en,zh,Reorder Point,再订货点,电商术语
+en,zh,Inventory Management,库存管理,电商术语
+en,zh,Order,订单,电商术语
+en,zh,Order Status,订单状态,电商术语
+en,zh,Pending Order,待处理订单,电商术语
+en,zh,Shipped Order,已发货订单,电商术语
+en,zh,Delivered,已送达,电商术语
+en,zh,Cancelled Order,已取消订单,电商术语
+en,zh,Order Confirmation,订单确认,电商术语
+en,zh,Order Fulfillment,订单履行,电商术语
+en,zh,Invoice,发票,电商术语
+en,zh,Receipt,收据,电商术语
+en,zh,Discount,折扣,电商术语
+en,zh,Coupon,优惠券,电商术语
+en,zh,Promotion,促销,电商术语
+en,zh,Flash Sale,限时秒杀,电商术语
+en,zh,Limited-Time Offer,限时优惠,电商术语
+en,zh,Bundle,捆绑销售,电商术语
+en,zh,Wholesale,批发,电商术语
+en,zh,Retail Price,零售价,电商术语
+en,zh,Wholesale Price,批发价,电商术语
+en,zh,List Price,标价,电商术语
+en,zh,Unit Price,单价,电商术语
+en,zh,Total Price,总价,电商术语
+en,zh,Seller,卖家,电商术语
+en,zh,Buyer,买家,电商术语
+en,zh,Supplier,供应商,电商术语
+en,zh,Vendor,供货商,电商术语
+en,zh,Storefront,店铺首页,电商术语
+en,zh,Shop,店铺,电商术语
+en,zh,Shop Name,店铺名,电商术语
+en,zh,Customer Service,客服,电商术语
+en,zh,Customer Review,顾客评价,电商术语
+en,zh,Product Review,商品评价,电商术语
+en,zh,Rating,评分,电商术语
+en,zh,Star Rating,星级评分,电商术语
+en,zh,Feedback,反馈,电商术语
+en,zh,Seller Rating,卖家评分,电商术语
+en,zh,Verified Purchase,已认证购买,电商术语
+en,zh,Amazon Prime,亚马逊Prime会员,电商术语
+en,zh,Prime Delivery,Prime配送,电商术语
+en,zh,Best Seller,热卖品,电商术语
+en,zh,Top Rated,好评榜,电商术语
+en,zh,New Arrival,新品,电商术语
+en,zh,Featured Product,推荐商品,电商术语
+en,zh,Recommended Products,推荐商品,电商术语
+en,zh,Related Products,相关商品,电商术语
+en,zh,Customer Also Bought,购买此商品的顾客也购买,电商术语
+en,zh,Recently Viewed,最近浏览,电商术语
+en,zh,Wishlist,心愿单,电商术语
+en,zh,Shopping Cart,购物车,电商术语
+en,zh,Product Catalog,产品目录,电商术语
+en,zh,Price Comparison,比价,电商术语
+en,zh,Flash Deal,秒杀,电商术语
+en,zh,Group Buying,团购,电商术语
+en,zh,Live Streaming E-commerce,直播电商,电商术语
+en,zh,Influencer Marketing,网红营销,电商术语
+en,zh,Social Commerce,社交电商,电商术语
+en,zh,Shopify,电商建站平台,电商术语
+en,zh,Amazon Seller Central,亚马逊卖家中心,电商术语
+en,zh,Alibaba,阿里巴巴,电商术语
+en,zh,Alibaba International Station,阿里巴巴国际站,电商术语
+en,zh,Made in China,中国制造网,电商术语
+en,zh,Global Sources,环球资源,电商术语
+en,zh,Trade Assurance,贸易保障,电商术语
+en,zh,Golden Supplier,金牌供应商,电商术语
+en,zh,Verified Supplier,认证供应商,电商术语
+en,zh,Product Qualification,产品资质,电商术语
+en,zh,Quality Control,质量控制,电商术语
+en,zh,QC Report,质检报告,电商术语
+en,zh,Sample,样品,电商术语
+en,zh,Free Sample,免费样品,电商术语
+en,zh,Sample Fee,样品费,电商术语
+en,zh,Customization,定制,电商术语
+en,zh,OEM (Original Equipment Manufacturer),贴牌生产,电商术语
+en,zh,ODM (Original Design Manufacturer),原始设计制造商,电商术语
+en,zh,Private Label,自有品牌,电商术语
+en,zh,Brand,品牌,电商术语
+en,zh,Trademark,商标,电商术语
+en,zh,Copyright,版权,电商术语
+en,zh,Patent,专利,电商术语
+en,zh,Design Patent,外观设计专利,电商术语
+en,zh,Utility Patent,实用新型专利,电商术语
+en,zh,Infringement,侵权,电商术语
+en,zh,Intellectual Property,知识产权,电商术语
+en,zh,IP Protection,知识产权保护,电商术语
+en,zh,Suspension,账号封禁,电商术语
+en,zh,Account Suspension,账号停用,电商术语
+en,zh,Performance Metrics,绩效指标,电商术语
+en,zh,ODR (Order Defect Rate),订单缺陷率,电商术语
+en,zh,Return Rate,退货率,电商术语
+en,zh,Dispute,纠纷,电商术语
+en,zh,A-to-Z Claim,亚马逊A-to-Z索赔,电商术语
+en,zh,Case,投诉案件,电商术语
+en,zh,Chargeback,拒付,电商术语
+en,zh,Feedback Score,反馈评分,电商术语
+en,zh,Account Health,账号健康度,电商术语
+en,zh,Listing Suspension,商品下架,电商术语
+en,zh,Product Removal,商品移除,电商术语
+en,zh,Policy Violation,政策违规,电商术语
+en,zh,Restricted Product,受限商品,电商术语
+en,zh,Prohibited Product,禁售商品,电商术语
+en,zh,Compliance,合规,电商术语
+en,zh,Product Safety,产品安全,电商术语
+en,zh,Product Liability,产品责任,电商术语
+en,zh,Import/Export License,进出口许可证,电商术语

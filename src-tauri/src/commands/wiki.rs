@@ -146,3 +146,38 @@ pub async fn wiki_apply_plan(
     let svc = WikiService::new(state.db.clone());
     svc.apply_plan(&wiki_id, &plan).await
 }
+
+/// §10.1.1 导入文件 + 自动入库：复制到 raw/ 并返回文本内容（入库决策由前端/调用方定）
+#[tauri::command]
+pub async fn wiki_ingest_ai(
+    state: State<'_, crate::AppState>,
+    wiki_id: String,
+    file_path: String,
+) -> Result<serde_json::Value, AppError> {
+    let svc = WikiService::new(state.db.clone());
+    let content = svc.ingest_file(&wiki_id, &file_path).await?;
+    Ok(serde_json::json!({ "content": content, "imported_to": "raw/" }))
+}
+
+/// §10.1.1 从 .trash 恢复已删页面
+#[tauri::command]
+pub async fn wiki_restore_trash(
+    state: State<'_, crate::AppState>,
+    wiki_id: String,
+    path: String,
+) -> Result<(), AppError> {
+    let svc = WikiService::new(state.db.clone());
+    svc.restore_trash(&wiki_id, &path).await
+}
+
+/// §10.1.1 打开页面：返回页面完整路径（供前端查看器跳转）
+#[tauri::command]
+pub async fn wiki_open_page(
+    state: State<'_, crate::AppState>,
+    wiki_id: String,
+    path: String,
+) -> Result<serde_json::Value, AppError> {
+    let svc = WikiService::new(state.db.clone());
+    let content = svc.read_page(&wiki_id, &path).await?;
+    Ok(serde_json::json!({ "wiki_id": wiki_id, "path": path, "content": content }))
+}

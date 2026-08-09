@@ -20,15 +20,13 @@ const BATCH_CONCURRENCY: usize = 4;
 
 pub struct TranslateService {
     pub pool: SqlitePool,
-    cache: tokio::sync::Mutex<HashMap<String, (String, i64)>>,
+    cache: Arc<tokio::sync::Mutex<HashMap<String, (String, i64)>>>,
 }
 
 impl TranslateService {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self {
-            pool,
-            cache: tokio::sync::Mutex::new(HashMap::new()),
-        }
+    /// 传入共享缓存（AppState 持有），保证跨 IPC 调用缓存生效
+    pub fn new(pool: SqlitePool, cache: Arc<tokio::sync::Mutex<HashMap<String, (String, i64)>>>) -> Self {
+        Self { pool, cache }
     }
 
     pub async fn translate(
@@ -53,15 +51,12 @@ impl TranslateService {
         let cache_key = format!("{text}|{source_lang}|{target}");
         let now = Utc::now().timestamp();
         if text.chars().count() <= 500 {
-            let cache = self.cache.lock().await;
-            if let Some((hit, ts)) = cache.get(&cache_key) {
-                if now - *ts < CACHE_TTL_SECS {
-                    return Ok(TranslateResult {
-                        translated: hit.clone(),
-                        source_lang,
-                        from_cache: true,
-                    });
-                }
+            if let Some(hit) = self.cache_get(&cache_key).await {
+                return Ok(TranslateResult {
+                    translated: hit,
+                    source_lang,
+                    from_cache: true,
+                });
             }
         }
 
@@ -92,7 +87,7 @@ impl TranslateService {
         // 5. 写历史 + 缓存
         self.insert_history(text, &source_lang, target, &cleaned, &display).await?;
         if text.chars().count() <= 500 {
-            self.cache.lock().await.insert(cache_key, (cleaned.clone(), now));
+            self.cache_put(&cache_key, cleaned.clone(), now).await;
         }
 
         Ok(TranslateResult {
@@ -100,6 +95,21 @@ impl TranslateService {
             source_lang,
             from_cache: false,
         })
+    }
+
+    /// 缓存读取（TTL 校验）
+    async fn cache_get(&self, key: &str) -> Option<String> {
+        let now = Utc::now().timestamp();
+        let cache = self.cache.lock().await;
+        match cache.get(key) {
+            Some((hit, ts)) if now - *ts < CACHE_TTL_SECS => Some(hit.clone()),
+            _ => None,
+        }
+    }
+
+    /// 缓存写入
+    async fn cache_put(&self, key: &str, value: String, ts: i64) {
+        self.cache.lock().await.insert(key.to_string(), (value, ts));
     }
 
     /// 批量翻译：并发执行（限并发 4），保持输入顺序
@@ -111,16 +121,18 @@ impl TranslateService {
     ) -> Result<Vec<TranslateResult>, AppError> {
         let sem = Arc::new(Semaphore::new(BATCH_CONCURRENCY));
         let pool = self.pool.clone();
+        let cache = self.cache.clone();
         let mut handles = Vec::with_capacity(texts.len());
         for t in texts {
             let sem = sem.clone();
             let pool = pool.clone();
+            let cache = cache.clone();
             let t = t.clone();
             let source = source.map(String::from);
             let target = target.to_string();
             handles.push(tokio::spawn(async move {
                 let _permit = sem.acquire().await.map_err(|_| AppError::Internal("信号量错误".into()))?;
-                let svc = TranslateService::new(pool);
+                let svc = TranslateService::new(pool, cache);
                 svc.translate(&t, source.as_deref(), &target, None).await
             }));
         }
@@ -260,10 +272,16 @@ impl TranslateService {
                 .bind(offset)
                 .fetch_all(&self.pool)
                 .await?;
+                // total 必须是 MATCH 命中的行数，而非整表计数（回归：搜索时 total 虚高）
                 let count_row: (i64,) =
-                    sqlx::query_as("SELECT COUNT(*) FROM translate_history")
-                        .fetch_one(&self.pool)
-                        .await?;
+                    sqlx::query_as(
+                        "SELECT COUNT(*) FROM translate_history th
+                         JOIN translate_fts fts ON th.rowid = fts.rowid
+                         WHERE translate_fts MATCH ?"
+                    )
+                    .bind(q)
+                    .fetch_one(&self.pool)
+                    .await?;
                 (rows, count_row.0)
             } else {
                 let rows = sqlx::query_as::<_, crate::data::models::TranslateHistoryRow>(
@@ -566,5 +584,59 @@ mod tests {
     fn detect_zh_en() {
         assert_eq!(detect_language_simple("今天天气很好").0, "zh");
         assert_eq!(detect_language_simple("hello world this is a test").0, "en");
+    }
+
+    /// 共享缓存跨服务实例生效（回归：缓存之前随服务实例销毁而失效）
+    #[tokio::test]
+    async fn shared_cache_hit_across_instances() {
+        let cache: Arc<tokio::sync::Mutex<HashMap<String, (String, i64)>>> =
+            Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+        let now = chrono::Utc::now().timestamp();
+
+        let key = "hello|auto|zh".to_string();
+        // 实例 A 写入
+        {
+            let mut guard = cache.lock().await;
+            guard.insert(key.clone(), ("你好".to_string(), now));
+        }
+
+        // 实例 B（新 TranslateService，但共享同一 Arc cache）读取命中
+        let db_dir = std::env::temp_dir().join(format!("prism_tr_cache_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&db_dir).await.unwrap();
+        let svc_b = TranslateService::new(db.pool.clone(), cache.clone());
+        let hit = svc_b.cache_get(&key).await;
+        assert_eq!(hit.as_deref(), Some("你好"), "共享缓存跨实例必须命中");
+        let _ = std::fs::remove_dir_all(&db_dir);
+    }
+
+    /// FTS 搜索 total 统计（回归：之前 total 用整表计数，搜索时虚高）
+    #[tokio::test]
+    async fn history_search_total_counts_matches_only() {
+        let db_dir = std::env::temp_dir().join(format!("prism_tr_fts_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&db_dir).await.unwrap();
+        let cache: Arc<tokio::sync::Mutex<HashMap<String, (String, i64)>>> =
+            Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+        let svc = TranslateService::new(db.pool.clone(), cache);
+        let now = chrono::Utc::now().timestamp_millis();
+
+        // 2 条历史：1 条含 "kubernetes"，1 条不含
+        for (i, (src, trans)) in [("hello kubernetes world", "你好 kubernetes 世界"), ("apple pie", "苹果派")].iter().enumerate() {
+            let id = uuid::Uuid::new_v4().to_string();
+            sqlx::query(
+                "INSERT INTO translate_history (id, source_text, source_lang, target_lang, translated, created_at) VALUES (?1, ?2, 'en', 'zh', ?3, ?4)"
+            )
+            .bind(&id).bind(src).bind(trans).bind(now + i as i64)
+            .execute(&db.pool).await.unwrap();
+        }
+
+        let result = svc.history(Some("kubernetes"), Some(10), Some(0)).await.unwrap();
+        assert_eq!(result.items.len(), 1, "只应命中 1 条");
+        assert_eq!(result.total, 1, "total 必须是命中数而非整表计数");
+
+        // 无搜索：total = 整表 2
+        let all = svc.history(None, Some(10), Some(0)).await.unwrap();
+        assert_eq!(all.total, 2);
+
+        let _ = std::fs::remove_dir_all(&db_dir);
     }
 }

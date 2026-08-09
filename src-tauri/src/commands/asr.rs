@@ -194,6 +194,10 @@ pub async fn meeting_start_recording(
     // 先建 stream（ASR 消费端）——时序规避核心
     let rx = streams.create_stream(&id).await;
 
+    // 状态机：idle → recording
+    let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
+    svc.set_status(&id, "recording").await?;
+
     // 事件回调 → 增量落库 + 前端事件（meeting:transcript 实时转录）
     let db = state.db.clone();
     let app_handle = app.clone();
@@ -236,6 +240,7 @@ pub async fn meeting_start_recording(
 }
 
 /// 推送音频块（前端 Web Audio API → IPC）
+/// 双写：① recording.wav 落盘（供离线二次转写/换模型重转）② 推给 ASR 流
 #[tauri::command]
 pub async fn meeting_audio_chunk(
     state: State<'_, crate::AppState>,
@@ -247,13 +252,20 @@ pub async fn meeting_audio_chunk(
     let pcm = base64::engine::general_purpose::STANDARD
         .decode(pcm_base64.trim())
         .map_err(|e| AppError::Validation(format!("PCM base64 解码失败: {e}")))?;
+    // 双写 ①：录音文件
+    let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
+    if let Err(e) = svc.append_recording(&meeting_id, &pcm).await {
+        tracing::warn!("[ASR] 录音双写失败（不影响实时转写）: {e}");
+    }
+    // 双写 ②：ASR 流
     streams.push_chunk(&meeting_id, pcm).await?;
     Ok(())
 }
 
-/// 停止录音：移除音频流 + 落库最终转写
+/// 停止录音：移除音频流 + 落库最终转写 + 状态机 recording/paused → ready
 #[tauri::command]
 pub async fn meeting_stop_recording(
+    app: tauri::AppHandle,
     state: State<'_, crate::AppState>,
     id: String,
 ) -> Result<serde_json::Value, AppError> {
@@ -267,7 +279,68 @@ pub async fn meeting_stop_recording(
         .bind(&id)
         .execute(&state.db.pool)
         .await?;
+    // 状态机：recording/paused → ready（停止即定稿）
+    svc.set_status(&id, "ready").await?;
+    let _ = app.emit("meeting:status", serde_json::json!({
+        "meeting_id": id,
+        "status": "ready",
+    }));
     Ok(serde_json::json!({ "transcript": transcript }))
+}
+
+/// 暂停录音（§10.3 状态机）：recording → paused，音频流保留，前端停止采集
+#[tauri::command]
+pub async fn meeting_pause_recording(
+    app: tauri::AppHandle,
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<(), AppError> {
+    let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
+    svc.pause(&id).await?;
+    let _ = app.emit("meeting:status", serde_json::json!({
+        "meeting_id": id,
+        "status": "paused",
+    }));
+    Ok(())
+}
+
+/// 恢复录音（§10.3 状态机）：paused → recording
+#[tauri::command]
+pub async fn meeting_resume_recording(
+    app: tauri::AppHandle,
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<(), AppError> {
+    let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
+    svc.resume(&id).await?;
+    let _ = app.emit("meeting:status", serde_json::json!({
+        "meeting_id": id,
+        "status": "recording",
+    }));
+    Ok(())
+}
+
+/// 取消录音（§10.3 状态机）：任意状态 → cancelled，丢弃音频流并清理转写
+#[tauri::command]
+pub async fn meeting_cancel_recording(
+    app: tauri::AppHandle,
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<(), AppError> {
+    let streams = get_streams(&state).await;
+    streams.drop_stream(&id).await;
+    let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
+    svc.cancel(&id).await?;
+    // 清理已落库的转写片段（取消 = 本次录音作废）
+    sqlx::query("DELETE FROM meeting_transcripts WHERE meeting_id = ?")
+        .bind(&id)
+        .execute(&state.db.pool)
+        .await?;
+    let _ = app.emit("meeting:status", serde_json::json!({
+        "meeting_id": id,
+        "status": "cancelled",
+    }));
+    Ok(())
 }
 
 async fn get_streams(state: &State<'_, crate::AppState>) -> SharedAudioStreams {

@@ -24,6 +24,8 @@ pub struct AppState {
     pub audio_streams: std::sync::Arc<AudioStreamManager>,
     pub session_state: std::sync::Arc<SessionStateManager>,
     pub loop_scheduler: std::sync::Arc<LoopScheduler>,
+    /// 翻译短文本缓存（跨 IPC 调用共享，<500 字符，TTL 24h）
+    pub translate_cache: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -71,6 +73,7 @@ pub fn run() {
                 audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
                 session_state: std::sync::Arc::new(SessionStateManager::new()),
                 loop_scheduler: std::sync::Arc::new(LoopScheduler::new()),
+                translate_cache: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
             });
             Ok(())
         })
@@ -174,6 +177,9 @@ pub fn run() {
             commands::wiki::wiki_search,
             commands::wiki::wiki_write_ai,
             commands::wiki::wiki_apply_plan,
+            commands::wiki::wiki_ingest_ai,
+            commands::wiki::wiki_restore_trash,
+            commands::wiki::wiki_open_page,
             commands::translate::translate_translate,
             commands::translate::translate_batch,
             commands::translate::translate_file,
@@ -184,7 +190,10 @@ pub fn run() {
             commands::glossary::glossary_list,
             commands::glossary::glossary_add,
             commands::glossary::glossary_remove,
+            commands::glossary::glossary_update,
             commands::glossary::glossary_import_csv,
+            commands::glossary::glossary_builtin_list,
+            commands::glossary::glossary_import_builtin,
             commands::ocr::ocr_recognize,
             commands::ocr::ocr_providers,
             commands::meeting::meeting_create,
@@ -212,6 +221,9 @@ pub fn run() {
             commands::asr::meeting_start_recording,
             commands::asr::meeting_audio_chunk,
             commands::asr::meeting_stop_recording,
+            commands::asr::meeting_pause_recording,
+            commands::asr::meeting_resume_recording,
+            commands::asr::meeting_cancel_recording,
             commands::trace::trace_list,
             commands::trace::trace_grade,
             commands::router::router_route,

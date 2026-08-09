@@ -26,6 +26,11 @@
 	let showGlossary = $state(false);
 	let newTerm = $state({ source_lang: 'zh', target_lang: 'en', source_term: '', target_term: '', category: '' });
 
+	// 内置词库一键导入
+	let builtinGlossaries = $state<{ file: string; label: string; description: string }[]>([]);
+	let importingFile = $state('');
+	let importMessage = $state<{ ok: boolean; text: string } | null>(null);
+
 	// OCR
 	let ocrText = $state('');
 	let ocrImage = $state('');
@@ -108,7 +113,8 @@
 		reader.onload = async () => {
 			ocrImage = reader.result as string;
 			try {
-				const result = await ocrApi.recognize(file.name);
+				// 传 data URL（WebView 的 file.name 不是磁盘路径，后端无法读取）
+				const result = await ocrApi.recognize(undefined, reader.result as string);
 				ocrText = result.text;
 				ocrLang = result.lang;
 			} catch (e) { console.error(e); ocrText = '识别失败'; }
@@ -117,7 +123,28 @@
 	}
 
 	function toggleHistory() { showHistory = !showHistory; if (showHistory) loadHistory(); }
-	function toggleGlossary() { showGlossary = !showGlossary; if (showGlossary) loadGlossary(); }
+	function toggleGlossary() { showGlossary = !showGlossary; if (showGlossary) { loadGlossary(); loadBuiltin(); } }
+
+	// ── 内置词库一键导入 ──────────────────────────────
+	async function loadBuiltin() {
+		try {
+			builtinGlossaries = await glossaryApi.builtinList();
+		} catch (e) { console.error(e); }
+	}
+
+	async function importBuiltin(file: string) {
+		if (importingFile) return;
+		importingFile = file;
+		importMessage = null;
+		try {
+			const res = await glossaryApi.importBuiltin(file);
+			importMessage = { ok: true, text: `「${file}」导入完成：成功 ${res.imported} 条` };
+			await loadGlossary();
+		} catch (e) {
+			importMessage = { ok: false, text: `导入失败：${e}` };
+		}
+		importingFile = '';
+	}
 </script>
 
 <div class="page">
@@ -232,6 +259,37 @@
 				<input placeholder="译文" bind:value={newTerm.target_term} aria-label="译文" />
 				<button class="btn-primary" onclick={addTerm}>添加</button>
 			</div>
+
+			<!-- 内置词库一键导入 -->
+			<div class="builtin-section">
+				<div class="builtin-title">内置词库一键导入</div>
+				{#if builtinGlossaries.length === 0}
+					<div class="empty">未发现内置词库（打包资源缺失）</div>
+				{:else}
+					<div class="builtin-list">
+						{#each builtinGlossaries as g}
+							<div class="builtin-item">
+								<div class="builtin-info">
+									<span class="builtin-label">{g.label}</span>
+									<span class="builtin-desc">{g.description}</span>
+								</div>
+								<button
+									class="btn-import"
+									onclick={() => importBuiltin(g.file)}
+									disabled={importingFile !== ''}
+									aria-label={`导入${g.label}`}
+								>
+									{importingFile === g.file ? '导入中...' : '一键导入'}
+								</button>
+							</div>
+						{/each}
+					</div>
+					{#if importMessage}
+						<div class="import-msg" class:error={!importMessage.ok}>{importMessage.text}</div>
+					{/if}
+				{/if}
+			</div>
+
 			<div class="term-list">
 				{#each terms as t}
 					<div class="term-item">
@@ -306,6 +364,19 @@
 	.lang-badge { font-size: 10px; background: var(--color-accent); color: #fff; padding: 2px 4px; border-radius: 3px; }
 	.term-form { display: flex; gap: 8px; margin-bottom: 12px; }
 	.term-form input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 13px; outline: none; }
+
+	/* 内置词库一键导入 */
+	.builtin-section { border: 1px dashed var(--color-separator); border-radius: 8px; padding: 10px; margin-bottom: 12px; background: var(--color-bg); }
+	.builtin-title { font-size: 12px; font-weight: 600; color: var(--color-fg-secondary); margin-bottom: 8px; }
+	.builtin-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+	.builtin-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: var(--color-bg-secondary); }
+	.builtin-info { display: flex; flex-direction: column; min-width: 0; }
+	.builtin-label { font-size: 13px; color: var(--color-fg); font-weight: 500; }
+	.builtin-desc { font-size: 11px; color: var(--color-fg-tertiary); }
+	.btn-import { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; border: none; background: var(--color-accent); color: #fff; font-size: 12px; cursor: pointer; }
+	.btn-import:disabled { opacity: 0.5; cursor: not-allowed; }
+	.import-msg { margin-top: 8px; font-size: 12px; color: var(--color-accent); }
+	.import-msg.error { color: var(--color-red); }
 	.term-item span { flex: 1; font-size: 13px; color: var(--color-fg); }
 	.empty { text-align: center; padding: 24px; color: var(--color-fg-secondary); font-size: 13px; }
 

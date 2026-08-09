@@ -320,6 +320,12 @@ export const wikiApi = {
 		invoke<{ plan: WikiWritePlan }>('wiki_write_ai', { wikiId, info, preview }),
 	applyPlan: (wikiId: string, plan: WikiWritePlan) =>
 		invoke<WikiWriteResult>('wiki_apply_plan', { wikiId, plan }),
+	ingestAi: (wikiId: string, filePath: string) =>
+		invoke<{ content: string; imported_to: string }>('wiki_ingest_ai', { wikiId, filePath }),
+	restoreTrash: (wikiId: string, path: string) =>
+		invoke<void>('wiki_restore_trash', { wikiId, path }),
+	openPage: (wikiId: string, path: string) =>
+		invoke<{ wiki_id: string; path: string; content: string }>('wiki_open_page', { wikiId, path }),
 };
 
 export interface WikiOp {
@@ -435,6 +441,7 @@ export interface MeetingDto {
 	summary: string;
 	participants: string[];
 	recording_duration: number;
+	status: string;
 	created_at: number;
 	updated_at: number;
 }
@@ -526,6 +533,12 @@ export const asrApi = {
 		invoke<void>('meeting_audio_chunk', { meetingId, pcmBase64 }),
 	stopRecording: (id: string) =>
 		invoke<{ transcript: string }>('meeting_stop_recording', { id }),
+	pauseRecording: (id: string) =>
+		invoke<void>('meeting_pause_recording', { id }),
+	resumeRecording: (id: string) =>
+		invoke<void>('meeting_resume_recording', { id }),
+	cancelRecording: (id: string) =>
+		invoke<void>('meeting_cancel_recording', { id }),
 };
 
 export interface AsrConfigInputDto {
@@ -604,13 +617,19 @@ export const glossaryApi = {
 	add: (term: Omit<GlossaryTermDto, 'id' | 'enabled'>) =>
 		invoke<void>('glossary_add', { term }),
 	remove: (id: string) => invoke<void>('glossary_remove', { id }),
+	update: (id: string, term: Omit<GlossaryTermDto, 'id' | 'enabled'>) =>
+		invoke<void>('glossary_update', { id, term }),
 	importCsv: (path: string) =>
 		invoke<{ imported: number; failed: number }>('glossary_import_csv', { path }),
+	builtinList: () =>
+		invoke<{ file: string; label: string; description: string }[]>('glossary_builtin_list'),
+	importBuiltin: (file: string) =>
+		invoke<{ imported: number; failed: number }>('glossary_import_builtin', { file }),
 };
 
 export const ocrApi = {
-	recognize: (imagePath: string, lang?: string) =>
-		invoke<OcrResultDto>('ocr_recognize', { imagePath, lang }),
+	recognize: (imagePath?: string, imageData?: string, lang?: string) =>
+		invoke<OcrResultDto>('ocr_recognize', { imagePath, imageData, lang }),
 	providers: () =>
 		invoke<{ name: string; kind: string; available: boolean }[]>('ocr_providers'),
 };

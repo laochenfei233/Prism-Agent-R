@@ -26,6 +26,7 @@
 
 	// ── 录音 ─────────────────────────────────────────────
 	let recording = $state(false);
+	let paused = $state(false);
 	let recordingDuration = $state(0);
 	let recordingTimer: ReturnType<typeof setInterval> | null = null;
 	let liveTranscript = $state('');
@@ -192,12 +193,17 @@
 			// 1. 通知后端先建 stream（使用设置页配置的默认 ASR 后端）
 			await asrApi.startRecording(selectedMeeting.id);
 
-			// 2. 监听实时转录事件
+			// 2. 监听实时转录事件（按 index 覆盖：Map 存储，渲染时排序拼接，中间结果不重复）
+			let segMap = new Map<number, { text: string; is_final: boolean }>();
 			unlistenTranscript = await listen<{ meeting_id: string; index: number; text: string; is_final: boolean }>(
 				'meeting:transcript', (e) => {
-					if (e.meeting_id === selectedMeeting?.id) {
-						liveTranscript += e.text;
-					}
+					if (e.meeting_id !== selectedMeeting?.id) return;
+					segMap.set(e.index, { text: e.text, is_final: e.is_final });
+					const sorted = [...segMap.entries()].sort((a, b) => a[0] - b[0]);
+					liveTranscript = sorted
+						.map(([, s]) => s.text)
+						.filter(Boolean)
+						.join('\n');
 				}
 			);
 
@@ -210,16 +216,62 @@
 			const mid = selectedMeeting.id;
 			recorderNode.port.onmessage = (ev) => {
 				const pcmBase64 = ev.data as string;
-				if (pcmBase64) asrApi.audioChunk(mid, pcmBase64);
+				if (pcmBase64 && !paused) asrApi.audioChunk(mid, pcmBase64);
 			};
 			micStream.connect(recorderNode);
 			recording = true;
+			paused = false;
 			recordingDuration = 0;
 			recordingTimer = setInterval(() => { recordingDuration += 1; }, 1000);
 		} catch (e) {
 			console.error('录音启动失败:', e);
 			alert('录音启动失败：' + e);
 		}
+	}
+
+	/** 暂停：停止上报音频（后端状态 recording → paused），保留采集链路 */
+	async function pauseRecording() {
+		if (!recording || paused || !selectedMeeting) return;
+		paused = true;
+		clearInterval(recordingTimer!);
+		recordingTimer = null;
+		try {
+			await asrApi.pauseRecording(selectedMeeting.id);
+		} catch (e) { console.error(e); }
+	}
+
+	/** 恢复：重新上报音频（paused → recording） */
+	async function resumeRecording() {
+		if (!recording || !paused || !selectedMeeting) return;
+		paused = false;
+		recordingTimer = setInterval(() => { recordingDuration += 1; }, 1000);
+		try {
+			await asrApi.resumeRecording(selectedMeeting.id);
+		} catch (e) { console.error(e); }
+	}
+
+	/** 取消：丢弃本次录音（后端清理转写，状态 cancelled） */
+	async function cancelRecording() {
+		if (!recording || !selectedMeeting) return;
+		if (!confirm('取消本次录音？已识别的转写将被清除。')) return;
+		paused = false;
+		if (recordingTimer) { clearInterval(recordingTimer); recordingTimer = null; }
+		recorderNode?.disconnect();
+		micStream?.disconnect();
+		mediaStream?.getTracks().forEach(t => t.stop());
+		recorderNode = null; micStream = null; mediaStream = null;
+		if (audioCtx) { audioCtx.close(); audioCtx = null; }
+		try {
+			await asrApi.cancelRecording(selectedMeeting.id);
+			// 清理前端实时转录显示
+			liveTranscript = '';
+			const updated = await meetingApi.get(selectedMeeting.id);
+			selectedMeeting = updated;
+			meetings = meetings.map(x => x.id === updated.id ? updated : x);
+		} catch (e) { console.error(e); }
+		recording = false;
+		unlistenTranscript?.();
+		unlistenTranscript = null;
 	}
 
 	async function loadWorklet() {
@@ -412,6 +464,14 @@
 					</div>
 				</div>
 				<div class="header-actions">
+					{#if recording}
+						{#if paused}
+							<button class="ghost-btn" onclick={resumeRecording}>继续</button>
+						{:else}
+							<button class="ghost-btn" onclick={pauseRecording}>暂停</button>
+						{/if}
+						<button class="ghost-btn danger" onclick={cancelRecording}>取消</button>
+					{/if}
 					<button
 						class="rec-btn"
 						class:recording={recording}
@@ -422,6 +482,7 @@
 						{#if recording}
 							<span class="rec-dot"></span>
 							{formatDuration(recordingDuration)}
+							{#if paused}<span class="rec-paused">已暂停</span>{/if}
 						{:else}
 							<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
 							录音
@@ -681,6 +742,7 @@
 	}
 	.rec-btn.recording { background: var(--color-red); }
 	.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1s infinite; }
+	.rec-paused { font-size: 11px; opacity: 0.85; }
 	@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 	.ghost-btn {
 		padding: 6px 14px;
@@ -692,6 +754,8 @@
 		cursor: pointer;
 	}
 	.ghost-btn:hover { background: var(--color-bg-tertiary); }
+	.ghost-btn.danger { color: var(--color-red); border-color: var(--color-red); }
+	.ghost-btn.danger:hover { background: var(--color-red); color: #fff; }
 
 	/* ── tab ──────────────────────────────────── */
 	.tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--color-separator); }

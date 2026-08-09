@@ -5,6 +5,7 @@ pub mod model;
 pub mod prompt;
 pub mod router;
 pub mod tool;
+pub mod wiki_tool;
 
 pub use error::AgentError;
 pub use instructions::{InstructionManager, InstructionMode};

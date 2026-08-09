@@ -16,6 +16,10 @@ pub fn builtin_register() {
     #[cfg(not(feature = "sherpa-native"))]
     register_backend("SherpaOnnx", |cfg| Box::new(LocalNativeBackend::sherpa(cfg)));
     register_backend("LocalFunasrWs", |cfg| Box::new(LocalFunasrWsBackend::new(cfg)));
+    // Vosk：启用 `vosk-native` feature 时走真实本地推理；否则骨架（校验模型路径，提示安装）
+    #[cfg(feature = "vosk-native")]
+    register_backend("Vosk", |cfg| Box::new(VoskBackend::new(cfg)));
+    #[cfg(not(feature = "vosk-native"))]
     register_backend("Vosk", |cfg| Box::new(LocalNativeBackend::vosk(cfg)));
     register_backend("AzureSpeech", |cfg| Box::new(AzureSpeechBackend::new(cfg)));
 }
@@ -65,13 +69,14 @@ impl OpenAiCompatibleBackend {
     }
 
     async fn transcribe_chunk(&self, wav: Vec<u8>) -> Result<String, AsrError> {
+        // §10.3.3② MiMo 协议：audio_url + data URL 内联（与 prism-agent MiMoAsrService 一致）
         let data_url = format!("data:audio/wav;base64,{}", base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &wav));
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let body = serde_json::json!({
             "model": self.model,
             "messages": [{
                 "role": "user",
-                "content": [{ "type": "input_audio", "input_audio": { "data": data_url } }]
+                "content": [{ "type": "audio_url", "audio_url": { "url": data_url } }]
             }],
             "asr_options": { "language": "auto" },
             "max_tokens": 1024,
@@ -110,11 +115,15 @@ impl AsrBackend for OpenAiCompatibleBackend {
     fn languages(&self) -> &[String] { &self.langs }
 
     async fn health_check(&self) -> Result<(), AsrError> {
-        // 轻量探测：GET /models（兼容端点多支持）
+        // 轻量探测：GET /models（兼容端点多支持）。鉴权头与写入路径保持一致
         let url = format!("{}/models", self.base_url.trim_end_matches('/'));
         let mut req = reqwest::Client::new().get(&url);
         if !self.api_key.is_empty() {
-            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+            if self.use_api_key_header {
+                req = req.header("api-key", self.api_key.clone());
+            } else {
+                req = req.header("Authorization", format!("Bearer {}", self.api_key));
+            }
         }
         let resp = req.send().await.map_err(|e| AsrError::Network(e.to_string()))?;
         if resp.status().is_success() {
@@ -297,6 +306,7 @@ impl AsrBackend for WhisperApiBackend {
         tokio::spawn(async move {
             let mut buf: Vec<u8> = Vec::new();
             let mut index: u64 = 0;
+            let mut prev_text = String::new();
 
             while let Some(chunk) = audio.next().await {
                 if cancel.is_cancelled() { break; }
@@ -308,12 +318,17 @@ impl AsrBackend for WhisperApiBackend {
                     buf.drain(..take - OVERLAP_BYTES.min(take));
                     if let Ok(text) = backend.transcribe_wav(pcm_to_wav(&slice)).await {
                         if !text.is_empty() {
-                            events.segment(AsrSegment {
-                                index, text, is_final: true,
-                                start_ms: 0, end_ms: 0,
-                                language: None, confidence: None, speaker_id: None,
-                            });
-                            index += 1;
+                            // 重叠 1s ≈ 20 字（中文），去重后发送，避免拼接文本重复（§10.3.3⑤）
+                            let text = dedup_overlap(&prev_text, &text, 20);
+                            if !text.is_empty() {
+                                events.segment(AsrSegment {
+                                    index, text: text.clone(), is_final: true,
+                                    start_ms: 0, end_ms: 0,
+                                    language: None, confidence: None, speaker_id: None,
+                                });
+                                index += 1;
+                            }
+                            prev_text = text;
                         }
                     }
                 }
@@ -321,11 +336,14 @@ impl AsrBackend for WhisperApiBackend {
             if !buf.is_empty() {
                 if let Ok(text) = backend.transcribe_wav(pcm_to_wav(&buf)).await {
                     if !text.is_empty() {
-                        events.segment(AsrSegment {
-                            index, text, is_final: true,
-                            start_ms: 0, end_ms: 0,
-                            language: None, confidence: None, speaker_id: None,
-                        });
+                        let text = dedup_overlap(&prev_text, &text, 20);
+                        if !text.is_empty() {
+                            events.segment(AsrSegment {
+                                index, text, is_final: true,
+                                start_ms: 0, end_ms: 0,
+                                language: None, confidence: None, speaker_id: None,
+                            });
+                        }
                     }
                 }
             }
@@ -437,6 +455,7 @@ impl AsrBackend for DashScopeFunasrBackend {
             let mut index: u64 = 0;
             let mut task_started = false;
             let mut finished = false;
+            let mut task_finished_received = false;
 
             loop {
                 tokio::select! {
@@ -523,6 +542,8 @@ impl AsrBackend for DashScopeFunasrBackend {
                                     "task-finished" => {
                                         events.status("stopped");
                                         finished = true;
+                                        task_finished_received = true;
+                                        break;
                                     }
                                     "task-failed" | "failed" | "error" => {
                                         events.status(&format!("ASR 错误: {text}"));
@@ -536,6 +557,63 @@ impl AsrBackend for DashScopeFunasrBackend {
                             events.status(&format!("WebSocket 错误: {e}"));
                             break;
                         }
+                        _ => {}
+                    }
+                }
+            }
+
+            // 排空阶段：finish-task 已发送后，服务端仍会推送尾部定稿与 task-finished。
+            // 若直接退出循环，尾部 result-generated 会丢失（§10.3.3 协议：需读到 task-finished 为止）。
+            if finished && !task_finished_received {
+                while let Ok(Some(msg)) = tokio::time::timeout(std::time::Duration::from_secs(5), ws.next()).await {
+                    match msg {
+                        Ok(WsMessage::Text(text)) => {
+                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                                let event = v["header"]["action"].as_str().or_else(|| v["header"]["event"].as_str()).unwrap_or("");
+                                match event {
+                                    "result-generated" => {
+                                        let output = &v["payload"]["output"];
+                                        let sentence = &output["sentence"];
+                                        let (seg_text, is_end, speaker_id) = if sentence.is_object() {
+                                            (
+                                                sentence["text"].as_str().unwrap_or("").to_string(),
+                                                sentence["sentence_end"].as_bool().unwrap_or(false),
+                                                sentence["speaker_id"].as_str().map(String::from),
+                                            )
+                                        } else {
+                                            (
+                                                output["text"].as_str().unwrap_or("").to_string(),
+                                                output["sentence_end"].as_bool().unwrap_or(false),
+                                                output["speaker_id"].as_str().map(String::from),
+                                            )
+                                        };
+                                        if !seg_text.is_empty() {
+                                            events.segment(AsrSegment {
+                                                index,
+                                                text: seg_text,
+                                                is_final: is_end,
+                                                start_ms: 0,
+                                                end_ms: 0,
+                                                language: None,
+                                                confidence: None,
+                                                speaker_id: speaker_id.and_then(|s| s.parse().ok()),
+                                            });
+                                            if is_end { index += 1; }
+                                        }
+                                    }
+                                    "task-finished" => {
+                                        events.status("stopped");
+                                        break;
+                                    }
+                                    "task-failed" | "failed" | "error" => {
+                                        events.status(&format!("ASR 错误: {text}"));
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        Ok(WsMessage::Close(_)) => break,
+                        Err(_) => break,
                         _ => {}
                     }
                 }
@@ -836,6 +914,151 @@ impl AsrBackend for SherpaOnnxBackend {
                 }
             });
             let _ = langs;
+        });
+
+        Ok(handle)
+    }
+
+    async fn stop(&mut self) -> Result<Vec<AsrSegment>, AsrError> {
+        Ok(Vec::new())
+    }
+}
+
+// ── VoskBackend（真实本地推理，§10.3.3⑥） ──
+// 使用 vosk crate（vosk-sys 静态链接 libvosk）。仅当启用 `vosk-native` feature 时编译
+// （需本机预装 Vosk 库，无自动下载，故默认关闭）；默认构建下 Vosk 由 LocalNativeBackend 骨架承接。
+// 模型：model_path 指向 Vosk 模型目录（含 conf/model.conf + am/final.mdl 等）。
+
+#[cfg(feature = "vosk-native")]
+pub struct VoskBackend {
+    model_path: Option<String>,
+    langs: Vec<String>,
+}
+
+#[cfg(feature = "vosk-native")]
+impl VoskBackend {
+    pub fn new(cfg: &AsrBackendConfig) -> Self {
+        Self {
+            model_path: cfg.model_path.clone(),
+            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::Vosk.languages()),
+        }
+    }
+}
+
+#[cfg(feature = "vosk-native")]
+#[async_trait::async_trait]
+impl AsrBackend for VoskBackend {
+    fn kind(&self) -> AsrKind { AsrKind::Vosk }
+
+    fn languages(&self) -> &[String] { &self.langs }
+
+    async fn health_check(&self) -> Result<(), AsrError> {
+        let Some(path) = &self.model_path else {
+            return Err(AsrError::ModelNotFound("Vosk 未配置模型路径，请在配置中指定 model_path".into()));
+        };
+        let dir = std::path::Path::new(path);
+        if !dir.exists() {
+            return Err(AsrError::ModelNotFound(format!("模型目录不存在: {path}")));
+        }
+        // Vosk 模型关键文件：am/final.mdl 与 conf/model.conf
+        if !dir.join("am").join("final.mdl").exists() || !dir.join("conf").join("model.conf").exists() {
+            return Err(AsrError::ModelNotFound(format!(
+                "{} 目录不是有效的 Vosk 模型（缺少 am/final.mdl 或 conf/model.conf）",
+                dir.display()
+            )));
+        }
+        Ok(())
+    }
+
+    async fn start(
+        &mut self,
+        mut audio: AudioSource,
+        events: AsrEventSink,
+    ) -> Result<AsrSessionHandle, AsrError> {
+        self.health_check().await?;
+        let model_path = self.model_path.clone().unwrap();
+        let langs = self.langs.clone();
+        let handle = AsrSessionHandle::new();
+        let cancel = handle.token();
+
+        tokio::spawn(async move {
+            // 模型加载失败直接报状态（无句柄可回传，只能通过事件提示）
+            let Some(model) = vosk::Model::new(&model_path) else {
+                events.status("Vosk 模型加载失败");
+                return;
+            };
+            let Some(mut recognizer) = vosk::Recognizer::new(&model, 16000.0) else {
+                events.status("Vosk Recognizer 创建失败");
+                return;
+            };
+
+            let mut index: u64 = 0;
+            let mut seg_buf: Vec<i16> = Vec::new();
+            while let Some(chunk) = audio.next().await {
+                if cancel.is_cancelled() { break; }
+                // PCM 块：16kHz 16bit 小端 → i16 样本
+                let samples: Vec<i16> = chunk
+                    .chunks_exact(2)
+                    .map(|b| i16::from_le_bytes([b[0], b[1]]))
+                    .collect();
+                seg_buf.extend_from_slice(&samples);
+                // 攒够 ~200ms 再喂（减少调用次数），vosk 内部有端点检测
+                if seg_buf.len() >= 3200 {
+                    match recognizer.accept_waveform(&seg_buf) {
+                        Ok(vosk::DecodingState::Finalized) => {
+                            let result = recognizer.result();
+                            let text = match &result {
+                                vosk::CompleteResult::Single(s) => s.text.trim().to_string(),
+                                vosk::CompleteResult::Multiple(m) => m
+                                    .alternatives
+                                    .first()
+                                    .map(|a| a.text.trim().to_string())
+                                    .unwrap_or_default(),
+                            };
+                            if !text.is_empty() {
+                                events.segment(AsrSegment {
+                                    index, text: text.clone(), is_final: true,
+                                    start_ms: 0, end_ms: 0,
+                                    language: langs.first().cloned(), confidence: None, speaker_id: None,
+                                });
+                                index += 1;
+                            }
+                        }
+                        Ok(_) => {
+                            // Running：中间结果（灰显渲染）
+                            let partial = recognizer.partial_result();
+                            let text = partial.partial.trim().to_string();
+                            if !text.is_empty() {
+                                events.segment(AsrSegment {
+                                    index, text, is_final: false,
+                                    start_ms: 0, end_ms: 0,
+                                    language: langs.first().cloned(), confidence: None, speaker_id: None,
+                                });
+                            }
+                        }
+                        Err(_) => events.status("Vosk 解码错误"),
+                    }
+                    seg_buf.clear();
+                }
+            }
+            // 流结束：取最终结果
+            let final_result = recognizer.final_result();
+            let text = match &final_result {
+                vosk::CompleteResult::Single(s) => s.text.trim().to_string(),
+                vosk::CompleteResult::Multiple(m) => m
+                    .alternatives
+                    .first()
+                    .map(|a| a.text.trim().to_string())
+                    .unwrap_or_default(),
+            };
+            if !text.is_empty() {
+                events.segment(AsrSegment {
+                    index, text, is_final: true,
+                    start_ms: 0, end_ms: 0,
+                    language: langs.first().cloned(), confidence: None, speaker_id: None,
+                });
+            }
+            events.status("stopped");
         });
 
         Ok(handle)
@@ -1251,7 +1474,60 @@ fn diff_text(full: &str, prev: &str) -> String {
     }
 }
 
+/// Whisper 分片重叠去重（§10.3.3⑤）：新片文本开头若与上一片文本尾部重复，
+/// 去掉重复部分后返回。去重阈值 = 重叠 1s 音频对应的文本长度（约 20 字）。
+fn dedup_overlap(prev: &str, next: &str, max_overlap_chars: usize) -> String {
+    if prev.is_empty() || next.is_empty() {
+        return next.to_string();
+    }
+    let prev_tail: String = prev.chars().rev().take(max_overlap_chars).collect::<Vec<_>>().into_iter().rev().collect();
+    let next_head_len = next.chars().take(max_overlap_chars).count();
+    let next_head: String = next.chars().take(next_head_len).collect();
+    // 找 prev_tail 与 next_head 的最长公共后缀/前缀匹配
+    let mut best = 0;
+    let prev_chars: Vec<char> = prev_tail.chars().collect();
+    let next_chars: Vec<char> = next_head.chars().collect();
+    for overlap in 1..=prev_chars.len().min(next_chars.len()) {
+        let p_tail = &prev_chars[prev_chars.len() - overlap..];
+        let n_head = &next_chars[..overlap];
+        if p_tail == n_head {
+            best = overlap;
+        }
+    }
+    if best > 0 {
+        next.chars().skip(best).collect()
+    } else {
+        next.to_string()
+    }
+}
+
 /// 将音频缓冲（PCM 块列表）拼成单个 AudioSource 流（用于离线二次转写）
 pub fn pcm_chunks_to_source(chunks: Vec<PcmChunk>) -> AudioSource {
     Box::pin(futures::stream::iter(chunks))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dedup_overlap_removes_repeated_head() {
+        // 上一片尾部「继续讨论。今天」与新片开头重复 → 去重后不重复
+        let prev = "我们先讨论需求。继续讨论。今天";
+        let next = "今天天气不错，我们继续。";
+        let out = dedup_overlap(prev, next, 20);
+        assert_eq!(out, "天气不错，我们继续。", "重叠的「今天」应被去除");
+    }
+
+    #[test]
+    fn dedup_overlap_no_match_keeps_all() {
+        let prev = "完全不同的内容";
+        let next = "新话题开始了";
+        assert_eq!(dedup_overlap(prev, next, 20), "新话题开始了");
+    }
+
+    #[test]
+    fn dedup_overlap_empty_prev() {
+        assert_eq!(dedup_overlap("", "第一条文本", 20), "第一条文本");
+    }
 }

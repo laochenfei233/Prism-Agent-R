@@ -598,6 +598,14 @@ pub struct ImportResultDto {
     pub failed: usize,
 }
 
+/// 内置词库条目（一键导入列表展示）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuiltinGlossaryDto {
+    pub file: String,
+    pub label: String,
+    pub description: String,
+}
+
 // ── OCR ───────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -740,6 +748,7 @@ pub struct MeetingRow {
     pub asr_kind: Option<String>,
     pub asr_model: Option<String>,
     pub retranscribed_at: Option<i64>,
+    pub status: String,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -753,6 +762,7 @@ pub struct Meeting {
     pub summary: String,
     pub participants: Vec<String>,
     pub recording_duration: i32,
+    pub status: String,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -766,6 +776,7 @@ pub struct MeetingDto {
     pub summary: String,
     pub participants: Vec<String>,
     pub recording_duration: i32,
+    pub status: String,
     pub created_at: i64,
     pub updated_at: i64,
 }

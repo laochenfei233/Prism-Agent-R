@@ -122,5 +122,5 @@ pub async fn meeting_retranscribe(
 }
 
 fn meeting_to_dto(m: Meeting) -> MeetingDto {
-    MeetingDto { id: m.id, title: m.title, date: m.date, transcript: m.transcript, summary: m.summary, participants: m.participants, recording_duration: m.recording_duration, created_at: m.created_at, updated_at: m.updated_at }
+    MeetingDto { id: m.id, title: m.title, date: m.date, transcript: m.transcript, summary: m.summary, participants: m.participants, recording_duration: m.recording_duration, status: m.status, created_at: m.created_at, updated_at: m.updated_at }
 }

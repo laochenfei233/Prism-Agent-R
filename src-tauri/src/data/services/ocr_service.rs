@@ -48,8 +48,48 @@ impl OcrService {
         }
     }
 
+    /// 识别入口（data URL 或路径统一入口）：resolve 字节后分发
+    pub async fn recognize_input(
+        &self,
+        input: &str,
+        lang: Option<&str>,
+        provider: Option<&str>,
+    ) -> Result<OcrResult, AppError> {
+        let (bytes, mime) = decode_image_input(input)?;
+        // LLM 走 data URL；tesseract 走临时文件
+        if matches!(provider, Some("tesseract") | Some("local")) {
+            let tmp = write_temp_image(&bytes, &mime)?;
+            let r = self.recognize(tmp.to_string_lossy().as_ref(), lang, provider).await;
+            let _ = std::fs::remove_file(&tmp);
+            r
+        } else {
+            let lang = lang.unwrap_or("auto").to_string();
+            let data_url = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+            // 降级链：llm → tesseract（临时文件）
+            match self.recognize_llm_from_data_url(&data_url, &lang).await {
+                Ok(r) => Ok(r),
+                Err(e) => {
+                    tracing::warn!("LLM OCR 失败（{e}），降级 tesseract");
+                    let tmp = write_temp_image(&bytes, &mime)?;
+                    let r = self.recognize_tesseract(tmp.to_string_lossy().as_ref(), &lang);
+                    let _ = std::fs::remove_file(&tmp);
+                    r.map_err(|t_err| {
+                        AppError::Internal(format!("LLM OCR 失败: {e}；tesseract 也不可用: {t_err}"))
+                    })
+                }
+            }
+        }
+    }
+
     /// 多模态 LLM OCR：base64 图片 → /chat/completions
     async fn recognize_llm(&self, image_path: &str, lang: &str) -> Result<OcrResult, AppError> {
+        let bytes = tokio::fs::read(image_path).await?;
+        let mime = mime_guess::from_path(image_path).first_or_octet_stream().to_string();
+        let data_url = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+        self.recognize_llm_from_data_url(&data_url, lang).await
+    }
+
+    async fn recognize_llm_from_data_url(&self, data_url: &str, lang: &str) -> Result<OcrResult, AppError> {
         use crate::data::models::{ModelRow, ProviderRow};
 
         let model_row = sqlx::query_as::<_, ModelRow>(
@@ -78,12 +118,6 @@ impl OcrService {
             .as_deref()
             .map(crate::commands::settings::decrypt_provider_key)
             .unwrap_or_default();
-
-        // 读取图片 → base64 data URL
-        let bytes = tokio::fs::read(image_path).await?;
-        let mime = mime_guess::from_path(image_path).first_or_octet_stream().to_string();
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let data_url = format!("data:{mime};base64,{b64}");
 
         let lang_hint = if lang == "auto" { "自动检测" } else { lang };
         let body = serde_json::json!({
@@ -184,6 +218,58 @@ impl OcrService {
     }
 }
 
+/// 图片输入解析：data URL（data:image/png;base64,xxx）或磁盘路径 → (字节, mime)
+/// 供前端直接传 FileReader 的 data URL，规避 WebView file.name 不是磁盘路径的问题。
+fn decode_image_input(input: &str) -> Result<(Vec<u8>, String), AppError> {
+    if let Some(rest) = input.strip_prefix("data:") {
+        let (mime, b64) = rest
+            .split_once(';')
+            .ok_or_else(|| AppError::Validation("data URL 缺少 mime 分隔".into()))?;
+        let b64 = b64.strip_prefix("base64,").ok_or_else(|| AppError::Validation("data URL 非 base64".into()))?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| AppError::Validation(format!("data URL base64 解码失败: {e}")))?;
+        Ok((bytes, mime.to_string()))
+    } else {
+        let bytes = std::fs::read(input).map_err(|e| AppError::Internal(format!("图片路径不可读: {input}: {e}")))?;
+        let mime = mime_guess::from_path(input).first_or_octet_stream().to_string();
+        Ok((bytes, mime))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_data_url_png() {
+        // 1x1 透明 PNG
+        let png = [0x89u8, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+        let url = format!("data:image/png;base64,{b64}");
+        let (bytes, mime) = decode_image_input(&url).unwrap();
+        assert_eq!(bytes, png);
+        assert_eq!(mime, "image/png");
+    }
+
+    #[test]
+    fn decode_path_reads_file() {
+        let dir = std::env::temp_dir().join(format!("prism_ocr_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.png");
+        std::fs::write(&path, b"PNGDATA").unwrap();
+        let (bytes, mime) = decode_image_input(&path.to_string_lossy()).unwrap();
+        assert_eq!(bytes, b"PNGDATA");
+        assert_eq!(mime, "image/png");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn decode_invalid_path_errors() {
+        assert!(decode_image_input("C:\\nonexistent\\x.png").is_err());
+    }
+}
+
 /// 在 PATH 中查找可执行文件
 fn find_executable(name: &str) -> Option<std::path::PathBuf> {
     let path_var = std::env::var_os("PATH")?;
@@ -194,4 +280,19 @@ fn find_executable(name: &str) -> Option<std::path::PathBuf> {
         }
     }
     None
+}
+
+/// 将图片字节写为临时文件（tesseract 需要磁盘路径），返回路径
+fn write_temp_image(bytes: &[u8], mime: &str) -> Result<std::path::PathBuf, AppError> {
+    let ext = match mime {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpg",
+        _ => "png",
+    };
+    let path = std::env::temp_dir().join(format!(
+        "prism_ocr_{}.{ext}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::write(&path, bytes).map_err(|e| AppError::Internal(format!("临时图片写入失败: {e}")))?;
+    Ok(path)
 }

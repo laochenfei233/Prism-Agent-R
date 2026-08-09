@@ -29,7 +29,7 @@ impl MeetingService {
         .bind(folder.to_string_lossy().to_string()).bind(now)
         .execute(&self.db.pool).await?;
 
-        Ok(Meeting { id, title: title.to_string(), date, transcript: String::new(), summary: String::new(), participants: participants.unwrap_or(&[]).to_vec(), recording_duration: 0, created_at: now, updated_at: now })
+        Ok(Meeting { id, title: title.to_string(), date, transcript: String::new(), summary: String::new(), participants: participants.unwrap_or(&[]).to_vec(), recording_duration: 0, status: "idle".into(), created_at: now, updated_at: now })
     }
 
     pub async fn list(&self) -> Result<Vec<Meeting>, AppError> {
@@ -42,6 +42,47 @@ impl MeetingService {
         let row = sqlx::query_as::<_, MeetingRow>("SELECT * FROM meetings WHERE id = ?1")
             .bind(id).fetch_optional(&self.db.pool).await?;
         row.map(row_to_meeting).ok_or_else(|| AppError::Validation(format!("会议不存在: {id}")))
+    }
+
+    /// 设置会议状态（§10.3 状态机：idle → recording ⇄ paused → transcribing → ready / cancelled）
+    pub async fn set_status(&self, id: &str, status: &str) -> Result<(), AppError> {
+        sqlx::query("UPDATE meetings SET status = ?1, updated_at = ?2 WHERE id = ?3")
+            .bind(status)
+            .bind(chrono::Utc::now().timestamp())
+            .bind(id)
+            .execute(&self.db.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// 暂停录音（recording → paused）：仅记录状态，音频流保留，前端停止采集
+    pub async fn pause(&self, id: &str) -> Result<(), AppError> {
+        self.assert_status(id, "recording").await?;
+        self.set_status(id, "paused").await
+    }
+
+    /// 恢复录音（paused → recording）
+    pub async fn resume(&self, id: &str) -> Result<(), AppError> {
+        self.assert_status(id, "paused").await?;
+        self.set_status(id, "recording").await
+    }
+
+    /// 取消录音（任意状态 → cancelled）
+    pub async fn cancel(&self, id: &str) -> Result<(), AppError> {
+        self.set_status(id, "cancelled").await
+    }
+
+    /// 状态机校验：当前状态必须为 expected，否则报错
+    async fn assert_status(&self, id: &str, expected: &str) -> Result<(), AppError> {
+        let m = self.get(id).await?;
+        if m.status == expected {
+            Ok(())
+        } else {
+            Err(AppError::Validation(format!(
+                "状态机校验失败：会议当前状态 {}，期望 {}",
+                m.status, expected
+            )))
+        }
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), AppError> {
@@ -74,14 +115,24 @@ impl MeetingService {
         let rows = sqlx::query_as::<_, TranscriptSegmentRow>(
             "SELECT * FROM meeting_transcripts WHERE meeting_id = ?1 ORDER BY \"index\" ASC"
         ).bind(id).fetch_all(&self.db.pool).await?;
-        Ok(rows.into_iter().map(|r| TranscriptSegment {
+        let mut segs: Vec<TranscriptSegment> = rows.into_iter().map(|r| TranscriptSegment {
             index: r.index,
             text: r.text,
             is_final: r.is_final != 0,
             translated: r.translated,
             speaker_id: r.speaker_id.map(|s| s as u32),
-        }).collect())
+        }).collect();
+
+        // §10.3.4 转写上限：总量 > 500KB 时丢弃最旧段（保持最近内容，防无限膨胀）
+        let mut total: usize = segs.iter().map(|s| s.text.len()).sum();
+        while total > Self::MAX_TRANSCRIPT_BYTES && segs.len() > 1 {
+            total -= segs.remove(0).text.len();
+        }
+        Ok(segs)
     }
+
+    /// 转写上限（§10.3.4）：超出截断最旧段
+    pub const MAX_TRANSCRIPT_BYTES: usize = 500 * 1024;
 
     /// 转写全文（含说话人前缀，供展示/推送/导出复用）
     pub async fn transcript_text(&self, id: &str) -> Result<String, AppError> {
@@ -191,7 +242,7 @@ impl MeetingService {
         Ok(path.to_string_lossy().to_string())
     }
 
-    /// 转写清洗（§10.3.6）：修正错别字、补标点、按语义分段
+    /// 转写清洗（§10.3.6）：修正错别字、补标点、按语义分段；结果落库（供导出/摘要复用）
     pub async fn clean_transcript(&self, id: &str) -> Result<String, AppError> {
         let segments = self.get_transcript(id).await?;
         let raw: String = segments.iter().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n");
@@ -203,7 +254,15 @@ impl MeetingService {
              只输出清洗后的 Markdown 文本。\n\n{}",
             truncate_chars(&raw, 20_000)
         );
-        self.call_llm(&prompt).await
+        let cleaned = self.call_llm(&prompt).await?;
+        // 清洗结果写回 transcript（刷新/导出/摘要均基于清洗后内容）
+        sqlx::query("UPDATE meetings SET transcript = ?, updated_at = ? WHERE id = ?")
+            .bind(&cleaned)
+            .bind(chrono::Utc::now().timestamp())
+            .bind(id)
+            .execute(&self.db.pool)
+            .await?;
+        Ok(cleaned)
     }
 
     /// 会议问答（§10.3.6）：上下文 = 标题 + 参会人 + 转写 + 摘要
@@ -275,7 +334,9 @@ impl MeetingService {
     }
 
     /// 追加录音（PCM 16kHz mono，WAV 头 + 流式追加写盘）
-    pub async fn append_recording(&self, id: &str, pcm: &[u8]) -> Result<(), AppError> {
+    pub async fn append_recording(&self, id: &str, pcm: &[u8]) -> Result<(), AppError> {        use tokio::io::AsyncWriteExt;
+        const WAV_HEADER_LEN: u64 = 44;
+
         let folder = self.base_dir.join(id);
         tokio::fs::create_dir_all(&folder).await?;
         let wav_path = folder.join("recording.wav");
@@ -287,14 +348,13 @@ impl MeetingService {
         // 首次写入时附带 WAV 头
         let meta = file.metadata().await?;
         if meta.len() == 0 {
-            use tokio::io::AsyncWriteExt;
             file.write_all(&pcm_to_wav_header()).await?;
         }
-        use tokio::io::AsyncWriteExt;
         file.write_all(pcm).await?;
 
-        // 更新录音时长（按字节推算）
-        let seconds = (meta.len() as f64 / 32000.0).round() as i32;
+        // 更新录音时长（写入后按「文件大小 - WAV 头」推算，避免用写入前大小）
+        let final_len = file.metadata().await?.len();
+        let seconds = (final_len.saturating_sub(WAV_HEADER_LEN) as f64 / 32000.0).round() as i32;
         sqlx::query("UPDATE meetings SET recording_duration = ?, updated_at = ? WHERE id = ?")
             .bind(seconds)
             .bind(chrono::Utc::now().timestamp())
@@ -464,8 +524,70 @@ impl MeetingService {
                 }
                 Ok(out)
             }
-            _ => Err(AppError::Validation("仅支持 markdown / text 格式".into())),
+            "docx" => {
+                // §10.3.7 DOCX 导出：docx-rs 生成，写入 {meetings}/{id}/export.docx
+                let path = self.export_docx(&meeting, &transcript, inc_summary, translated.as_deref()).await?;
+                Ok(path.to_string_lossy().to_string())
+            }
+            _ => Err(AppError::Validation("仅支持 markdown / text / docx 格式".into())),
         }
+    }
+
+    /// DOCX 导出（§10.3.7）：标题/日期/参会人 + 转写 + 摘要 + 翻译稿
+    async fn export_docx(
+        &self,
+        meeting: &Meeting,
+        transcript: &[TranscriptSegment],
+        include_summary: bool,
+        translated: Option<&str>,
+    ) -> Result<std::path::PathBuf, AppError> {
+        use docx_rs::{Docx, Paragraph, Run};
+
+        let mut doc = Docx::new();
+
+        // 标题（大字号加粗）
+        doc = doc.add_paragraph(Paragraph::new().size(32).bold().add_run(
+            Run::new().add_text(&meeting.title),
+        ));
+
+        let meta = format!(
+            "日期: {} | 参会人: {}",
+            meeting.date,
+            meeting.participants.join(", ")
+        );
+        doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(&meta)));
+
+        // 转写
+        doc = doc.add_paragraph(Paragraph::new().size(28).bold().add_run(Run::new().add_text("转写")));
+        for seg in transcript {
+            let line = format!("{}{}", speaker_prefix(seg.speaker_id), seg.text);
+            doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(&line)));
+        }
+
+        // 摘要
+        if include_summary && !meeting.summary.trim().is_empty() {
+            doc = doc.add_paragraph(Paragraph::new().size(28).bold().add_run(Run::new().add_text("摘要")));
+            for line in meeting.summary.lines() {
+                doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
+            }
+        }
+
+        // 翻译稿
+        if let Some(t) = translated {
+            doc = doc.add_paragraph(Paragraph::new().size(28).bold().add_run(Run::new().add_text("翻译稿")));
+            for line in t.lines() {
+                doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
+            }
+        }
+
+        let folder = self.base_dir.join(&meeting.id);
+        tokio::fs::create_dir_all(&folder).await?;
+        let path = folder.join("export.docx");
+        // pack 直接产出 ZIP 归档字节（Docx::pack → ZipResult<()>，需要 Write + Seek）
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        doc.pack(&mut cursor).map_err(|e| AppError::Internal(format!("DOCX 生成失败: {e}")))?;
+        tokio::fs::write(&path, cursor.into_inner()).await?;
+        Ok(path)
     }
 
     pub async fn list_asr_configs(&self) -> Result<Vec<AsrConfig>, AppError> {
@@ -504,7 +626,7 @@ impl MeetingService {
 
 fn row_to_meeting(r: MeetingRow) -> Meeting {
     let participants: Vec<String> = serde_json::from_str(&r.participants).unwrap_or_default();
-    Meeting { id: r.id, title: r.title, date: r.date, transcript: r.transcript, summary: r.summary, participants, recording_duration: r.recording_duration, created_at: r.created_at, updated_at: r.updated_at }
+    Meeting { id: r.id, title: r.title, date: r.date, transcript: r.transcript, summary: r.summary, participants, recording_duration: r.recording_duration, status: r.status, created_at: r.created_at, updated_at: r.updated_at }
 }
 
 /// 16kHz 16bit mono WAV 头（44 字节，data 长度字段为 0，后续追加）
@@ -617,6 +739,121 @@ mod tests {
         // transcript_text 带说话人前缀
         let text = svc.transcript_text(&meeting.id).await.unwrap();
         assert_eq!(text, "[说话人 2] 今天天气很好。");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 录音双写：append_recording 必须生成带 44 字节 WAV 头的文件，且时长随字节数正确累加
+    #[tokio::test]
+    async fn append_recording_writes_wav_and_duration() {
+        let dir = std::env::temp_dir().join(format!("prism_meeting_rec_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&dir).await.unwrap();
+        let base = dir.join("meetings");
+        let svc = MeetingService::new(db, base.clone());
+        let meeting = svc.create("rec", None).await.unwrap();
+
+        // 1 秒 PCM = 32000 字节（16kHz 16bit mono）
+        let pcm1 = vec![0u8; 32000];
+        svc.append_recording(&meeting.id, &pcm1).await.unwrap();
+
+        let wav_path = base.join(&meeting.id).join("recording.wav");
+        let bytes = tokio::fs::read(&wav_path).await.unwrap();
+        assert_eq!(bytes.len(), 44 + 32000, "WAV 头 + 1s PCM");
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+
+        let m = svc.get(&meeting.id).await.unwrap();
+        assert_eq!(m.recording_duration, 1, "1s PCM → 时长 1");
+
+        // 再追加 2 秒 → 时长 3，文件 44 + 96000
+        svc.append_recording(&meeting.id, &vec![0u8; 64000]).await.unwrap();
+        let bytes = tokio::fs::read(&wav_path).await.unwrap();
+        assert_eq!(bytes.len(), 44 + 96000);
+        let m = svc.get(&meeting.id).await.unwrap();
+        assert_eq!(m.recording_duration, 3, "累计 3s");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 状态机（§10.3）：idle → recording ⇄ paused → ready；非法迁移必须报错
+    #[tokio::test]
+    async fn meeting_state_machine_transitions() {
+        let dir = std::env::temp_dir().join(format!("prism_meeting_st_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&dir).await.unwrap();
+        let svc = MeetingService::new(db, std::env::temp_dir());
+        let meeting = svc.create("sm", None).await.unwrap();
+        assert_eq!(meeting.status, "idle", "新建会议为 idle");
+
+        // 未录音时暂停 → 报错
+        assert!(svc.pause(&meeting.id).await.is_err(), "idle 不能直接暂停");
+
+        // idle → recording（由 start 命令设置）→ paused → recording
+        svc.set_status(&meeting.id, "recording").await.unwrap();
+        svc.pause(&meeting.id).await.unwrap();
+        assert_eq!(svc.get(&meeting.id).await.unwrap().status, "paused");
+        svc.resume(&meeting.id).await.unwrap();
+        assert_eq!(svc.get(&meeting.id).await.unwrap().status, "recording");
+
+        // paused 时 resume → 合法（paused → recording）；recording 时 resume → 报错
+        svc.pause(&meeting.id).await.unwrap();
+        assert!(svc.resume(&meeting.id).await.is_ok(), "paused → resume 合法");
+        assert!(svc.resume(&meeting.id).await.is_err(), "非 paused 不能 resume");
+
+        // recording → cancelled（任意状态可取消）
+        svc.cancel(&meeting.id).await.unwrap();
+        assert_eq!(svc.get(&meeting.id).await.unwrap().status, "cancelled");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 转写上限（§10.3.4）：总量 > 500KB 时截断最旧段，保留最近的片段
+    #[tokio::test]
+    async fn transcript_truncates_oldest_when_over_limit() {
+        let dir = std::env::temp_dir().join(format!("prism_meeting_tr_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&dir).await.unwrap();
+        let svc = MeetingService::new(db, std::env::temp_dir());
+        let meeting = svc.create("tr", None).await.unwrap();
+
+        // 600KB 文本 = 1 段 400KB + 1 段 250KB（超 500KB 上限）
+        let seg_a = "A".repeat(400 * 1024);
+        let seg_b = "B".repeat(250 * 1024);
+        svc.update_transcript(&meeting.id, &[
+            TranscriptSegment { index: 0, text: seg_a.clone(), is_final: true, translated: None, speaker_id: None },
+        ]).await.unwrap();
+        svc.update_transcript(&meeting.id, &[
+            TranscriptSegment { index: 1, text: seg_b.clone(), is_final: true, translated: None, speaker_id: None },
+        ]).await.unwrap();
+
+        let segs = svc.get_transcript(&meeting.id).await.unwrap();
+        let total: usize = segs.iter().map(|s| s.text.len()).sum();
+        assert!(total <= 500 * 1024, "截断后总量 {total} 必须 ≤ 500KB");
+        // 最旧段（index 0，400KB）应被截掉，保留 index 1
+        assert!(!segs.iter().any(|s| s.index == 0 && s.text.contains('A')), "最旧段应被截断");
+        assert!(segs.iter().any(|s| s.index == 1), "最近的段保留");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// DOCX 导出（§10.3.7）：生成有效 ZIP（PK 魔数）文件
+    #[tokio::test]
+    async fn export_docx_produces_valid_file() {
+        let dir = std::env::temp_dir().join(format!("prism_meeting_docx_{}", uuid::Uuid::new_v4()));
+        let db = crate::data::db::Database::new(&dir).await.unwrap();
+        let base = dir.join("meetings");
+        let svc = MeetingService::new(db, base.clone());
+        let meeting = svc.create("docx", None).await.unwrap();
+
+        svc.update_transcript(&meeting.id, &[
+            TranscriptSegment { index: 0, text: "今天天气很好。".into(), is_final: true, translated: None, speaker_id: Some(1) },
+        ]).await.unwrap();
+
+        let out = svc.export(&meeting.id, "docx", Some(true), Some(false)).await.unwrap();
+        // 返回文件路径字符串
+        let path = std::path::PathBuf::from(&out);
+        assert!(path.exists(), "docx 文件应生成: {out}");
+        let bytes = tokio::fs::read(&path).await.unwrap();
+        // DOCX = ZIP 容器，以 PK\x03\x04 开头
+        assert_eq!(&bytes[0..2], b"PK", "docx 文件应为 ZIP 容器");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

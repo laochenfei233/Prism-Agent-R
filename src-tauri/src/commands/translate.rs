@@ -14,7 +14,7 @@ pub async fn translate_translate(
     target: String,
     model_id: Option<String>,
 ) -> Result<TranslateResultDto, AppError> {
-    let svc = TranslateService::new(state.db.pool.clone());
+    let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
     let result = svc
         .translate(&text, source.as_deref(), &target, model_id.as_deref())
         .await?;
@@ -32,7 +32,7 @@ pub async fn translate_batch(
     source: Option<String>,
     target: String,
 ) -> Result<Vec<TranslateResultDto>, AppError> {
-    let svc = TranslateService::new(state.db.pool.clone());
+    let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
     let results = svc
         .batch(&texts, source.as_deref(), &target)
         .await?;
@@ -46,14 +46,18 @@ pub async fn translate_batch(
         .collect())
 }
 
+/// §10.5.4 translate:file：读文件内容 → 整文件翻译（保留 Markdown 结构）
 #[tauri::command]
 pub async fn translate_file(
     state: State<'_, crate::AppState>,
-    content: String,
+    path: String,
     source: Option<String>,
     target: String,
 ) -> Result<String, AppError> {
-    let svc = TranslateService::new(state.db.pool.clone());
+    let content = tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| AppError::Validation(format!("文件不可读: {path}: {e}")))?;
+    let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
     svc.translate_file(&content, source.as_deref(), &target)
         .await
 }
@@ -65,7 +69,7 @@ pub async fn translate_history(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<TranslateHistoryResultDto, AppError> {
-    let svc = TranslateService::new(state.db.pool.clone());
+    let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
     let result = svc
         .history(query.as_deref(), limit, offset)
         .await?;
@@ -80,7 +84,7 @@ pub async fn translate_detect(
     state: State<'_, crate::AppState>,
     text: String,
 ) -> Result<DetectResultDto, AppError> {
-    let svc = TranslateService::new(state.db.pool.clone());
+    let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
     let result = svc.detect(&text).await?;
     Ok(DetectResultDto {
         lang: result.lang,
@@ -94,7 +98,7 @@ pub async fn translate_model_config(
     state: State<'_, crate::AppState>,
     model_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
-    let svc = TranslateService::new(state.db.pool.clone());
+    let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
     svc.set_model_config(model_id.as_deref()).await?;
     let current = svc.model_config().await?;
     Ok(serde_json::json!({ "model_id": current }))
@@ -105,7 +109,7 @@ pub async fn translate_model_config(
 pub async fn translate_model_status(
     state: State<'_, crate::AppState>,
 ) -> Result<serde_json::Value, AppError> {
-    let svc = TranslateService::new(state.db.pool.clone());
+    let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
     let configured = svc.model_config().await?;
     Ok(serde_json::json!({ "model_id": configured }))
 }

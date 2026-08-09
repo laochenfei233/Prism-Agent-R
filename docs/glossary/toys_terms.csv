@@ -1,0 +1,103 @@
+source_lang,target_lang,source_term,target_term,category
+en,zh,Small Parts,小零件,玩具安全
+en,zh,Choking Hazard,窒息危险,玩具安全
+en,zh,Sharp Edge,锐边,玩具安全
+en,zh,Sharp Point,锐尖,玩具安全
+en,zh,Toys Safety,玩具安全,玩具安全
+en,zh,Age Grading,年龄分级,玩具安全
+en,zh,Age Label,年龄标识,玩具安全
+en,zh,Not Suitable for Children Under 3,不适合3岁以下儿童,玩具安全
+en,zh,Warning Label,警告标签,玩具安全
+en,zh,Flammability,易燃性,玩具安全
+en,zh,Flame Retardant,阻燃剂,玩具安全
+en,zh,Toxic Substances,有毒物质,玩具安全
+en,zh,Lead Content,铅含量,玩具安全
+en,zh,Phthalates,邻苯二甲酸酯,玩具安全
+en,zh,BPA (Bisphenol A),双酚A,玩具安全
+en,zh,Heavy Metals,重金属,玩具安全
+en,zh,Test Report,测试报告,玩具安全
+en,zh,Third-Party Testing,第三方检测,玩具安全
+en,zh,CE Certificate,CE认证证书,玩具安全
+en,zh,CE Marking,CE标志,玩具安全
+en,zh,Declaration of Conformity,符合性声明,玩具安全
+en,zh,EN71,欧盟玩具安全标准,玩具安全
+en,zh,EN 71-1 Mechanical and Physical Properties,EN71-1 机械物理性能,玩具安全
+en,zh,EN 71-2 Flammability,EN71-2 易燃性,玩具安全
+en,zh,EN 71-3 Migration of Certain Elements,EN71-3 特定元素迁移,玩具安全
+en,zh,ASTM F963,美国玩具安全标准,玩具安全
+en,zh,GB 6675,中国玩具安全标准,玩具安全
+en,zh,CPSC (Consumer Product Safety Commission),美国消费品安全委员会,玩具安全
+en,zh,CPSIA (Consumer Product Safety Improvement Act),美国消费品安全改进法案,玩具安全
+en,zh,Toy Safety Directive,玩具安全指令,玩具安全
+en,zh,CE Marking Directive,CE标志指令,玩具安全
+en,zh,Warning Mark,警告标识,玩具安全
+en,zh,Safety Hazard,安全隐患,玩具安全
+en,zh,Intended Use,预期用途,玩具安全
+en,zh,Intended Age Group,适用年龄组,玩具安全
+en,zh,Detachable Parts,可拆卸零件,玩具安全
+en,zh,Component,零部件,玩具安全
+en,zh,Stuffed Toy,填充玩具,玩具分类
+en,zh,Plush Toy,毛绒玩具,玩具分类
+en,zh,Soft Toy,软体玩具,玩具分类
+en,zh,Action Figure,可动人偶,玩具分类
+en,zh,Doll,玩偶,玩具分类
+en,zh,Educational Toy,益智玩具,玩具分类
+en,zh,Building Block,积木,玩具分类
+en,zh,Stacking Toy,叠叠乐玩具,玩具分类
+en,zh,Puzzle,拼图,玩具分类
+en,zh,Model Kit,模型套件,玩具分类
+en,zh,Die-Cast Toy,合金玩具,玩具分类
+en,zh,Ride-On Toy,骑乘玩具,玩具分类
+en,zh,Tricycle,三轮车,玩具分类
+en,zh,Remote Control Car,遥控车,玩具分类
+en,zh,RC Toy (Remote Control Toy),遥控玩具,玩具分类
+en,zh,Electric Toy,电动玩具,玩具分类
+en,zh,Battery-Operated Toy,电池玩具,玩具分类
+en,zh,Musical Toy,音乐玩具,玩具分类
+en,zh,Rattle,摇铃,玩具分类
+en,zh,Teether,磨牙棒,玩具分类
+en,zh,Board Game,桌游,玩具分类
+en,zh,Card Game,卡牌游戏,玩具分类
+en,zh,Outdoor Toy,户外玩具,玩具分类
+en,zh,Water Toy,水上玩具,玩具分类
+en,zh,Inflatable Toy,充气玩具,玩具分类
+en,zh,Fidget Toy,解压玩具,玩具分类
+en,zh,Stress Relief Toy,减压玩具,玩具分类
+en,zh,Pop It,按压玩具,玩具分类
+en,zh,Slime,起泡胶,玩具分类
+en,zh,Playdough,彩泥,玩具分类
+en,zh,Clay,橡皮泥,玩具分类
+en,zh,Science Kit,科学实验套装,玩具分类
+en,zh,Craft Kit,手工套装,玩具分类
+en,zh,Playset,玩具套装,玩具分类
+en,zh,Playhouse,玩具屋,玩具分类
+en,zh,Outdoor Swing,户外秋千,玩具分类
+en,zh,Slide,滑梯,玩具分类
+en,zh,See-Saw,跷跷板,玩具分类
+en,zh,Ball Pit,海洋球池,玩具分类
+en,zh,Jump Rope,跳绳,玩具分类
+en,zh,Hula Hoop,呼啦圈,玩具分类
+en,zh,Kite,风筝,玩具分类
+en,zh,Bubble Toy,泡泡玩具,玩具分类
+en,zh,Toy Car,玩具车,玩具分类
+en,zh,Toy Train,玩具火车,玩具分类
+en,zh,Toy Plane,玩具飞机,玩具分类
+en,zh,Pull Toy,拖拉玩具,玩具分类
+en,zh,Winding Toy,发条玩具,玩具分类
+en,zh,Vinyl Doll,搪胶玩偶,玩具分类
+en,zh,Blind Box,盲盒,玩具分类
+en,zh,Collectible Figure,收藏人偶,玩具分类
+en,zh,Minifigure,迷你人偶,玩具分类
+en,zh,Assembly Instructions,组装说明,玩具说明
+en,zh,Instruction Manual,说明书,玩具说明
+en,zh,User Manual,用户手册,玩具说明
+en,zh,Product Description,产品描述,玩具说明
+en,zh,Product Specification,产品规格,玩具说明
+en,zh,Item Number,货号,玩具说明
+en,zh,Model Number,型号,玩具说明
+en,zh,Packaging,包装,玩具说明
+en,zh,Blister Pack,吸塑包装,玩具说明
+en,zh,Color Box,彩盒,玩具说明
+en,zh,Display Box,展示盒,玩具说明
+en,zh,Window Box,开窗盒,玩具说明
+en,zh,Gift Box,礼盒,玩具说明
