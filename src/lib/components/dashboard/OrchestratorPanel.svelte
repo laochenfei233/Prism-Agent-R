@@ -376,7 +376,7 @@
 								<div class="card">
 									<h4 class="card-title">实时事件</h4>
 									<div class="event-list">
-										{#each events.slice(0, 20) as event (event.timestamp)}
+										{#each events.slice(0, 20) as event (event.timestamp + event.event_type + event.message)}
 											<div class="event-row">
 												<span class="event-time">{formatTime(event.timestamp)}</span>
 												<span class="event-msg">{event.message}</span>
@@ -401,7 +401,7 @@
 								<div class="empty-inline">暂无事件</div>
 							{:else}
 								<div class="event-list event-list-bordered">
-									{#each events as event (event.timestamp)}
+									{#each events as event (event.timestamp + event.event_type + event.message)}
 										<div class="event-row">
 											<span class="event-time event-time-wide">{formatTime(event.timestamp)}</span>
 											<span class="event-badge {eventBadgeClass(event.event_type)}">{event.event_type}</span>

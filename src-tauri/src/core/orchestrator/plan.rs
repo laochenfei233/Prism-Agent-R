@@ -15,6 +15,7 @@ pub struct ExecutionGroup {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GroupKind {
     Parallel,
     Sequential,
