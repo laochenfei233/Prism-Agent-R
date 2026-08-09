@@ -61,6 +61,19 @@ impl OrchestratorEngine {
         }
     }
 
+    /// 任务级事件：携带任务状态数据，供前端渲染子任务卡片
+    fn emit_task_event(&self, event_type: &str, message: String, data: serde_json::Value) {
+        let event = OrchestratorEvent {
+            event_type: event_type.into(),
+            message,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            data: Some(data),
+        };
+        if let Some(f) = &self.on_event {
+            f(&event);
+        }
+    }
+
     /// 主循环：Spec → Plan → Execute → Review → 循环
     pub async fn run(&self, session: &mut OrchestratorSession) -> Result<(), AppError> {
         loop {
@@ -287,8 +300,9 @@ impl OrchestratorEngine {
                     let handles: Vec<_> = group.tasks.iter().map(|task| {
                         let provider = provider.clone();
                         let self_ref = self;
+                        let group_id = group.id.clone();
                         async move {
-                            self_ref.execute_task(task, provider).await
+                            self_ref.run_group_task(task, provider, &group_id).await
                         }
                     }).collect();
                     let results = futures::future::join_all(handles).await;
@@ -296,13 +310,54 @@ impl OrchestratorEngine {
                 }
                 GroupKind::Sequential => {
                     for task in &group.tasks {
-                        let result = self.execute_task(task, provider.clone()).await;
+                        let result = self.run_group_task(task, provider.clone(), &group.id).await;
                         all_results.push(result);
                     }
                 }
             }
         }
         all_results
+    }
+
+    /// 执行单个任务并补发任务级事件（task_started / task_finished）
+    async fn run_group_task(
+        &self,
+        task: &PlannedTask,
+        provider: Arc<dyn ModelProvider>,
+        group_id: &str,
+    ) -> TaskResult {
+        self.emit_task_event(
+            "task_started",
+            format!("开始执行任务 {}", task.spec_task_id),
+            serde_json::json!({
+                "task_id": task.spec_task_id,
+                "role": task.agent_config.role,
+                "model_id": task.agent_config.model_id,
+                "group_id": group_id,
+            }),
+        );
+
+        let result = self.execute_task(task, provider).await;
+        let status = if matches!(result.status, TaskStatus::Completed) {
+            "completed"
+        } else {
+            "failed"
+        };
+
+        self.emit_task_event(
+            "task_finished",
+            format!("任务 {} {}", task.spec_task_id, if status == "completed" { "完成" } else { "失败" }),
+            serde_json::json!({
+                "task_id": task.spec_task_id,
+                "status": status,
+                "duration_ms": result.duration_ms,
+                "tokens_used": result.tokens_used,
+                "output_summary": result.output.chars().take(200).collect::<String>(),
+                "error": result.error,
+            }),
+        );
+
+        result
     }
 
     /// 执行单个任务（真实 LLM 调用，无工具）
