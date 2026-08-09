@@ -12,7 +12,7 @@
 			asrDownloadProgress[e.model_id] = e.progress;
 			if (e.progress >= 1) loadAsr();
 		});
-		return un;
+		return () => un();
 	});
 
 	// ── 分组导航 ─────────────────────────────────────────

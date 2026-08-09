@@ -233,91 +233,123 @@
 	{/if}
 
 	{#if !selectedWiki}
-		<!-- 知识库列表 -->
-		{#if loading}
-			<div class="empty">加载中...</div>
-		{:else if wikis.length === 0}
-			<div class="empty">
-				<p>暂无知识库</p>
-				<button class="btn-primary" onclick={() => showCreate = true}>创建第一个</button>
-			</div>
-		{:else}
-			<div class="grid">
-				{#each wikis as wiki}
-					<div
-						class="card"
-						onclick={() => selectWiki(wiki)}
-						role="button"
-						tabindex="0"
-						onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectWiki(wiki); } }}
-					>
-						<div class="card-head">
-							<div class="card-icon">
-								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-							</div>
-							<button
-								class="card-delete"
-								onclick={(e) => { e.stopPropagation(); deleteWiki(wiki.id); }}
-								title="删除知识库"
-								aria-label="删除知识库"
-							>
-								<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-							</button>
+		<!-- 知识库列表（三段式：左栏导航 + 右侧内容） -->
+		<div class="wiki-list-shell">
+			<aside class="wiki-nav-pane">
+				<div class="pane-header">
+					<h3>知识库</h3>
+					<button class="icon-btn-sm" title="新建知识库" aria-label="新建知识库" onclick={() => showCreate = true}>
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+					</button>
+				</div>
+				<div class="wiki-nav-list">
+					{#each wikis as wiki}
+						<div
+							class="wiki-nav-item"
+							onclick={() => selectWiki(wiki)}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectWiki(wiki); } }}
+						>
+							<span class="wiki-nav-icon">
+								<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+							</span>
+							<span class="wiki-nav-name">{wiki.name}</span>
 						</div>
-						<h3>{wiki.name}</h3>
-						{#if wiki.description}<p>{wiki.description}</p>{/if}
-					</div>
-				{/each}
-			</div>
-		{/if}
+					{/each}
+					{#if wikis.length === 0}
+						<div class="hint">暂无知识库</div>
+					{/if}
+				</div>
+			</aside>
 
-		<!-- RAG 嵌入器配置（Cherry Studio 卡片风格） -->
-		<div class="emb-card">
-			<div class="emb-card-head">
-				<div>
-					<h2 class="emb-title">RAG 嵌入器</h2>
-					<p class="emb-desc">配置知识库检索的向量化模式</p>
-				</div>
-				{#if embStatus}
-					<span class="emb-status">
-						{embStatus.is_local ? '本地' : embStatus.model || 'API'} · {embStatus.dim} 维
-					</span>
-				{/if}
-			</div>
-			<div class="emb-body">
-				<div class="emb-row">
-					<label for="emb-mode">模式</label>
-					<select id="emb-mode" bind:value={embMode}>
-						<option value="local">本地（离线特征哈希，无网络）</option>
-						<option value="api">API（OpenAI 兼容 /embeddings）</option>
-					</select>
-				</div>
-				{#if embMode === 'api'}
-					<div class="emb-row">
-						<label for="emb-provider">Provider</label>
-						<select id="emb-provider" bind:value={embProvider}>
-							<option value="">选择 Provider</option>
-							{#each providers as p}
-								<option value={p.id}>{p.name} ({p.kind})</option>
-							{/each}
-						</select>
+			<main class="wiki-main">
+				{#if loading}
+					<div class="empty">加载中...</div>
+				{:else if wikis.length === 0}
+					<div class="empty">
+						<p>暂无知识库</p>
+						<button class="btn-primary" onclick={() => showCreate = true}>创建第一个</button>
 					</div>
-					<div class="emb-row">
-						<label for="emb-model">模型</label>
-						<input id="emb-model" placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="嵌入模型" />
+				{:else}
+					<div class="grid">
+						{#each wikis as wiki}
+							<div
+								class="card"
+								onclick={() => selectWiki(wiki)}
+								role="button"
+								tabindex="0"
+								onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectWiki(wiki); } }}
+							>
+								<div class="card-head">
+									<div class="card-icon">
+										<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+									</div>
+									<button
+										class="card-delete"
+										onclick={(e) => { e.stopPropagation(); deleteWiki(wiki.id); }}
+										title="删除知识库"
+										aria-label="删除知识库"
+									>
+										<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+									</button>
+								</div>
+								<h3>{wiki.name}</h3>
+								{#if wiki.description}<p>{wiki.description}</p>{/if}
+							</div>
+						{/each}
 					</div>
 				{/if}
-				<div class="emb-row">
-					<label for="emb-rerank">重排序</label>
-					<label class="switch-label" for="emb-rerank">
-						<input id="emb-rerank" type="checkbox" bind:checked={rerankEnabled} onchange={toggleRerank} />
-						<span>LLM 重排序（初检 top-150 → 重排 → top-k，有成本）</span>
-					</label>
+
+				<!-- RAG 嵌入器配置（Cherry Studio 卡片风格） -->
+				<div class="emb-card">
+					<div class="emb-card-head">
+						<div>
+							<h2 class="emb-title">RAG 嵌入器</h2>
+							<p class="emb-desc">配置知识库检索的向量化模式</p>
+						</div>
+						{#if embStatus}
+							<span class="emb-status">
+								{embStatus.is_local ? '本地' : embStatus.model || 'API'} · {embStatus.dim} 维
+							</span>
+						{/if}
+					</div>
+					<div class="emb-body">
+						<div class="emb-row">
+							<label for="emb-mode">模式</label>
+							<select id="emb-mode" bind:value={embMode}>
+								<option value="local">本地（离线特征哈希，无网络）</option>
+								<option value="api">API（OpenAI 兼容 /embeddings）</option>
+							</select>
+						</div>
+						{#if embMode === 'api'}
+							<div class="emb-row">
+								<label for="emb-provider">Provider</label>
+								<select id="emb-provider" bind:value={embProvider}>
+									<option value="">选择 Provider</option>
+									{#each providers as p}
+										<option value={p.id}>{p.name} ({p.kind})</option>
+									{/each}
+								</select>
+							</div>
+							<div class="emb-row">
+								<label for="emb-model">模型</label>
+								<input id="emb-model" placeholder="如 text-embedding-3-small / nomic-embed-text" bind:value={embModel} aria-label="嵌入模型" />
+							</div>
+						{/if}
+						<div class="emb-row">
+							<label for="emb-rerank">重排序</label>
+							<label class="switch-label" for="emb-rerank">
+								<input id="emb-rerank" type="checkbox" bind:checked={rerankEnabled} onchange={toggleRerank} />
+								<span>LLM 重排序（初检 top-150 → 重排 → top-k，有成本）</span>
+							</label>
+						</div>
+						<div class="emb-actions">
+							<button class="btn-primary" onclick={saveEmbConfig}>保存配置</button>
+						</div>
+					</div>
 				</div>
-				<div class="emb-actions">
-					<button class="btn-primary" onclick={saveEmbConfig}>保存配置</button>
-				</div>
-			</div>
+			</main>
 		</div>
 	{:else}
 		<!-- 知识库详情：左栏切换器+页面树，右栏内容（Cherry Studio 风格） -->
@@ -502,7 +534,7 @@
 </div>
 
 <style>
-	.page { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+	.page { padding: 24px 32px; }
 	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 	.header-left { display: flex; align-items: center; gap: 10px; }
 	.header-right { display: flex; align-items: center; gap: 8px; }
@@ -532,6 +564,16 @@
 	.create-form input { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-separator); background: var(--color-bg); color: var(--color-fg); font-size: 14px; outline: none; }
 	.create-form input:focus { border-color: var(--color-accent); }
 	.form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+	/* 列表三段式：左栏知识库导航 + 右侧内容 */
+	.wiki-list-shell { display: flex; gap: 16px; align-items: flex-start; }
+	.wiki-nav-pane { width: 240px; min-width: 240px; background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 12px; position: sticky; top: 0; max-height: calc(100vh - 140px); overflow-y: auto; }
+	.wiki-nav-list { display: flex; flex-direction: column; gap: 2px; }
+	.wiki-nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--color-fg); transition: background 0.15s; }
+	.wiki-nav-item:hover { background: var(--color-bg-tertiary); }
+	.wiki-nav-icon { color: var(--color-accent); display: flex; align-items: center; flex-shrink: 0; }
+	.wiki-nav-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.wiki-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 
 	/* 列表 */
 	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
@@ -586,9 +628,9 @@
 	.emb-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 	.emb-actions .btn-primary { width: fit-content; }
 
-	/* 详情双栏（Cherry 风格：左栏切换器+树 + 右栏内容 + 底部查询栏） */
-	.detail { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-	.tree-pane { background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 12px; max-height: 280px; overflow-y: auto; }
+	/* 详情三段式（Cherry 风格：左栏切换器+树 + 右栏内容 + 底部查询栏） */
+	.detail { display: flex; flex-direction: row; gap: 16px; min-height: 0; align-items: flex-start; }
+	.tree-pane { width: 240px; min-width: 240px; background: var(--color-bg-secondary); border: 1px solid var(--color-separator); border-radius: 12px; padding: 12px; max-height: none; overflow-y: auto; position: sticky; top: 0; }
 	.wiki-switcher { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 10px; margin-bottom: 10px; border-bottom: 1px solid var(--color-separator); }
 	.switcher-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
 	.switcher-info svg { color: var(--color-accent); flex-shrink: 0; }
@@ -616,7 +658,7 @@
 	.hint { font-size: 12px; color: var(--color-fg-secondary); padding: 4px 0; }
 
 	/* 内容区 */
-	.content-pane { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+	.content-pane { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 16px; }
 	.editor-header { display: flex; align-items: center; gap: 8px; }
 	.editor-path { font-size: 13px; color: var(--color-fg-secondary); flex: 1; font-family: monospace; }
 	.editor, .markdown-view { width: 100%; border-radius: 10px; border: 1px solid var(--color-separator); background: var(--color-bg-secondary); color: var(--color-fg); font-size: 14px; }
@@ -664,6 +706,8 @@
 
 	@media (max-width: 900px) {
 		.detail { flex-direction: column; }
-		.tree-pane { max-height: 220px; }
+		.tree-pane { width: 100%; min-width: 0; max-height: 220px; position: static; }
+		.wiki-list-shell { flex-direction: column; }
+		.wiki-nav-pane { width: 100%; min-width: 0; max-height: 180px; position: static; }
 	}
 </style>
