@@ -11,6 +11,7 @@
 	import AgentLauncher from '$lib/components/dashboard/AgentLauncher.svelte';
 	import SkillOverviewCard from '$lib/components/dashboard/SkillOverviewCard.svelte';
 	import McpOverviewCard from '$lib/components/dashboard/McpOverviewCard.svelte';
+	import OrchestratorPanel from '$lib/components/dashboard/OrchestratorPanel.svelte';
 	import RecentSessionsCard from '$lib/components/dashboard/RecentSessionsCard.svelte';
 	import TaskDesigner from '$lib/components/task/TaskDesigner.svelte';
 
@@ -62,12 +63,17 @@
 	<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? agentStore.agents.length} />
 
 	<div class="dashboard-body">
-		<!-- Row 1: Task Designer（核心功能前置） -->
+		<!-- Row 1: Orchestrator Panel（自主编排主入口） -->
+		<div class="section-row orchestrator-card">
+			<OrchestratorPanel />
+		</div>
+
+		<!-- Row 2: Task Designer（手动任务设计器） -->
 		<div class="section-row">
 			<TaskDesigner />
 		</div>
 
-		<!-- Row 2: Agent Launcher + Usage Trend -->
+		<!-- Row 3: Agent Launcher + Usage Trend -->
 		<div class="section-row two-col">
 			<div class="col-main">
 				<AgentLauncher
@@ -85,14 +91,14 @@
 			</div>
 		</div>
 
-		<!-- Row 3: Stats + Skill + MCP（三列紧凑布局） -->
+		<!-- Row 4: Stats + Skill + MCP（三列紧凑布局） -->
 		<div class="section-row three-col">
 			<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
 			<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
 			<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
 		</div>
 
-		<!-- Row 4: Recent Sessions -->
+		<!-- Row 5: Recent Sessions -->
 		<RecentSessionsCard
 			sessions={dashboardStore.overview?.recent_sessions ?? []}
 			onOpenSession={handleOpenSession}
@@ -156,6 +162,15 @@
 	.section-row.three-col > :global(*) {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.orchestrator-card {
+		height: 560px;
+		overflow: hidden;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.setup-banner {

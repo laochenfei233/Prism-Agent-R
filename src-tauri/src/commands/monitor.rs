@@ -393,6 +393,7 @@ async fn build_orchestrator_engine(
                     "event_type": event.event_type,
                     "message": event.message,
                     "timestamp": event.timestamp,
+                    "data": event.data,
                 }));
             }
         });
