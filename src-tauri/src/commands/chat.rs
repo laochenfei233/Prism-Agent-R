@@ -217,15 +217,42 @@ pub async fn chat_send(
         .with_on_tool_call(on_tool_call)
         .with_mcp_runtime(state.mcp_runtime.clone());
 
-    // 护栏：默认启用注入检测 + 长度限制
-    agent = agent.with_guardrails(GuardrailPipeline::default_input());
+    // 护栏：默认启用注入检测 + 长度限制（阈值与开关可从设置页调整）
+    {
+        use crate::data::settings::prefs;
+        let max_chars = prefs::get_i64(&state.db.pool, "guardrail.max_chars", 100_000).await as usize;
+        let injection = prefs::get_bool(&state.db.pool, "guardrail.injection_enabled", true).await;
+        agent = agent.with_guardrails(GuardrailPipeline::configured(max_chars, injection));
+    }
 
     // 工具路由：按用户消息 BM25 注入 top-N 工具
     let router = agent.build_router(8);
     agent = agent.with_router(router);
 
-    // Token 预算：工具输出裁剪阈值（约 100K tokens）
-    agent = agent.with_token_budget(100_000);
+    // Token 预算：工具输出裁剪阈值（默认约 100K tokens，可从设置页调整）
+    {
+        use crate::data::settings::prefs;
+        let budget = prefs::get_i64(&state.db.pool, "token_budget.chat", 100_000).await as usize;
+        agent = agent.with_token_budget(budget);
+    }
+
+    // 反思循环：设置页开关启用后接线（默认关闭）
+    {
+        use crate::data::settings::prefs;
+        let reflection_enabled =
+            prefs::get_bool(&state.db.pool, "reflection.enabled", false).await;
+        if reflection_enabled {
+            let max_iters =
+                prefs::get_i64(&state.db.pool, "reflection.max_iterations", 3).await.clamp(1, 10) as u32;
+            agent = agent.with_reflection(
+                crate::core::rig::reflection::ReflectionConfig {
+                    enabled: true,
+                    max_iterations: max_iters,
+                    ..Default::default()
+                },
+            );
+        }
+    }
 
     // 轨迹记录：完成后写入 agent_traces
     {

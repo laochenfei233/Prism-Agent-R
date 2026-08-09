@@ -105,6 +105,8 @@ pub fn run() {
             commands::settings::settings_add_provider,
             commands::settings::settings_add_model,
             commands::settings::model_fetch_available,
+            commands::settings::settings_get_all,
+            commands::settings::settings_set,
             commands::mcp::mcp_list,
             commands::mcp::mcp_add,
             commands::mcp::mcp_update,

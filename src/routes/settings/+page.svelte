@@ -1,25 +1,68 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { invoke, listen } from '$lib/api/client';
-	import { agentApi, asrApi, mcpApi, memoryApi, settingsApi, skillApi } from '$lib/api';
+	import { agentApi, asrApi, mcpApi, memoryApi, projectIndexApi, ragApi, settingsApi, skillApi, translateApi, workspaceApi } from '$lib/api';
+	import type { SettingSpecDto } from '$lib/api';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
+	import Switch from '$lib/components/base/Switch.svelte';
 
+	// ASR 模型下载进度事件
+	onMount(async () => {
+		const un = await listen<{ model_id: string; progress: number; message: string }>('asr:model-download-progress', (e) => {
+			asrDownloadProgress[e.model_id] = e.progress;
+			if (e.progress >= 1) loadAsr();
+		});
+		return un;
+	});
+
+	// ── 分组导航 ─────────────────────────────────────────
+	const groups = [
+		{ id: 'model_service', label: '模型服务', icon: 'model' },
+		{ id: 'agent', label: 'Agent', icon: 'agent' },
+		{ id: 'memory', label: '记忆', icon: 'memory' },
+		{ id: 'tools', label: '工具', icon: 'tools' },
+		{ id: 'rag', label: 'RAG', icon: 'rag' },
+		{ id: 'meeting', label: '会议', icon: 'meeting' },
+		{ id: 'security', label: '安全', icon: 'shield' },
+		{ id: 'advanced', label: '高级', icon: 'gear' },
+	];
+	let activeGroup = $state('model_service');
+
+	// ── 注册表设置项 ─────────────────────────────────────
+	let specs = $state<SettingSpecDto[]>([]);
+	let msg = $state('');
+	let savingKey = $state('');
+
+	async function loadSpecs() {
+		try {
+			specs = await settingsApi.getAll();
+		} catch (e) {
+			msg = '加载设置失败: ' + String(e);
+		}
+	}
+
+	function specsOf(group: string) {
+		return specs.filter((s) => s.group === group);
+	}
+
+	async function saveSpec(spec: SettingSpecDto, value: unknown) {
+		if (savingKey === spec.key) return;
+		savingKey = spec.key;
+		try {
+			const updated = await settingsApi.set(spec.key, value);
+			const idx = specs.findIndex((s) => s.key === spec.key);
+			if (idx >= 0) specs[idx] = updated;
+			msg = `✓ ${spec.label} 已保存`;
+		} catch (e) {
+			msg = '保存失败: ' + String(e);
+		} finally {
+			savingKey = '';
+		}
+	}
+
+	// ── Provider/Model ───────────────────────────────────
 	let providers = $state<any[]>([]);
 	let models = $state<any[]>([]);
-	let mcpServers = $state<any[]>([]);
-	let skills = $state<any[]>([]);
-	let msg = $state('');
-	// 是否已完成首载（区分"加载中"与"暂无"）
-	let loaded = $state(false);
-	// 当前激活的设置分类（Cherry Studio 风格左导航）
-	let section = $state<'providers' | 'asr' | 'tts' | 'agents' | 'mcp' | 'skills' | 'market' | 'memory'>('providers');
-	// 当前选中的 Provider（Cherry Studio 风格：左侧列表 + 右侧详情）
-	let selectedProviderId = $state<string | null>(null);
-	// 是否处于"添加 Provider"模式（右侧显示表单）
-	let addingProvider = $state(false);
-
-	// Provider/Model
 	let pName = $state('');
 	let pKind = $state('openai');
 	let pUrl = $state('');
@@ -32,44 +75,12 @@
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
 
-	// 切换 Provider 分类时自动选中第一个
-	$effect(() => {
-		if (section === 'providers') {
-			if (!selectedProviderId && providers.length > 0) {
-				selectedProviderId = providers[0].id;
-			}
-		}
-	});
-
-	// ASR 语音识别（从会议页移入）
-	let asrBackends = $state<any[]>([]);
-	let asrCatalog = $state<any[]>([]);
-	let asrInstalled = $state<any[]>([]);
-	let asrConfigs = $state<any[]>([]);
-	let asrDownloadProgress = $state<Record<string, number>>({});
-	let asrShowAddConfig = $state(false);
-	let asrNewConfig = $state<any>({
-		name: '本地 SenseVoice', kind: 'SherpaOnnx', is_default: false,
-		model_path: '', lang: 'zh'
-	});
-	let asrModelPathInput = $state('');
-
-	// MCP
-	let mcName = $state('');
-	let mcType = $state('stdio');
-	let mcCommand = $state('');
-	let mcArgs = $state('');
-	let mcUrl = $state('');
-
-	// Skill
-	let skillPath = $state('');
-
 	async function fetchModels() {
 		if (!mProvider) return;
 		loadingModels = true;
 		availableModels = [];
 		try {
-			const result = await invoke<{models: string[]}>('model_fetch_available', { provider_id: mProvider });
+			const result = await invoke<{ models: string[] }>('model_fetch_available', { provider_id: mProvider });
 			availableModels = result.models || [];
 		} catch (e) {
 			msg = '拉取失败: ' + String(e);
@@ -78,51 +89,9 @@
 		}
 	}
 
-	async function load() {
-		loaded = false;
+	async function loadModels() {
 		providers = await invoke<any[]>('model_providers');
 		models = await invoke<any[]>('model_list');
-		try { mcpServers = await mcpApi.list(); } catch (e) {}
-		try { skills = await skillApi.list(); } catch (e) {}
-		try { loadAsr(); } catch (e) {}
-		loaded = true;
-	}
-
-	// ── ASR 语音识别 ─────────────────────────────────────
-	async function loadAsr() {
-		try {
-			[asrBackends, asrCatalog, asrInstalled, asrConfigs] = await Promise.all([
-				asrApi.backends(), asrApi.modelCatalog(), asrApi.modelInstalled(), asrApi.listConfigs()
-			]);
-		} catch (e) { console.error(e); }
-	}
-
-	async function asrDownloadModel(id: string) {
-		try { await asrApi.modelDownload(id); } catch (e) { console.error(e); }
-	}
-
-	async function asrRemoveModel(id: string) {
-		if (!confirm('删除模型？')) return;
-		try { await asrApi.modelRemove(id); await loadAsr(); } catch (e) { console.error(e); }
-	}
-
-	async function asrTestConfig() {
-		try {
-			const res = await asrApi.test({ ...asrNewConfig, model_path: asrModelPathInput || undefined });
-			alert(res.ok ? `连接正常（${res.latency_ms}ms）` : `失败：${res.error}`);
-		} catch (e) { console.error(e); }
-	}
-
-	async function asrSaveConfig() {
-		try {
-			await asrApi.saveConfig({ ...asrNewConfig, model_path: asrModelPathInput || undefined, api_key: asrNewConfig.api_key || undefined });
-			asrShowAddConfig = false;
-			await loadAsr();
-		} catch (e) { console.error(e); }
-	}
-
-	async function asrDeleteConfig(id: string) {
-		try { await asrApi.deleteConfig(id); await loadAsr(); } catch (e) { console.error(e); }
 	}
 
 	async function saveProvider() {
@@ -133,12 +102,7 @@
 				baseUrl: pUrl.trim() || null, apiKey: pKey.trim() || null
 			});
 			pName = ''; pUrl = ''; pKey = '';
-			addingProvider = false;
-			await load();
-			// 显式选中新添加的 Provider（位于列表首位）
-			if (providers.length > 0) {
-				selectedProviderId = providers[0].id;
-			}
+			await loadModels();
 			msg = '✓ Provider 已添加';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
@@ -165,29 +129,48 @@
 	}
 
 	async function saveModel() {
-		// 优先用当前选中的 Provider，其次用下拉框选择
-		const providerId = mProvider || selectedProviderId;
-		if (!providerId || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
+		if (!mProvider || !mModelId.trim()) { msg = '请选择 Provider 并输入模型 ID'; return; }
 		try {
 			await invoke('settings_add_model', {
-				providerId, modelId: mModelId.trim(),
+				providerId: mProvider, modelId: mModelId.trim(),
 				displayName: null, isDefault: true
 			});
 			mModelId = '';
-			await load();
+			await loadModels();
 			msg = '✓ 模型已添加';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
-	async function createAgent() {
+	// ── 翻译模型 ─────────────────────────────────────────
+	let translateModelId = $state('');
+	let translateLoading = $state(false);
+	async function loadTranslateModel() {
 		try {
-			await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
-			msg = '✓ Agent 已创建';
-			await load();
+			const st = await translateApi.modelStatus();
+			translateModelId = st.model_id || '';
+		} catch (e) {}
+	}
+	async function saveTranslateModel() {
+		translateLoading = true;
+		try {
+			await translateApi.modelConfig(translateModelId.trim() || undefined);
+			msg = '✓ 翻译模型已保存';
 		} catch (e) { msg = '错误: ' + String(e); }
+		finally { translateLoading = false; }
 	}
 
-	// MCP
+	// ── MCP ──────────────────────────────────────────────
+	let mcpServers = $state<any[]>([]);
+	let mcName = $state('');
+	let mcType = $state('stdio');
+	let mcCommand = $state('');
+	let mcArgs = $state('');
+	let mcUrl = $state('');
+
+	async function loadMcp() {
+		try { mcpServers = await mcpApi.list(); } catch (e) {}
+	}
+
 	async function addMcp() {
 		if (!mcName.trim()) { msg = '请输入 MCP 名称'; return; }
 		try {
@@ -198,7 +181,7 @@
 				await mcpApi.add({ name: mcName.trim(), type: 'http', base_url: mcUrl.trim(), args });
 			}
 			mcName = ''; mcCommand = ''; mcArgs = ''; mcUrl = '';
-			await load();
+			await loadMcp();
 			msg = '✓ MCP 服务器已添加';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
@@ -206,7 +189,7 @@
 	async function removeMcp(id: string) {
 		try {
 			await mcpApi.remove(id);
-			await load();
+			await loadMcp();
 			msg = '✓ MCP 已删除';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
@@ -218,13 +201,20 @@
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
-	// Skill
+	// ── Skill ────────────────────────────────────────────
+	let skills = $state<any[]>([]);
+	let skillPath = $state('');
+
+	async function loadSkills() {
+		try { skills = await skillApi.list(); } catch (e) {}
+	}
+
 	async function installSkill() {
 		if (!skillPath.trim()) { msg = '请输入技能目录路径'; return; }
 		try {
 			await skillApi.install(skillPath.trim());
 			skillPath = '';
-			await load();
+			await loadSkills();
 			msg = '✓ 技能已安装';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
@@ -232,13 +222,141 @@
 	async function uninstallSkill(id: string) {
 		try {
 			await skillApi.uninstall(id);
-			await load();
+			await loadSkills();
 			msg = '✓ 技能已卸载';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
-	// Memory
+	// ── ASR 配置 ─────────────────────────────────────────
+	let asrConfigs = $state<any[]>([]);
+	let acName = $state('');
+	let acKind = $state('DashScopeFunasr');
+	let acBaseUrl = $state('');
+	let acApiKey = $state('');
+	let acModel = $state('');
+	let acLang = $state('zh');
+	let asrBackends = $state<any[]>([]);
+	// ASR 本地模型管理（§10.3.1 模型清单/下载/删除）
+	let asrCatalog = $state<any[]>([]);
+	let asrInstalled = $state<any[]>([]);
+	let asrDownloadProgress = $state<Record<string, number>>({});
+
+	async function loadAsr() {
+		try { asrConfigs = await asrApi.listConfigs(); } catch (e) {}
+		try { asrBackends = await asrApi.backends(); } catch (e) {}
+		try { asrCatalog = await asrApi.modelCatalog(); } catch (e) {}
+		try { asrInstalled = await asrApi.modelInstalled(); } catch (e) {}
+	}
+
+	async function asrDownloadModel(id: string) {
+		try { await asrApi.modelDownload(id); } catch (e) { msg = '下载失败: ' + String(e); }
+	}
+
+	async function asrRemoveModel(id: string) {
+		if (!confirm('删除该模型？')) return;
+		try { await asrApi.modelRemove(id); await loadAsr(); } catch (e) { msg = '删除失败: ' + String(e); }
+	}
+
+	async function saveAsr() {
+		if (!acName.trim()) { msg = '请输入 ASR 配置名称'; return; }
+		try {
+			await asrApi.saveConfig({
+				name: acName.trim(), kind: acKind, base_url: acBaseUrl.trim() || undefined,
+				api_key: acApiKey.trim() || undefined, model: acModel.trim() || undefined,
+				lang: acLang.trim() || undefined, is_default: asrConfigs.length === 0,
+			});
+			acName = ''; acBaseUrl = ''; acApiKey = ''; acModel = '';
+			await loadAsr();
+			msg = '✓ ASR 配置已保存';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function deleteAsr(id: string) {
+		try {
+			await asrApi.deleteConfig(id);
+			await loadAsr();
+			msg = '✓ ASR 配置已删除';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	// ── RAG 嵌入 / contextual / rerank ──────────────────
+	let embedMode = $state('local');
+	let embedProvider = $state('');
+	let embedModel = $state('');
+	let embedDim = $state(256);
+	let ragContextual = $state(true);
+	let ragRerank = $state(false);
+
+	async function loadRagStatus() {
+		try {
+			const st = await ragApi.embeddingStatus();
+			embedMode = st.mode || 'local';
+			embedProvider = st.provider_id || '';
+			embedModel = st.model || '';
+			embedDim = st.dim || 256;
+		} catch (e) {}
+		try { ragContextual = (await ragApi.contextualStatus()).enabled; } catch (e) {}
+		try { ragRerank = (await ragApi.rerankStatus()).enabled; } catch (e) {}
+	}
+
+	async function saveEmbedding() {
+		try {
+			await ragApi.embeddingConfig(embedMode as 'local' | 'api', embedProvider || undefined, embedModel || undefined, embedDim);
+			msg = '✓ 嵌入配置已保存';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function toggleContextual(v: boolean) {
+		try { await ragApi.contextualConfig(v); msg = '✓ Contextual Retrieval 已更新'; }
+		catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function toggleRerank(v: boolean) {
+		try { await ragApi.rerankConfig(v); msg = '✓ Reranker 已更新'; }
+		catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	// ── 项目索引 / 记忆 ─────────────────────────────────
+	let projectIndex = $state({ enabled: true, workdir: null as string | null, indexed_files: 0, in_progress: false, last_indexed_at: null as number | null });
 	let reconciling = $state(false);
+
+	// ── 工作区 ──────────────────────────────────────────
+	let wsPath = $state('');
+	let wsCurrent = $state('');
+	let wsSaving = $state(false);
+
+	async function loadWorkspace() {
+		try {
+			const info = await workspaceApi.get();
+			wsCurrent = info.current_dir || '';
+			wsPath = wsCurrent;
+		} catch (e) {}
+	}
+
+	async function saveWorkspace() {
+		if (!wsPath.trim()) { msg = '请输入工作区路径'; return; }
+		wsSaving = true;
+		try {
+			const info = await workspaceApi.set(wsPath.trim());
+			wsCurrent = info.current_dir;
+			msg = '✓ 工作区已更新';
+		} catch (e) { msg = '错误: ' + String(e); }
+		finally { wsSaving = false; }
+	}
+
+	async function loadProjectIndex() {
+		try { projectIndex = await projectIndexApi.status(); } catch (e) {}
+	}
+
+	async function toggleProjectIndex(v: boolean) {
+		try { projectIndex = await projectIndexApi.toggle(v); msg = '✓ 项目索引已更新'; }
+		catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function reindexProject() {
+		try { projectIndex = await projectIndexApi.reindex(); msg = '✓ 项目已重新索引'; }
+		catch (e) { msg = '错误: ' + String(e); }
+	}
 
 	async function reconcileMemory() {
 		if (reconciling) return;
@@ -250,164 +368,134 @@
 		finally { reconciling = false; }
 	}
 
-	$effect(() => { load(); });
-
-	// toast 4 秒后自动消失
-	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+	// ── 初始化 ───────────────────────────────────────────
 	$effect(() => {
-		if (!msg) return;
-		if (toastTimer) clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => { msg = ''; }, 4000);
-		return () => { if (toastTimer) clearTimeout(toastTimer); };
+		loadSpecs();
+		loadModels();
+		loadMcp();
+		loadSkills();
+		loadAsr();
+		loadRagStatus();
+		loadProjectIndex();
+		loadTranslateModel();
+		loadWorkspace();
 	});
 
-	let asrListenerCleanup: (() => void) | null = null;
-
-	onMount(async () => {
-		// ASR 模型下载进度事件
-		const un = await listen<{ model_id: string; progress: number; message: string }>('asr:model-download-progress', (e) => {
-			asrDownloadProgress[e.model_id] = e.progress;
-			if (e.progress >= 1) loadAsr();
-		});
-		asrListenerCleanup = un;
-	});
+	// ── 图标 ─────────────────────────────────────────────
+	const icons: Record<string, string> = {
+		model: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+		agent: '<circle cx="12" cy="7" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
+		memory: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+		tools: '<path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3z"/>',
+		rag: '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>',
+		meeting: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+		shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+		gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+	};
 </script>
 
-{#if msg}
-	<div class="toast" class:error={msg.startsWith('错误')} role="status" aria-live="polite">{msg}</div>
-{/if}
+<div class="page">
+	<div class="nav">
+		<button class="nav-back" onclick={() => history.back()}>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<polyline points="15 18 9 12 15 6"/>
+			</svg>
+			返回
+		</button>
+		<h1 class="nav-title">设置</h1>
+		<div></div>
+	</div>
 
-<div class="settings-shell">
-	<!-- 左侧分类导航 -->
-	<aside class="settings-nav">
-		<div class="nav-header">
-			<button class="nav-back" onclick={() => goto('/')} title="返回聊天" aria-label="返回聊天">
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-			</button>
-			<h1 class="nav-title">设置</h1>
-		</div>
-		<div class="nav-scroll">
-			<div class="nav-group-title">模型管理</div>
-			<button class="nav-item" class:active={section === 'providers'} onclick={() => section = 'providers'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-				<span>Provider & 模型</span>
-			</button>
-			<button class="nav-item" class:active={section === 'asr'} onclick={() => section = 'asr'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
-				<span>语音识别</span>
-			</button>
-			<button class="nav-item" class:active={section === 'tts'} onclick={() => section = 'tts'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-				<span>语音合成</span>
-			</button>
+	{#if msg}
+		<div class="toast" class:error={msg.startsWith('错误') || msg.startsWith('保存失败')}>{msg}</div>
+	{/if}
 
-			<div class="nav-group-title">能力</div>
-			<button class="nav-item" class:active={section === 'agents'} onclick={() => section = 'agents'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-				<span>Agent</span>
-			</button>
-			<button class="nav-item" class:active={section === 'mcp'} onclick={() => section = 'mcp'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-				<span>MCP 服务器</span>
-			</button>
-			<button class="nav-item" class:active={section === 'skills'} onclick={() => section = 'skills'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8z"/></svg>
-				<span>技能</span>
-			</button>
-			<button class="nav-item" class:active={section === 'market'} onclick={() => section = 'market'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg>
-				<span>Market</span>
-			</button>
+	<div class="layout">
+		<!-- 左侧分组导航 -->
+		<nav class="side-nav">
+			{#each groups as g}
+				<button
+					class="nav-item"
+					class:active={activeGroup === g.id}
+					onclick={() => (activeGroup = g.id)}
+				>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+						{@html icons[g.icon]}
+					</svg>
+					<span>{g.label}</span>
+				</button>
+			{/each}
+		</nav>
 
-			<div class="nav-group-title">数据</div>
-			<button class="nav-item" class:active={section === 'memory'} onclick={() => section = 'memory'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-				<span>记忆管理</span>
-			</button>
-		</div>
-	</aside>
+		<!-- 右侧内容区 -->
+		<div class="content">
+			{#if activeGroup === 'model_service'}
+				<!-- 模型服务：Provider + 模型 + 翻译模型 -->
+				<div class="group">
+					<div class="group-header">Provider</div>
+					<div class="group-body">
+						<div class="form-row">
+							<select bind:value={pKind}>
+								<option value="openai">OpenAI 兼容</option>
+								<option value="ollama">Ollama</option>
+							</select>
+							<input bind:value={pName} placeholder="名称" />
+						</div>
+						<div class="form-row">
+							<input bind:value={pUrl} placeholder="Base URL" />
+							<input bind:value={pKey} type="password" placeholder="API Key" />
+						</div>
+						<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
 
-	<!-- 右侧内容 -->
-	<main class="settings-content">
-		{#if section === 'providers'}
-			{@const sel = providers.find(p => p.id === selectedProviderId) ?? null}
-			<div class="provider-shell">
-				<!-- Provider 列表（Cherry Studio 风格左子栏） -->
-				<div class="provider-list-pane">
-					<div class="pane-title">Provider</div>
-					<button class="add-provider-btn" onclick={() => { pName = ''; pUrl = ''; pKey = ''; pKind = 'openai'; addingProvider = true; }}>
-						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-						添加 Provider
-					</button>
-					<div class="pane-list">
-						{#each providers as p}
-							<button
-								class="pane-item"
-								class:active={selectedProviderId === p.id}
-								onclick={() => selectedProviderId = p.id}
-							>
-								<span class="pane-item-name">{p.name}</span>
-								<span class="pane-item-kind">{p.kind}</span>
-							</button>
-						{/each}
-						{#if providers.length === 0}
-							<div class="pane-empty">{loaded ? '暂无 Provider' : '加载中...'}</div>
+						{#if providers.length > 0}
+							<div class="divider"></div>
+							{#each providers as p}
+								<div class="config-row">
+									<div class="config-info">
+										<span class="config-name">{p.name}</span>
+										<span class="config-badge">{p.kind}</span>
+									</div>
+									<div class="config-actions">
+										{#if editKeyProviderId === p.id}
+											<input
+												class="key-input"
+												bind:value={editKeyValue}
+												type="password"
+												placeholder="新 API Key"
+												onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(p.id); }}
+												disabled={keySaving}
+											/>
+											<button class="btn-sm" onclick={() => saveProviderKey(p.id)} disabled={keySaving || !editKeyValue.trim()}>
+												{keySaving ? '保存中…' : '保存'}
+											</button>
+											<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
+										{:else}
+											<button class="btn-sm" onclick={() => startEditKey(p.id)}>编辑 Key</button>
+										{/if}
+									</div>
+								</div>
+							{/each}
 						{/if}
 					</div>
 				</div>
 
-				<!-- Provider 详情（连接 + 模型管理） -->
-				<div class="provider-detail-pane">
-					{#if sel && !addingProvider}
-						<div class="content-header">
-							<h2 class="content-title">{sel.name}</h2>
-							<p class="content-desc">配置连接参数并管理该服务商的模型</p>
-						</div>
-
-						<!-- 连接设置 -->
-						<div class="card detail-card">
-							<div class="section-title">连接设置</div>
-							<div class="form-row">
-								<input value={sel.base_url || ''} disabled placeholder="Base URL" aria-label="Base URL" />
-							</div>
-							<div class="config-row">
-								<div class="config-info">
-									<span class="config-name">API Key</span>
-									{#if editKeyProviderId === sel.id}
-										<input
-											class="key-input"
-											bind:value={editKeyValue}
-											type="password"
-											placeholder="新 API Key"
-											onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(sel.id); }}
-											disabled={keySaving}
-											aria-label="新 API Key"
-										/>
-										<button class="btn-sm" onclick={() => saveProviderKey(sel.id)} disabled={keySaving || !editKeyValue.trim()}>
-											{keySaving ? '保存中…' : '保存'}
-										</button>
-										<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
-									{:else}
-										<button class="btn-sm" onclick={() => startEditKey(sel.id)}>编辑 Key</button>
-									{/if}
-								</div>
-							</div>
-						</div>
-
-						<!-- 模型管理 -->
-						<div class="card detail-card">
-							<div class="section-title">模型</div>
+				<div class="group">
+					<div class="group-header">模型</div>
+					<div class="group-body">
+						{#if providers.length === 0}
+							<p class="hint">请先添加 Provider</p>
+						{:else}
 							<div class="form-row">
 								<select bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
 									<option value="">选择 Provider</option>
 									{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
 								</select>
-								<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" aria-label="模型 ID,如 gpt-4o" />
-								<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
-									{loadingModels ? '拉取中...' : '拉取'}
-								</button>
-								<button class="btn-primary" onclick={saveModel}>添加</button>
 							</div>
+							{#if mProvider}
+								<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
+									{loadingModels ? '拉取中...' : '拉取可用模型'}
+								</button>
+							{/if}
 							{#if availableModels.length > 0}
 								<div class="form-row">
 									<select bind:value={mModelId}>
@@ -415,616 +503,611 @@
 										{#each availableModels as m}<option value={m}>{m}</option>{/each}
 									</select>
 								</div>
-							{/if}
-
-							<div class="divider"></div>
-							{#if models.filter(m => m.provider_id === sel.id).length === 0}
-								<p class="hint">该服务商暂无模型，请在上面添加</p>
 							{:else}
-								{#each models.filter(m => m.provider_id === sel.id) as m}
-									<div class="config-row">
-										<div class="config-info">
-											<span class="config-name">{m.display_name || m.model_id}</span>
-											{#if m.is_default}<span class="config-badge default">默认</span>{/if}
-										</div>
-									</div>
-								{/each}
+								<div class="form-row">
+									<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" />
+								</div>
 							{/if}
-						</div>
-					{:else}
-						<!-- 添加 Provider 模式 -->
-						<div class="content-header">
-							<h2 class="content-title">Provider & 模型</h2>
-							<p class="content-desc">添加模型服务商并配置其模型</p>
-						</div>
-						<div class="card detail-card">
-							<div class="section-title">添加 Provider</div>
-							<div class="form-row">
-								<select bind:value={pKind}>
-									<option value="openai">OpenAI 兼容</option>
-									<option value="ollama">Ollama</option>
-								</select>
-								<input bind:value={pName} placeholder="名称" aria-label="名称" />
-							</div>
-							<div class="form-row">
-								<input bind:value={pUrl} placeholder="Base URL" aria-label="Base URL" />
-								<input bind:value={pKey} type="password" placeholder="API Key" aria-label="API Key" />
-							</div>
-							<div class="form-row">
-								<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
-								{#if sel}
-									<button class="btn-sm" onclick={() => addingProvider = false}>取消</button>
-								{/if}
-							</div>
-						</div>
-					{/if}
-				</div>
-			</div>
+							<button class="btn-primary" onclick={saveModel}>添加模型</button>
+						{/if}
 
-	{:else if section === 'asr'}
-			<div class="provider-shell">
-				<!-- 后端列表 -->
-				<div class="provider-list-pane">
-					<div class="pane-title">ASR 后端</div>
-					<div class="pane-list">
-						{#each asrBackends as b}
-							<div class="pane-item" class:active={true}>
-								<span class="pane-item-name">{b.name}</span>
-								<span class="pane-item-kind">{b.languages.join(', ')}</span>
-							</div>
-						{/each}
-						{#if asrBackends.length === 0}
-							<div class="pane-empty">{loaded ? '暂无后端' : '加载中...'}</div>
+						{#if models.length > 0}
+							<div class="divider"></div>
+							{#each models as m}
+								<div class="config-row">
+									<div class="config-info">
+										<span class="config-name">{m.display_name || m.model_id}</span>
+										{#if m.is_default}<span class="config-badge default">默认</span>{/if}
+									</div>
+								</div>
+							{/each}
 						{/if}
 					</div>
 				</div>
 
-				<!-- 详情：模型管理 + 配置 -->
-				<div class="provider-detail-pane">
-					<div class="content-header">
-						<h2 class="content-title">语音识别 (ASR)</h2>
-						<p class="content-desc">配置会议录音的转写模型与后端连接</p>
+				<div class="group">
+					<div class="group-header">翻译专用模型</div>
+					<div class="group-body">
+						<p class="hint">留空则使用默认模型。</p>
+						<div class="form-row">
+							<input bind:value={translateModelId} placeholder="模型 ID，如 gpt-4o-mini" />
+						</div>
+						<button class="btn-primary" onclick={saveTranslateModel} disabled={translateLoading}>
+							{translateLoading ? '保存中…' : '保存'}
+						</button>
 					</div>
+				</div>
 
-					<div class="card detail-card">
-						<div class="section-title">模型管理</div>
+				<!-- 注册表项 -->
+				{#each specsOf('model_service') as spec}
+					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
+				{/each}
+			{:else if activeGroup === 'agent'}
+				<div class="group">
+					<div class="group-header">Agent 默认参数</div>
+					<div class="group-body">
+						<p class="hint">以下参数应用于新建 Agent。</p>
+					</div>
+				</div>
+				{#each specsOf('agent') as spec}
+					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
+				{/each}
+			{:else if activeGroup === 'memory'}
+				<div class="group">
+					<div class="group-header">记忆管理</div>
+					<div class="group-body">
+						<p class="hint">记忆存储于 global/projects/sessions 目录的 .md 文件，重建索引可回填全文搜索（memory_fts）。</p>
+						<button class="btn-primary" onclick={reconcileMemory} disabled={reconciling}>
+							{reconciling ? '索引中…' : '重建索引'}
+						</button>
+					</div>
+				</div>
+				{#each specsOf('memory') as spec}
+					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
+				{/each}
+			{:else if activeGroup === 'tools'}
+				<!-- MCP -->
+				<div class="group">
+					<div class="group-header">MCP 服务器</div>
+					<div class="group-body">
+						<div class="form-row">
+							<input bind:value={mcName} placeholder="名称" />
+							<select bind:value={mcType}>
+								<option value="stdio">Stdio</option>
+								<option value="http">HTTP</option>
+							</select>
+						</div>
+						{#if mcType === 'stdio'}
+							<div class="form-row">
+								<input bind:value={mcCommand} placeholder="命令，如 npx" />
+							</div>
+							<div class="form-row">
+								<input bind:value={mcArgs} placeholder="参数（空格分隔），如 -y @modelcontextprotocol/server-filesystem" />
+							</div>
+						{:else}
+							<div class="form-row">
+								<input bind:value={mcUrl} placeholder="URL，如 http://localhost:3000/sse" />
+							</div>
+						{/if}
+						<button class="btn-primary" onclick={addMcp}>添加 MCP</button>
+
+						{#if mcpServers.length > 0}
+							<div class="divider"></div>
+							{#each mcpServers as mc}
+								<div class="config-row">
+									<div class="config-info">
+										<span class="config-name">{mc.name}</span>
+										<span class="config-badge">{mc.type}</span>
+									</div>
+									<div class="config-actions">
+										<button class="btn-sm" onclick={() => testMcp(mc.id)}>测试</button>
+										<button class="btn-sm danger" onclick={() => removeMcp(mc.id)}>删除</button>
+									</div>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				</div>
+
+				<!-- Skill -->
+				<div class="group">
+					<div class="group-header">技能</div>
+					<div class="group-body">
+						<div class="form-row">
+							<input bind:value={skillPath} placeholder="技能目录路径，如 /path/to/my-skill" />
+						</div>
+						<button class="btn-primary" onclick={installSkill}>安装技能</button>
+
+						{#if skills.length > 0}
+							<div class="divider"></div>
+							{#each skills as skill}
+								<div class="config-row">
+									<div class="config-info">
+										<span class="config-name">{skill.name}</span>
+										<span class="config-badge">{skill.source}</span>
+										{#if skill.is_enabled}<span class="config-badge default">已启用</span>{/if}
+									</div>
+									<button class="btn-sm danger" onclick={() => uninstallSkill(skill.id)}>卸载</button>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				</div>
+
+				<!-- Skill Market -->
+				<div class="group">
+					<div class="group-header">Market</div>
+					<div class="group-body">
+						<SkillMarket />
+					</div>
+				</div>
+			{:else if activeGroup === 'rag'}
+				<!-- 嵌入配置 -->
+				<div class="group">
+					<div class="group-header">嵌入配置</div>
+					<div class="group-body">
+						<div class="form-row">
+							<select bind:value={embedMode}>
+								<option value="local">本地嵌入</option>
+								<option value="api">API 嵌入</option>
+							</select>
+						</div>
+						{#if embedMode === 'api'}
+							<div class="form-row">
+								<input bind:value={embedProvider} placeholder="Provider ID" />
+							</div>
+							<div class="form-row">
+								<input bind:value={embedModel} placeholder="嵌入模型，如 text-embedding-3-small" />
+							</div>
+						{/if}
+						<div class="form-row">
+							<input bind:value={embedDim} type="number" placeholder="维度" />
+						</div>
+						<button class="btn-primary" onclick={saveEmbedding}>保存嵌入配置</button>
+					</div>
+				</div>
+
+				<!-- Contextual / Rerank -->
+				<div class="group">
+					<div class="group-header">检索增强</div>
+					<div class="group-body">
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">Contextual Retrieval</span>
+							</div>
+							<Switch checked={ragContextual} onchange={(v) => { ragContextual = v; toggleContextual(v); }} />
+						</div>
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">Reranker 重排序</span>
+							</div>
+							<Switch checked={ragRerank} onchange={(v) => { ragRerank = v; toggleRerank(v); }} />
+						</div>
+					</div>
+				</div>
+
+				{#each specsOf('rag') as spec}
+					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
+				{/each}
+			{:else if activeGroup === 'meeting'}
+				<!-- ASR 配置 -->
+				<div class="group">
+					<div class="group-header">ASR 语音识别配置</div>
+					<div class="group-body">
+						<div class="form-row">
+							<input bind:value={acName} placeholder="配置名称" />
+							<select bind:value={acKind}>
+								{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
+							</select>
+						</div>
+						<div class="form-row">
+							<input bind:value={acBaseUrl} placeholder="Base URL（云端后端）" />
+							<input bind:value={acApiKey} type="password" placeholder="API Key" />
+						</div>
+						<div class="form-row">
+							<input bind:value={acModel} placeholder="模型（如 paraformer-realtime-v2）" />
+							<input bind:value={acLang} placeholder="语言（zh/en）" />
+						</div>
+						<button class="btn-primary" onclick={saveAsr}>保存 ASR 配置</button>
+
+						{#if asrConfigs.length > 0}
+							<div class="divider"></div>
+							{#each asrConfigs as cfg}
+								<div class="config-row">
+									<div class="config-info">
+										<span class="config-name">{cfg.name}</span>
+										<span class="config-badge">{cfg.kind}</span>
+										{#if cfg.is_default}<span class="config-badge default">默认</span>{/if}
+									</div>
+									<button class="btn-sm danger" onclick={() => deleteAsr(cfg.id)}>删除</button>
+								</div>
+							{/each}
+						{/if}
+
+						<!-- 本地模型管理（§10.3.1 下载/删除/进度） -->
+						<div class="divider"></div>
+						<div class="group-subtitle">本地模型</div>
 						{#each asrCatalog as m}
 							<div class="config-row">
 								<div class="config-info">
 									<span class="config-name">{m.name}</span>
-									<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
+									<span class="config-badge">{m.size_mb}MB</span>
+									{#if m.lang}<span class="config-badge">{m.lang.join('/')}</span>{/if}
 								</div>
-								<div class="config-actions">
-									{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
-										<span class="config-badge default">{(asrDownloadProgress[m.id] * 100).toFixed(0)}%</span>
-									{:else if asrInstalled.some(i => i.id === m.id)}
-										<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
-									{:else}
-										<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
-									{/if}
-								</div>
-							</div>
-						{/each}
-						{#if asrCatalog.length === 0}<p class="hint">{loaded ? '暂无可用模型' : '加载中...'}</p>{/if}
-					</div>
-
-					<div class="card detail-card">
-						<div class="section-title">ASR 配置</div>
-						<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
-						{#if asrShowAddConfig}
-							<div class="asr-form">
-								<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" aria-label="名称如 本地 SenseVoice" />
-								<select bind:value={asrNewConfig.kind}>
-									{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
-								</select>
-								<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" aria-label="模型路径本地后端,如 asr_models/sherpa-sensevoice-small" />
-								{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
-									<input bind:value={asrNewConfig.api_key} placeholder="API Key" aria-label="API Key" />
+								{#if asrInstalled.some(i => i.id === m.id)}
+									<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
+								{:else}
+									<button class="btn-sm" onclick={() => asrDownloadModel(m.id)} disabled={asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}>
+										{asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1
+											? `${Math.round(asrDownloadProgress[m.id] * 100)}%`
+											: '下载'}
+									</button>
 								{/if}
-								<div class="form-row">
-									<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
-									<button class="btn-primary" onclick={asrSaveConfig}>保存</button>
-								</div>
-							</div>
-						{/if}
-						{#each asrConfigs as c}
-							<div class="config-row">
-								<div class="config-info">
-									<span class="config-name">{c.name}</span>
-									<span class="config-badge">{c.kind}</span>
-									{#if c.model_path}<span class="config-badge">{c.model_path}</span>{/if}
-								</div>
-								<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删除</button>
 							</div>
 						{/each}
-						{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}
+						{#if asrCatalog.length === 0}<p class="hint">暂无可用本地模型</p>{/if}
 					</div>
 				</div>
-			</div>
 
-		{:else if section === 'tts'}
-			<div class="content-header">
-				<h2 class="content-title">语音合成 (TTS)</h2>
-				<p class="content-desc">配置文本转语音的后端与音色</p>
-			</div>
-			<div class="card">
-				<p class="hint">TTS 使用浏览器内置的 Web Speech API 播报（如会议待办播报），无需额外配置模型。</p>
-			</div>
-
-		{:else if section === 'agents'}
-			<div class="content-header">
-				<h2 class="content-title">Agent</h2>
-				<p class="content-desc">创建与配置对话 Agent</p>
-			</div>
-			<div class="card">
-				<p class="hint">创建一个使用默认模型的通用助手，可在左侧 Agent 列表中管理。</p>
-				<button class="btn-green" onclick={createAgent}>创建默认 Agent</button>
-			</div>
-
-		{:else if section === 'mcp'}
-			<div class="content-header">
-				<h2 class="content-title">MCP 服务器</h2>
-				<p class="content-desc">连接外部工具服务（Model Context Protocol）</p>
-			</div>
-			<div class="card">
-				<div class="card-head">
-					<div class="form-row">
-						<input bind:value={mcName} placeholder="名称" aria-label="名称" />
-						<select bind:value={mcType}>
-							<option value="stdio">Stdio</option>
-							<option value="http">HTTP</option>
-						</select>
+				{#each specsOf('meeting') as spec}
+					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
+				{/each}
+			{:else if activeGroup === 'security'}
+				{#each specsOf('security') as spec}
+					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
+				{/each}
+			{:else if activeGroup === 'advanced'}
+				<!-- 工作区 -->
+				<div class="group">
+					<div class="group-header">工作区</div>
+					<div class="group-body">
+						<p class="hint">当前工作区目录（用于项目索引与上下文注入）。</p>
+						<div class="form-row">
+							<input bind:value={wsPath} placeholder="工作区目录路径" />
+						</div>
+						<button class="btn-primary" onclick={saveWorkspace} disabled={wsSaving}>
+							{wsSaving ? '保存中…' : '设置工作区'}
+						</button>
+						{#if wsCurrent}
+							<p class="hint current-ws">当前：{wsCurrent}</p>
+						{/if}
 					</div>
-					{#if mcType === 'stdio'}
-						<div class="form-row">
-							<input bind:value={mcCommand} placeholder="命令，如 npx" aria-label="命令,如 npx" />
-						</div>
-						<div class="form-row">
-							<input bind:value={mcArgs} placeholder="参数（空格分隔），如 -y @modelcontextprotocol/server-filesystem" aria-label="参数空格分隔,如 -y @modelcontextprotocol/server-filesystem" />
-						</div>
-					{:else}
-						<div class="form-row">
-							<input bind:value={mcUrl} placeholder="URL，如 http://localhost:3000/sse" aria-label="URL,如 http://localhost:3000/sse" />
-						</div>
-					{/if}
-					<button class="btn-primary" onclick={addMcp}>添加 MCP</button>
 				</div>
 
-				{#if mcpServers.length > 0}
-					<div class="divider"></div>
-					{#each mcpServers as mc}
+				<!-- 项目索引 -->
+				<div class="group">
+					<div class="group-header">项目自动索引</div>
+					<div class="group-body">
 						<div class="config-row">
 							<div class="config-info">
-								<span class="config-name">{mc.name}</span>
-								<span class="config-badge">{mc.type}</span>
+								<span class="config-name">启用自动索引</span>
+								{#if projectIndex.workdir}<span class="config-badge">{projectIndex.workdir}</span>{/if}
 							</div>
-							<div class="config-actions">
-								<button class="btn-sm" onclick={() => testMcp(mc.id)}>测试</button>
-								<button class="btn-sm danger" onclick={() => removeMcp(mc.id)}>删除</button>
-							</div>
+							<Switch checked={projectIndex.enabled} onchange={(v) => { projectIndex.enabled = v; toggleProjectIndex(v); }} />
 						</div>
-					{/each}
-				{/if}
-			</div>
-
-		{:else if section === 'skills'}
-			<div class="content-header">
-				<h2 class="content-title">技能</h2>
-				<p class="content-desc">安装与管理 Prompt 技能包</p>
-			</div>
-			<div class="card">
-				<div class="card-head">
-					<div class="form-row">
-						<input bind:value={skillPath} placeholder="技能目录路径，如 /path/to/my-skill" aria-label="技能目录路径,如 /path/to/my-skill" />
+						{#if projectIndex.enabled}
+							<button class="btn-secondary" onclick={reindexProject} disabled={projectIndex.in_progress}>
+								{projectIndex.in_progress ? '索引中…' : `重新索引（${projectIndex.indexed_files} 文件）`}
+							</button>
+						{/if}
 					</div>
-					<button class="btn-primary" onclick={installSkill}>安装技能</button>
 				</div>
 
-				{#if skills.length > 0}
-					<div class="divider"></div>
-					{#each skills as skill}
-						<div class="config-row">
-							<div class="config-info">
-								<span class="config-name">{skill.name}</span>
-								<span class="config-badge">{skill.source}</span>
-								{#if skill.is_enabled}<span class="config-badge default">已启用</span>{/if}
-							</div>
-							<button class="btn-sm danger" onclick={() => uninstallSkill(skill.id)}>卸载</button>
-						</div>
-					{/each}
-				{/if}
-			</div>
-
-		{:else if section === 'market'}
-			<div class="content-header">
-				<h2 class="content-title">Market</h2>
-				<p class="content-desc">浏览与安装技能市场</p>
-			</div>
-			<div class="card">
-				<SkillMarket />
-			</div>
-
-		{:else if section === 'memory'}
-			<div class="content-header">
-				<h2 class="content-title">记忆管理</h2>
-				<p class="content-desc">管理跨会话的持久化记忆</p>
-			</div>
-			<div class="card">
-				<p class="hint">记忆存储于 global/projects/sessions 目录的 .md 文件，重建索引可回填全文搜索（memory_fts）。</p>
-				<button class="btn-primary" onclick={reconcileMemory} disabled={reconciling}>
-					{reconciling ? '索引中…' : '重建索引'}
-				</button>
-			</div>
-		{/if}
-	</main>
+				{#each specsOf('advanced') as spec}
+					{@render SettingRow(spec, (v) => saveSpec(spec, v))}
+				{/each}
+			{/if}
+		</div>
+	</div>
 </div>
 
+<!-- 注册表设置项行（通用渲染） -->
+{#snippet SettingRow(spec: SettingSpecDto, onsave: (v: unknown) => void)}
+	<div class="group">
+		<div class="group-header">{spec.label}</div>
+		<div class="group-body">
+			<p class="hint">{spec.description}</p>
+			<div class="form-row">
+				{#if spec.kind === 'bool'}
+					<Switch checked={!!spec.value} onchange={(v) => { spec.value = v; onsave(v); }} />
+				{:else if spec.kind === 'select'}
+					<select
+						value={spec.value as string}
+						onchange={(e) => onsave((e.currentTarget as HTMLSelectElement).value)}
+					>
+						{#each spec.options || [] as opt}<option value={opt}>{opt}</option>{/each}
+					</select>
+				{:else if spec.kind === 'int' || spec.kind === 'float'}
+					<div class="num-row">
+						<input
+							type="number"
+							value={spec.value as number}
+							min={spec.min ?? undefined}
+							max={spec.max ?? undefined}
+							step={spec.step ?? (spec.kind === 'int' ? 1 : 0.1)}
+							onchange={(e) => {
+								const raw = (e.currentTarget as HTMLInputElement).value;
+								if (raw === '') return;
+								const v = Number(raw);
+								if (!Number.isNaN(v)) onsave(v);
+						}}
+						/>
+					</div>
+				{:else}
+					<input
+						type="text"
+						value={spec.value as string}
+						onchange={(e) => onsave((e.currentTarget as HTMLInputElement).value)}
+					/>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/snippet}
+
 <style>
-	.settings-shell {
-		display: flex;
+	.page {
+		padding: 0;
+		overflow-y: auto;
 		height: 100%;
-		background: var(--color-bg);
+		background: var(--color-bg-secondary);
 	}
 
-	/* ── 左侧导航 ─────────────────────────── */
-	.settings-nav {
-		width: 220px;
-		min-width: 220px;
-		background: var(--color-bg-secondary);
-		border-right: 1px solid var(--color-separator);
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-	.nav-header {
+	/* ── Nav ────────────────────────────────────── */
+	.nav {
+		position: sticky;
+		top: 0;
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 14px 16px 12px;
-		font-size: 20px;
-		font-weight: 600;
-		color: var(--color-fg);
-		letter-spacing: -0.41px;
-		border-bottom: 1px solid var(--color-separator);
+		justify-content: space-between;
+		padding: 12px 16px;
+		min-height: 52px;
+		background: var(--color-glass);
+		backdrop-filter: saturate(180%) blur(20px);
+		border-bottom: 0.5px solid var(--color-separator);
+		z-index: 100;
 	}
 	.nav-back {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
+		gap: 4px;
+		padding: 4px 8px;
 		border: none;
-		border-radius: 8px;
 		background: transparent;
-		color: var(--color-fg-secondary);
+		color: var(--color-accent);
+		font-size: 17px;
 		cursor: pointer;
-		transition: background 0.15s ease;
+		border-radius: 8px;
 	}
-	.nav-back:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
-	.nav-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--color-fg); letter-spacing: -0.41px; }
-	.nav-scroll {
-		flex: 1;
-		overflow-y: auto;
-		padding: 8px;
+	.nav-back:hover { background: var(--color-bg-hover); }
+	.nav-title {
+		font-size: 17px;
+		font-weight: 600;
+		color: var(--color-fg);
+		letter-spacing: -0.41px;
+		margin: 0;
 	}
-	.nav-group-title {
-		padding: 12px 12px 4px;
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--color-fg-tertiary);
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
+
+	/* ── Toast ──────────────────────────────────── */
+	.toast {
+		padding: 10px 16px;
+		margin: 16px 16px 0;
+		border-radius: 10px;
+		background: var(--color-green);
+		color: #fff;
+		font-size: 15px;
+	}
+	.toast.error { background: var(--color-red); }
+
+	/* ── Layout ─────────────────────────────────── */
+	.layout {
+		display: flex;
+		gap: 0;
+		min-height: calc(100% - 52px);
+	}
+
+	.side-nav {
+		width: 200px;
+		flex-shrink: 0;
+		padding: 16px 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		border-right: 0.5px solid var(--color-separator);
+		background: var(--color-glass);
+		backdrop-filter: saturate(180%) blur(20px);
 	}
 	.nav-item {
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		width: 100%;
-		padding: 8px 12px;
+		padding: 9px 12px;
 		border: none;
-		border-radius: 8px;
+		border-radius: 10px;
 		background: transparent;
-		color: var(--color-fg-secondary);
-		font-size: 14px;
-		cursor: pointer;
-		text-align: left;
-		transition: background 0.15s ease;
-	}
-	.nav-item:hover { background: var(--color-bg-tertiary); }
-	.nav-item.active { background: var(--color-bg-tertiary); color: var(--color-fg); font-weight: 500; }
-	.nav-icon { flex-shrink: 0; opacity: 0.85; }
-
-	/* ── 右侧内容 ─────────────────────────── */
-	.settings-content {
-		flex: 1;
-		min-width: 0;
-		overflow-y: auto;
-		padding: 28px 32px;
-	}
-	.content-header { margin-bottom: 20px; }
-	.content-title {
-		font-size: 18px;
-		font-weight: 600;
 		color: var(--color-fg);
-		margin: 0 0 4px;
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s ease;
 	}
-	.content-desc {
-		font-size: 13px;
-		color: var(--color-fg-secondary);
-		margin: 0;
+	.nav-item:hover { background: var(--color-bg-hover); }
+	.nav-item.active {
+		background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+		color: var(--color-accent);
+		font-weight: 600;
 	}
 
-	/* ── Provider 两栏（Cherry Studio 风格） ──── */
-	.provider-shell {
-		display: flex;
-		gap: 20px;
-		height: 100%;
-		min-height: 0;
+	.content {
+		flex: 1;
+		padding: 16px;
+		overflow-y: auto;
+		min-width: 0;
 	}
-	.provider-list-pane {
-		width: 160px;
-		min-width: 160px;
-		display: flex;
-		flex-direction: column;
-		background: var(--color-bg-secondary);
-		border-right: 1px solid var(--color-separator);
-		overflow: hidden;
-	}
-	.pane-title {
-		padding: 14px 16px 8px;
+
+	/* ── Group ──────────────────────────────────── */
+	.group { margin-bottom: 16px; }
+	.group-header {
 		font-size: 13px;
 		font-weight: 600;
 		color: var(--color-fg-secondary);
 		text-transform: uppercase;
-		letter-spacing: 0.4px;
+		letter-spacing: 0.5px;
+		padding: 0 0 8px;
 	}
-	.add-provider-btn {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		margin: 0 8px 8px;
-		padding: 8px 10px;
-		border: none;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--color-accent);
-		font-size: 13px;
-		cursor: pointer;
-		text-align: left;
-		transition: background 0.15s ease;
-	}
-	.add-provider-btn:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
-	.pane-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
-	.pane-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-		width: 100%;
-		padding: 9px 10px;
-		border: none;
-		border-radius: 8px;
-		background: transparent;
-		color: var(--color-fg);
-		font-size: 13px;
-		cursor: pointer;
-		text-align: left;
-		transition: background 0.15s ease;
-	}
-	.pane-item:hover { background: var(--color-bg-tertiary); }
-	.pane-item.active { background: var(--color-bg-tertiary); font-weight: 500; }
-	.pane-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.pane-item-kind { font-size: 11px; color: var(--color-fg-secondary); flex-shrink: 0; }
-	.pane-empty { padding: 16px 10px; font-size: 13px; color: var(--color-fg-tertiary); }
-	.provider-detail-pane { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
-	.detail-card { margin-bottom: 16px; }
-	.detail-card .form-row .btn-secondary { flex-shrink: 0; }
-	.detail-card .form-row .btn-primary { flex-shrink: 0; }
-	.card {
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-separator);
+	.group-body {
+		background: var(--color-bg);
 		border-radius: 12px;
-		padding: 20px;
+		padding: 12px;
 	}
-	.card-head { display: flex; flex-direction: column; gap: 10px; }
 
-	/* ── 表单 ─────────────────────────────── */
+	/* ── Form ───────────────────────────────────── */
 	.form-row {
 		display: flex;
 		gap: 8px;
+		margin-bottom: 10px;
 	}
 	.form-row input,
 	.form-row select {
 		flex: 1;
-		padding: 9px 12px;
-		border-radius: 8px;
+		padding: 10px 12px;
+		border-radius: 10px;
 		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
+		background: var(--color-bg-secondary);
 		color: var(--color-fg);
-		font-size: 14px;
+		font-size: 15px;
 		outline: none;
-		box-sizing: border-box;
 	}
 	.form-row input:focus,
 	.form-row select:focus { border-color: var(--color-accent); }
 
+	.num-row {
+		display: flex;
+		gap: 8px;
+		flex: 1;
+	}
+	.num-row input { flex: 1; }
+
 	.hint {
-		font-size: 13px;
+		font-size: 14px;
 		color: var(--color-fg-tertiary);
 		margin: 0;
 		padding: 8px 0;
-		line-height: 1.6;
-	}
-
-	.section-title {
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--color-fg-secondary);
-		margin: 4px 0 8px;
 	}
 
 	.divider {
 		height: 0.5px;
 		background: var(--color-separator);
-		margin: 16px 0;
+		margin: 12px 0;
 	}
 
-	/* ── 配置列表 ─────────────────────────── */
+	.group-subtitle {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-fg-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		margin: 10px 0 8px;
+	}
+
+	/* ── Config List ────────────────────────────── */
 	.config-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 10px 0;
-		gap: 8px;
+		padding: 8px 0;
 	}
 	.config-info {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		min-width: 0;
+		flex-wrap: wrap;
 	}
 	.config-name {
-		font-size: 14px;
+		font-size: 15px;
 		color: var(--color-fg);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 	.config-badge {
 		padding: 2px 8px;
 		border-radius: 6px;
-		background: var(--color-bg-tertiary);
+		background: var(--color-bg-secondary);
 		color: var(--color-fg-secondary);
 		font-size: 12px;
-		flex-shrink: 0;
 	}
 	.config-badge.default {
 		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 		color: var(--color-accent);
 	}
-	.config-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 	.key-input {
-		width: 200px;
+		width: 180px;
 		padding: 6px 10px;
 		border-radius: 8px;
 		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
+		background: var(--color-bg-secondary);
 		color: var(--color-fg);
 		font-size: 13px;
 		outline: none;
 	}
 	.key-input:focus { border-color: var(--color-accent); }
 
-	/* ── 按钮 ─────────────────────────────── */
+	/* ── Buttons ────────────────────────────────── */
 	.btn-primary {
-		padding: 9px 16px;
-		border-radius: 8px;
+		width: 100%;
+		padding: 12px;
+		border-radius: 12px;
 		border: none;
 		background: var(--color-accent);
 		color: #fff;
-		font-size: 14px;
-		font-weight: 500;
+		font-size: 17px;
+		font-weight: 600;
 		cursor: pointer;
-		transition: background 0.15s ease;
+		transition: all 0.15s ease;
 	}
-	.btn-primary:hover { background: var(--color-accent-hover, var(--color-accent)); opacity: 0.92; }
-	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn-primary:hover { background: var(--color-accent-hover); }
+	.btn-primary:active { transform: scale(0.98); }
 
 	.btn-secondary {
-		width: fit-content;
-		padding: 8px 16px;
-		border-radius: 8px;
+		width: 100%;
+		padding: 10px;
+		border-radius: 10px;
 		border: 1px solid var(--color-accent);
 		background: transparent;
 		color: var(--color-accent);
-		font-size: 13px;
+		font-size: 15px;
 		font-weight: 500;
 		cursor: pointer;
+		margin-bottom: 10px;
 	}
 	.btn-secondary:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
 	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-	.btn-green {
-		padding: 9px 16px;
-		border-radius: 8px;
-		border: none;
-		background: var(--color-green);
-		color: #fff;
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: opacity 0.15s ease;
-	}
-	.btn-green:hover { opacity: 0.92; }
-	.btn-green:active { transform: scale(0.98); }
-	.btn-green:disabled { opacity: 0.5; cursor: not-allowed; }
-
+	.config-actions { display: flex; gap: 8px; }
 	.btn-sm {
 		padding: 4px 12px;
-		border-radius: 6px;
-		border: 1px solid var(--color-separator);
-		background: transparent;
-		color: var(--color-fg-secondary);
-		font-size: 13px;
-		cursor: pointer;
-		transition: background 0.15s ease;
-	}
-	.btn-sm:hover { background: var(--color-bg-tertiary); }
-	.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
-	.btn-sm.danger { color: var(--color-red, var(--color-red)); border-color: var(--color-red, var(--color-red)); }
-
-	/* ── ASR 表单 ─────────────────────────── */
-	.asr-form {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		margin: 10px 0;
-	}
-	.asr-form input,
-	.asr-form select {
-		width: 100%;
-		padding: 9px 12px;
 		border-radius: 8px;
 		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
+		background: var(--color-bg-secondary);
 		color: var(--color-fg);
-		font-size: 14px;
-		outline: none;
-		box-sizing: border-box;
+		font-size: 13px;
+		cursor: pointer;
+		transition: all 0.15s ease;
 	}
-	.asr-form input:focus,
-	.asr-form select:focus { border-color: var(--color-accent); }
-	.asr-form .btn-primary { width: fit-content; }
+	.btn-sm:hover { background: var(--color-bg-hover); }
+	.btn-sm.danger { color: var(--color-red); border-color: var(--color-red); }
+	.btn-sm.danger:hover { background: color-mix(in srgb, var(--color-red) 8%, transparent); }
 
-	/* ── Toast ─────────────────────────────── */
-	.toast {
-		position: fixed;
-		top: 16px;
-		right: 16px;
-		z-index: 200;
-		padding: 10px 16px;
-		border-radius: 10px;
-		background: var(--color-green);
-		color: #fff;
-		font-size: 14px;
-		box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-	}
-	.toast.error { background: var(--color-red, var(--color-red)); }
-
-	/* ── 窄视口响应式 ─────────────────────────── */
-	@media (max-width: 900px) {
-		.settings-nav { width: 56px; min-width: 56px; }
-		.nav-item span { display: none; }
-		.nav-item { justify-content: center; padding: 10px 0; }
-		.nav-group-title { display: none; }
-		.nav-back { width: 32px; }
-		.provider-list-pane { width: 140px; min-width: 140px; }
-	}
-	@media (max-width: 720px) {
-		.provider-shell { flex-direction: column; }
-		.provider-list-pane { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid var(--color-separator); }
-		.pane-list { display: flex; gap: 4px; overflow-x: auto; }
-		.pane-item { width: auto; flex-shrink: 0; }
-		.settings-content { padding: 20px; }
+	/* ── Responsive ─────────────────────────────── */
+	@media (max-width: 640px) {
+		.layout { flex-direction: column; }
+		.side-nav {
+			width: 100%;
+			flex-direction: row;
+			overflow-x: auto;
+			border-right: none;
+			border-bottom: 0.5px solid var(--color-separator);
+			padding: 8px;
+		}
+		.nav-item { white-space: nowrap; }
 	}
 </style>
+

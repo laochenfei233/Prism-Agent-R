@@ -29,7 +29,10 @@ pub async fn rag_search(
 ) -> Result<Vec<RagHitDto>, AppError> {
     let mut svc = RagService::new(state.db.clone());
     svc.configure_from_db().await?;
-    let hits = svc.search(&wiki_id, &query, top_k.unwrap_or(5)).await?;
+    let default_top_k = crate::data::settings::prefs::get_i64(&state.db.pool, "rag.top_k", 5)
+        .await
+        .clamp(1, 20) as usize;
+    let hits = svc.search(&wiki_id, &query, top_k.unwrap_or(default_top_k)).await?;
     Ok(hits
         .into_iter()
         .map(|h| RagHitDto {
@@ -146,7 +149,10 @@ pub async fn rag_eval(
     }
 
     let suite = suite.unwrap_or_else(|| "default".into());
-    let report = run_eval(&state.db, cases, top_k.unwrap_or(5), suite).await?;
+    let default_top_k = crate::data::settings::prefs::get_i64(&state.db.pool, "rag.top_k", 5)
+        .await
+        .clamp(1, 20) as usize;
+    let report = run_eval(&state.db, cases, top_k.unwrap_or(default_top_k), suite).await?;
 
     // 落库（趋势数据源）
     save_report(&state.db, &report).await?;
