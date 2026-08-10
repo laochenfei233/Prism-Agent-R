@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { invoke } from '$lib/api/client';
-	import { agentApi } from '$lib/api';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { dashboardStore } from '$lib/stores/dashboard.svelte';
 
@@ -23,13 +22,7 @@
 	}
 
 	async function createAgent() {
-		try {
-			await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
-			agentStore.loadAgents();
-			dashboardStore.loadOverview();
-		} catch (e) {
-			console.error('Failed to create agent:', e);
-		}
+		goto('/agent');
 	}
 
 	async function handleStartChat(agentId: string) {

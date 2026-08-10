@@ -9,6 +9,7 @@ use crate::utils::error::AppError;
 #[tauri::command]
 pub async fn agent_list(state: State<'_, crate::AppState>) -> Result<Vec<AgentDto>, AppError> {
     let svc = AgentService::new(state.db.pool.clone());
+    svc.ensure_builtin_agents().await?;
     svc.list().await
 }
 

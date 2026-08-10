@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { invoke, listen } from '$lib/api/client';
-	import { agentApi, asrApi, mcpApi, memoryApi, projectIndexApi, ragApi, settingsApi, skillApi, translateApi, workspaceApi } from '$lib/api';
+	import { asrApi, mcpApi, memoryApi, projectIndexApi, ragApi, settingsApi, skillApi, translateApi, workspaceApi } from '$lib/api';
 	import type { SettingSpecDto } from '$lib/api';
 	import Switch from '$lib/components/base/Switch.svelte';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
@@ -301,14 +301,6 @@
 			mModelId = '';
 			await load();
 			msg = '✓ 模型已添加';
-		} catch (e) { msg = '错误: ' + String(e); }
-	}
-
-	async function createAgent() {
-		try {
-			await agentApi.create('助手', 'AI 助手', '你是一个有用的 AI 助手。请用中文回答。');
-			msg = '✓ Agent 已创建';
-			await load();
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
@@ -690,11 +682,10 @@
 		{:else if section === 'agents'}
 			<div class="content-header">
 				<h2 class="content-title">Agent</h2>
-				<p class="content-desc">创建与配置对话 Agent</p>
+				<p class="content-desc">内置 OPC Agent 自动预置，可在左侧 Agent 列表中管理</p>
 			</div>
 			<div class="card">
-				<p class="hint">创建一个使用默认模型的通用助手，可在左侧 Agent 列表中管理。</p>
-				<button class="btn-green" onclick={createAgent}>创建默认 Agent</button>
+				<p class="hint">首次进入 Agent 页面时自动加载内置 OPC Agent（短视频脚本师、文案优化师、品牌定位顾问等），也可在 Agent 页面手动创建自定义 Agent。</p>
 			</div>
 
 		{:else if section === 'mcp'}
@@ -1243,21 +1234,6 @@
 	}
 	.btn-secondary:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
 	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-	.btn-green {
-		padding: 9px 16px;
-		border-radius: 8px;
-		border: none;
-		background: var(--color-green);
-		color: #fff;
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: opacity 0.15s ease;
-	}
-	.btn-green:hover { opacity: 0.92; }
-	.btn-green:active { transform: scale(0.98); }
-	.btn-green:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.btn-sm {
 		padding: 4px 12px;
