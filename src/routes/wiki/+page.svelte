@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { invoke } from '$lib/api/client';
 	import { wikiApi, ragApi, type WikiDto, type WikiPageDto, type WikiPageHitDto, type EmbeddingStatusDto, type WikiWritePlan, type WikiOp, type RagDocumentDto, type RagHitDto } from '$lib/api';
 
@@ -207,9 +206,6 @@
 <div class="page">
 	<header class="page-header">
 		<div class="header-left">
-			<button class="nav-back" onclick={() => goto('/')} title="返回聊天" aria-label="返回聊天">
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-			</button>
 			<h1 class="page-title">知识库</h1>
 		</div>
 		<div class="header-right">
@@ -538,20 +534,6 @@
 	.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 	.header-left { display: flex; align-items: center; gap: 10px; }
 	.header-right { display: flex; align-items: center; gap: 8px; }
-	.nav-back {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		border: none;
-		border-radius: 8px;
-		background: var(--color-bg-secondary);
-		color: var(--color-fg-secondary);
-		cursor: pointer;
-		transition: background 0.15s ease, color 0.15s ease;
-	}
-	.nav-back:hover { background: var(--color-bg-tertiary); color: var(--color-fg); }
 	.page-title { font-size: 22px; font-weight: 600; color: var(--color-fg); margin: 0; letter-spacing: -0.41px; }
 	.btn-primary { padding: 8px 16px; border-radius: 8px; border: none; background: var(--color-accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
 	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
