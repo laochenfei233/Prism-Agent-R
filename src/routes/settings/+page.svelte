@@ -152,6 +152,32 @@
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
 
+	// 预置模型库（Cherry Studio 风格：按服务商类型分类的常见模型，选择后填充输入框）
+	const PRESET_MODELS: Record<string, string[]> = {
+		openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3', 'o4-mini', 'text-embedding-3-small', 'text-embedding-3-large'],
+		ollama: ['llama3.1', 'qwen2.5', 'qwen2.5-coder', 'deepseek-r1', 'gemma2', 'mistral', 'phi4', 'nomic-embed-text'],
+		anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-haiku-4-5'],
+		google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-embedding-001'],
+		dashscope: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen-vl-max'],
+		mimo: ['mimo-v2.5', 'mimo-v2.5-pro'],
+		custom: ['gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4-5'],
+	};
+	function applyPreset(kind: string, modelId: string) {
+		mModelId = modelId;
+	}
+	function presetFor(kind: string): string[] {
+		return PRESET_MODELS[kind] ?? PRESET_MODELS.custom;
+	}
+	function kindLabel(kind: string): string {
+		switch (kind) {
+			case 'chat': return '对话';
+			case 'embedding': return '嵌入';
+			case 'vision': return '视觉';
+			case 'asr': return '语音';
+			default: return kind;
+		}
+	}
+
 	// 切换 Provider 分类时自动选中第一个
 	$effect(() => {
 		if (section === 'providers') {
@@ -301,6 +327,23 @@
 			mModelId = '';
 			await load();
 			msg = '✓ 模型已添加';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function deleteModel(id: string) {
+		if (!confirm('删除该模型？')) return;
+		try {
+			await invoke('model_delete', { id });
+			await load();
+			msg = '✓ 模型已删除';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	async function setDefaultModel(id: string) {
+		try {
+			await invoke('model_set_default', { id });
+			await load();
+			msg = '✓ 已设为默认';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
@@ -544,6 +587,13 @@
 									</select>
 								</div>
 							{/if}
+							<div class="form-row">
+								<select value={presetFor(sel.kind || 'custom')[0] ?? ''} onchange={(e) => applyPreset(sel.kind || 'custom', (e.currentTarget as HTMLSelectElement).value)}>
+									<option value="">预置模型库…</option>
+									{#each presetFor(sel.kind || 'custom') as pm}<option value={pm}>{pm}</option>{/each}
+								</select>
+								<span class="preset-hint">选择预置模型填充上方输入框</span>
+							</div>
 
 							<div class="divider"></div>
 							{#if models.filter(m => m.provider_id === sel.id).length === 0}
@@ -553,7 +603,14 @@
 									<div class="config-row">
 										<div class="config-info">
 											<span class="config-name">{m.display_name || m.model_id}</span>
+											<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
 											{#if m.is_default}<span class="config-badge default">默认</span>{/if}
+										</div>
+										<div class="config-actions">
+											{#if !m.is_default}
+												<button class="btn-sm" onclick={() => setDefaultModel(m.id)}>设默认</button>
+											{/if}
+											<button class="btn-sm danger" onclick={() => deleteModel(m.id)}>删除</button>
 										</div>
 									</div>
 								{/each}
@@ -1193,6 +1250,24 @@
 		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 		color: var(--color-accent);
 	}
+	.config-badge.kind-badge { font-size: 11px; padding: 2px 6px; }
+	.config-badge.kind-chat {
+		background: color-mix(in srgb, var(--color-green) 14%, transparent);
+		color: var(--color-green);
+	}
+	.config-badge.kind-embedding {
+		background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+		color: var(--color-accent);
+	}
+	.config-badge.kind-vision {
+		background: color-mix(in srgb, var(--color-purple, var(--color-accent)) 14%, transparent);
+		color: var(--color-purple, var(--color-accent));
+	}
+	.config-badge.kind-asr {
+		background: color-mix(in srgb, var(--color-orange) 14%, transparent);
+		color: var(--color-orange);
+	}
+	.preset-hint { font-size: 12px; color: var(--color-fg-tertiary); }
 	.config-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
 	.key-input {
 		width: 200px;

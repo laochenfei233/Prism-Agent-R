@@ -164,6 +164,25 @@ pub async fn settings_add_provider(
 }
 
 #[tauri::command]
+pub async fn model_delete(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<(), AppError> {
+    let svc = crate::data::services::ModelService::new(state.db.pool.clone());
+    svc.delete(&id).await
+}
+
+/// 将该模型所在 provider 下全部模型置为非默认，再将目标模型设为默认（事务）
+#[tauri::command]
+pub async fn model_set_default(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<(), AppError> {
+    let svc = crate::data::services::ModelService::new(state.db.pool.clone());
+    svc.set_default(&id).await
+}
+
+#[tauri::command]
 pub async fn settings_add_model(
     state: State<'_, crate::AppState>,
     provider_id: String,
