@@ -1410,12 +1410,18 @@
 		max-width: none;
 		width: 100%;
 	}
-	.content-header { margin-bottom: var(--space-4); }
+	.content-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		margin-bottom: var(--space-4);
+	}
 	.content-title {
 		font-size: 18px;
 		font-weight: 600;
 		color: var(--color-fg);
-		margin: 0 0 6px;
+		margin: 0 0 4px;
+		line-height: 1.25;
 	}
 	.content-desc {
 		font-size: 13px;
@@ -1684,8 +1690,7 @@
 	.preset-hint { font-size: 12px; color: var(--color-fg-tertiary); }
 
 	/* ── 模型列表（Cherry Studio 风格） ──── */
-	/* ── 模型列表（Cherry Studio 风格） ──── */
-	.model-section { margin-top: 20px; }
+	.model-section { margin-top: 28px; }
 	.model-header {
 		display: flex;
 		align-items: center;
@@ -1693,7 +1698,7 @@
 		margin-bottom: 12px;
 	}
 	.model-section-label {
-		font-size: 14px;
+		font-size: 15px;
 		font-weight: 600;
 		color: var(--color-fg);
 		margin: 0;
@@ -1738,18 +1743,12 @@
 		margin: 14px 0 6px;
 		padding: 0 4px;
 	}
-	.model-section-label {
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--color-fg-secondary);
-		margin: 0 0 6px;
-	}
 	.model-section-hint { font-weight: 400; color: var(--color-fg-tertiary); }
 	.model-row {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px 12px;
+		padding: 9px 12px;
 		border-radius: 8px;
 		font-size: 13px;
 		transition: background 0.12s ease;
@@ -1761,7 +1760,7 @@
 		justify-content: center;
 		color: var(--color-fg-tertiary);
 		font-size: 12px;
-		padding: 14px 12px;
+		padding: 16px 12px;
 		cursor: default;
 	}
 	.model-name { flex: 1; min-width: 0; word-break: break-all; }
@@ -1848,15 +1847,15 @@
 	}
 	.icon-picker-actions { display: flex; gap: 6px; }
 	.upload-label { cursor: pointer; }
-	/* ── 标题区可点击图标 ──── */
+	/* ── 标题区可点击图标（名称旁，非上方） ──── */
 	.provider-title-icon {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 40px;
-		height: 40px;
-		min-width: 40px;
-		border-radius: 12px;
+		width: 36px;
+		height: 36px;
+		min-width: 36px;
+		border-radius: 10px;
 		border: 1px solid var(--color-separator);
 		background: #fff;
 		cursor: pointer;
@@ -1865,42 +1864,42 @@
 		flex-shrink: 0;
 	}
 	.provider-title-icon:hover { border-color: var(--color-border-strong); box-shadow: var(--shadow-sm); }
-	.provider-title-icon .icon-preview { width: 100%; height: 100%; border-radius: 10px; border: none; }
+	.provider-title-icon .icon-preview { width: 100%; height: 100%; border-radius: 8px; border: none; }
 	/* ── 图标选择弹窗 ──── */
 	.icon-picker-panel {
 		background: var(--color-bg-secondary);
 		border: 1px solid var(--color-separator);
 		border-radius: 12px;
-		padding: 12px;
-		margin-bottom: 16px;
+		padding: 14px;
+		margin-bottom: 20px;
 	}
 	.preset-row {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
-		gap: 6px;
-		margin-bottom: 10px;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 8px;
+		margin-bottom: 12px;
 	}
 	.picker-actions { display: flex; gap: 6px; }
 	.icon-preset-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
-		gap: 6px;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 8px;
 		margin-top: 4px;
 	}
 	.icon-preset-item {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 32px;
-		height: 32px;
-		padding: 3px;
+		width: 100%;
+		height: 44px;
+		padding: 6px;
 		border: 1px solid var(--color-separator);
-		border-radius: 8px;
+		border-radius: 10px;
 		background: #fff;
 		cursor: pointer;
-		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+		transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 	}
-	.icon-preset-item:hover { border-color: var(--color-border-strong); }
+	.icon-preset-item:hover { border-color: var(--color-border-strong); transform: translateY(-1px); }
 	.icon-preset-item.active { border-color: var(--color-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 20%, transparent); }
 	.key-input {
 		width: 200px;
