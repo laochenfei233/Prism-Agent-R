@@ -150,6 +150,7 @@
 	let keySaving = $state(false);
 	let editBaseUrl = $state('');
 	let connSaving = $state(false);
+	let avatarMode = $state<'preset' | 'upload'>('preset');
 	let mProvider = $state('');
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
@@ -163,6 +164,30 @@
 			case 'asr': return '语音';
 			default: return kind;
 		}
+	}
+
+	// 预置模型库（未配置 Key 时也可选择添加；有 Key 时以 API 拉取结果为准）
+	const PRESET_MODELS: Record<string, string[]> = {
+		openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3', 'o4-mini', 'text-embedding-3-small'],
+		ollama: ['llama3.1', 'qwen2.5', 'deepseek-r1', 'gemma2', 'mistral', 'nomic-embed-text'],
+		anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-haiku-4-5'],
+		google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-embedding-001'],
+		dashscope: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen-vl-max'],
+		mimo: ['mimo-v2.5', 'mimo-v2.5-pro'],
+		deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+		zhipu: ['glm-4-plus', 'glm-4-flash', 'glm-4v-plus'],
+		moonshot: ['kimi-k2', 'kimi-latest', 'moonshot-v1-32k'],
+		doubao: ['doubao-pro-32k', 'doubao-lite-32k', 'doubao-1-5-pro'],
+		minimax: ['MiniMax-M2', 'MiniMax-M1', 'abab6.5s-chat'],
+		baichuan: ['Baichuan4', 'Baichuan4-Turbo'],
+		silicon: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct', 'BAAI/bge-m3'],
+		groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+		openrouter: ['openai/gpt-4o', 'anthropic/claude-sonnet-4.5', 'deepseek/deepseek-chat'],
+		mistral: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest'],
+		custom: [],
+	};
+	function presetModelsFor(kind: string): string[] {
+		return PRESET_MODELS[kind] ?? PRESET_MODELS.custom;
 	}
 
 	// 供应商预设库（Cherry Studio 风格：选中自动填充名称/Base URL）
@@ -402,6 +427,46 @@
 		editBaseUrl = sel2?.base_url ?? '';
 	}
 
+	// 选择预置图标：保存一个特殊标记（预设 kind 由前端 ProviderLogo 渲染，无需真实图片）
+	async function setAvatarKind(kind: string) {
+		if (!selectedProviderId) return;
+		try {
+			// 用 `preset:` 前缀标记「使用预置图标」，中间栏据此用 ProviderLogo 渲染对应 kind
+			await invoke('settings_update_provider', { providerId: selectedProviderId, avatar: `preset:${kind}` });
+			await load();
+			msg = '✓ 图标已设置';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
+	// 上传自定义图标：读为 Data URL 后保存（小图标，体积可控）
+	async function uploadAvatar(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file || !selectedProviderId) return;
+		if (file.size > 512 * 1024) { msg = '图标请控制在 512KB 以内'; return; }
+		try {
+			const dataUrl = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(String(reader.result));
+				reader.onerror = () => reject(new Error('读取文件失败'));
+				reader.readAsDataURL(file);
+			});
+			await invoke('settings_update_provider', { providerId: selectedProviderId, avatar: dataUrl });
+			await load();
+			msg = '✓ 图标已上传';
+		} catch (err) { msg = '错误: ' + String(err); }
+		finally { input.value = ''; }
+	}
+
+	async function clearAvatar() {
+		if (!selectedProviderId) return;
+		try {
+			await invoke('settings_update_provider', { providerId: selectedProviderId, avatar: '' });
+			await load();
+			msg = '✓ 图标已移除';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
 	// 选中 Provider 变化时同步编辑缓冲
 	$effect(() => {
 		if (selectedProviderId) {
@@ -634,7 +699,13 @@
 								class:active={pp.existing ? selectedProviderId === pp.existing.id : false}
 								onclick={() => selectPaneProvider(pp)}
 							>
-								<span class="pane-avatar"><ProviderLogo kind={pp.kind} /></span>
+								<span class="pane-avatar">
+									{#if pp.existing?.avatar && !pp.existing.avatar.startsWith('preset:')}
+										<img class="pane-avatar-img" src={pp.existing.avatar} alt="" />
+									{:else}
+										<ProviderLogo kind={pp.existing?.avatar?.startsWith('preset:') ? pp.existing.avatar.slice(7) : pp.kind} />
+									{/if}
+								</span>
 								<span class="pane-item-name">{pp.name}</span>
 								<span
 									class="pane-status"
@@ -702,6 +773,47 @@
 									{/if}
 								</div>
 							</div>
+							<div class="config-row icon-row">
+								<div class="config-info">
+									<span class="config-name">图标</span>
+								</div>
+								<div class="icon-picker">
+									<div class="icon-picker-current">
+										{#if sel.avatar && sel.avatar.startsWith('preset:')}
+											<span class="pane-avatar"><ProviderLogo kind={sel.avatar.slice(7)} /></span>
+										{:else if sel.avatar}
+											<img class="icon-preview" src={sel.avatar} alt="图标" />
+										{:else}
+											<span class="pane-avatar"><ProviderLogo kind={sel.kind} /></span>
+										{/if}
+									</div>
+									<div class="icon-picker-actions">
+										<button class="btn-sm" onclick={() => avatarMode = 'preset'}>选择预置</button>
+										<label class="btn-sm upload-label">
+											上传图片
+											<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange={(e) => uploadAvatar(e)} />
+										</label>
+										{#if sel.avatar}
+											<button class="btn-sm danger" onclick={clearAvatar}>移除</button>
+										{/if}
+									</div>
+								</div>
+								{#if avatarMode === 'preset'}
+									<div class="icon-preset-grid">
+										{#each PROVIDER_PRESETS.filter(pr => pr.kind !== 'custom') as pr}
+											<button
+												type="button"
+												class="icon-preset-item"
+												class:active={sel.avatar === `preset:${pr.kind}`}
+												title={pr.name}
+												onclick={() => setAvatarKind(pr.kind)}
+											>
+												<ProviderLogo kind={pr.kind} size={20} />
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
 						</div>
 
 						<!-- 模型管理（Cherry Studio 风格：列表展示） -->
@@ -737,28 +849,37 @@
 								</div>
 							</div>
 
-							<!-- 可用模型列表（API 拉取，框始终显示） -->
+							<!-- 可用模型列表（有 Key 拉取；无 Key 显示预置模型，均可点选添加） -->
 							<div class="model-section">
-								<div class="model-section-label">可用模型 <span class="model-section-hint">（点击添加）</span></div>
+								<div class="model-section-label">
+									{#if sel.has_key && sel.base_url}
+										可用模型 <span class="model-section-hint">（点击添加）</span>
+									{:else}
+										预置模型 <span class="model-section-hint">（未配置 Key，点击添加）</span>
+									{/if}
+								</div>
 								<div class="model-list-box">
 									{#if loadingModels}
 										<div class="model-row model-empty">拉取模型列表中...</div>
-									{:else if availableModels.length > 0}
-										{#each availableModels as modelId}
-											{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
-											<div class="model-row available" class:added={isAdded}>
-												<span class="model-name">{modelId}</span>
-												{#if isAdded}
-													<span class="config-badge default">已添加</span>
-												{:else}
-													<button class="btn-sm" onclick={() => quickAddModel(modelId)}>添加</button>
-												{/if}
-											</div>
-										{/each}
-									{:else if !(sel.has_key && sel.base_url)}
-										<div class="model-row model-empty">填写 API Key 并确认地址无误后自动拉取模型列表</div>
 									{:else}
-										<div class="model-row model-empty">未拉取到模型，可手动输入模型 ID 添加</div>
+										{@const modelsShown = (sel.has_key && sel.base_url) ? availableModels : presetModelsFor(sel.kind)}
+										{#if modelsShown.length > 0}
+											{#each modelsShown as modelId}
+												{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
+												<div class="model-row available" class:added={isAdded}>
+													<span class="model-name">{modelId}</span>
+													{#if isAdded}
+														<span class="config-badge default">已添加</span>
+													{:else}
+														<button class="btn-sm" onclick={() => quickAddModel(modelId)}>添加</button>
+													{/if}
+												</div>
+											{/each}
+										{:else if !(sel.has_key && sel.base_url)}
+											<div class="model-row model-empty">暂无该服务商的预置模型，可手动输入模型 ID 添加</div>
+										{:else}
+											<div class="model-row model-empty">未拉取到模型，可手动输入模型 ID 添加</div>
+										{/if}
 									{/if}
 								</div>
 							</div>
@@ -1306,11 +1427,18 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		background: var(--color-bg-elevated);
+		/* light 变体图标设计为白底展示（Anthropic 米色块 / Google 彩 logo / 豆包 / Groq / OpenRouter） */
+		background: #fff;
 		border: 1px solid var(--color-separator);
 		overflow: hidden;
 	}
 	.pane-avatar :global(svg) { display: block; }
+	.pane-avatar-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
 	.pane-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.pane-item-kind { font-size: 11px; color: var(--color-fg-secondary); flex-shrink: 0; }
 	.pane-status {
@@ -1545,6 +1673,44 @@
 	}
 	.conn-input:focus { border-color: var(--color-accent); }
 	.conn-input::placeholder { color: var(--color-fg-tertiary); }
+
+	/* ── 图标选择 ─────────────────────────── */
+	.icon-row { flex-direction: column; align-items: stretch; gap: 8px; }
+	.icon-picker { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+	.icon-picker-current { flex-shrink: 0; }
+	.icon-picker-current .pane-avatar { width: 32px; height: 32px; border-radius: 8px; }
+	.icon-preview {
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		border: 1px solid var(--color-separator);
+		object-fit: cover;
+		display: block;
+		background: #fff;
+	}
+	.icon-picker-actions { display: flex; gap: 6px; }
+	.upload-label { cursor: pointer; }
+	.icon-preset-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+		gap: 6px;
+		margin-top: 4px;
+	}
+	.icon-preset-item {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 3px;
+		border: 1px solid var(--color-separator);
+		border-radius: 8px;
+		background: #fff;
+		cursor: pointer;
+		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+	.icon-preset-item:hover { border-color: var(--color-border-strong); }
+	.icon-preset-item.active { border-color: var(--color-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 20%, transparent); }
 	.key-input {
 		width: 200px;
 		padding: 6px 10px;

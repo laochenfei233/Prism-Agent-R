@@ -8,7 +8,7 @@
           height="86"
           x="17"
           y="17"
-          mask-units="userSpaceOnUse"
+          maskUnits="userSpaceOnUse"
           style="mask-type:luminance">
           <path
             fill="#fff"
@@ -80,10 +80,10 @@
           x="17.134"
           y="60.14"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <filter
           id="google-i-googlelight__e"
@@ -92,10 +92,10 @@
           x="59.556"
           y="16.54"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <filter
           id="google-i-googlelight__g"
@@ -104,10 +104,10 @@
           x="27.815"
           y="16.485"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <filter
           id="google-i-googlelight__i"
@@ -116,10 +116,10 @@
           x="56.832"
           y="60.836"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <filter
           id="google-i-googlelight__k"
@@ -128,10 +128,10 @@
           x="60.123"
           y="51.247"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <filter
           id="google-i-googlelight__l"
@@ -140,10 +140,10 @@
           x="17.126"
           y="30.555"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <filter
           id="google-i-googlelight__n"
@@ -152,10 +152,10 @@
           x="24.938"
           y="19.112"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.519" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.519" />
         </filter>
         <filter
           id="google-i-googlelight__p"
@@ -164,10 +164,10 @@
           x="29.755"
           y="81.805"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <filter
           id="google-i-googlelight__r"
@@ -176,18 +176,18 @@
           x="55.522"
           y="84.601"
           color-interpolation-filters="sRGB"
-          filter-units="userSpaceOnUse">
+          filterUnits="userSpaceOnUse">
           <feFlood flood-opacity="0" result="BackgroundImageFix" />
           <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
-          <feGaussianBlur result="effect1_foregroundBlur_35_22298" std-deviation="0.074" />
+          <feGaussianBlur result="effect1_foregroundBlur_35_22298" stdDeviation="0.074" />
         </filter>
         <radialGradient
           id="google-i-googlelight__d"
           cx="0"
           cy="0"
           r="1"
-          gradient-transform="matrix(-1.74962 -42.82738 62.90853 -2.57 49.585 89.962)"
-          gradient-units="userSpaceOnUse">
+          gradientTransform="matrix(-1.74962 -42.82738 62.90853 -2.57 49.585 89.962)"
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.142" stop-color="#1ABD4D" />
           <stop offset="0.248" stop-color="#6EC30D" />
           <stop offset="0.312" stop-color="#8AC502" />
@@ -204,8 +204,8 @@
           cx="0"
           cy="0"
           r="1"
-          gradient-transform="matrix(29.7142 0 0 38.3742 88.821 39.925)"
-          gradient-units="userSpaceOnUse">
+          gradientTransform="matrix(29.7142 0 0 38.3742 88.821 39.925)"
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.408" stop-color="#FB4E5A" />
           <stop offset="1" stop-color="#FF4540" />
         </radialGradient>
@@ -214,8 +214,8 @@
           cx="0"
           cy="0"
           r="1"
-          gradient-transform="matrix(-41.6321 23.0583 31.2901 56.4944 72.594 11.077)"
-          gradient-units="userSpaceOnUse">
+          gradientTransform="matrix(-41.6321 23.0583 31.2901 56.4944 72.594 11.077)"
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.231" stop-color="#FF4541" />
           <stop offset="0.312" stop-color="#FF4540" />
           <stop offset="0.458" stop-color="#FF4640" />
@@ -230,8 +230,8 @@
           cx="0"
           cy="0"
           r="1"
-          gradient-transform="matrix(-75.5013 -98.558 -36.3804 27.8694 61.516 97.996)"
-          gradient-units="userSpaceOnUse">
+          gradientTransform="matrix(-75.5013 -98.558 -36.3804 27.8694 61.516 97.996)"
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.132" stop-color="#0CBA65" />
           <stop offset="0.21" stop-color="#0BB86D" />
           <stop offset="0.297" stop-color="#09B479" />
@@ -247,8 +247,8 @@
           cx="0"
           cy="0"
           r="1"
-          gradient-transform="rotate(96.618 17.58 37.855)scale(46.3623 64.1041)"
-          gradient-units="userSpaceOnUse">
+          gradientTransform="rotate(96.618 17.58 37.855)scale(46.3623 64.1041)"
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.366" stop-color="#FF4E3A" />
           <stop offset="0.458" stop-color="#FF8A1B" />
           <stop offset="0.54" stop-color="#FFA312" />
@@ -263,8 +263,8 @@
           cx="0"
           cy="0"
           r="1"
-          gradient-transform="matrix(-15.4439 17.0806 -48.1768 -43.5604 49.696 24.276)"
-          gradient-units="userSpaceOnUse">
+          gradientTransform="matrix(-15.4439 17.0806 -48.1768 -43.5604 49.696 24.276)"
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.316" stop-color="#FF4C3C" />
           <stop offset="0.604" stop-color="#FF692C" />
           <stop offset="0.727" stop-color="#FF7825" />
@@ -276,8 +276,8 @@
           cx="0"
           cy="0"
           r="1"
-          gradient-transform="matrix(-41.6321 -23.0583 31.2901 -56.4944 72.594 108.921)"
-          gradient-units="userSpaceOnUse">
+          gradientTransform="matrix(-41.6321 -23.0583 31.2901 -56.4944 72.594 108.921)"
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.231" stop-color="#0FBC5F" />
           <stop offset="0.312" stop-color="#0FBC5F" />
           <stop offset="0.366" stop-color="#0FBC5E" />
@@ -295,7 +295,7 @@
           x2="66.127"
           y1="94.188"
           y2="94.188"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#0FBC5C" />
           <stop offset="1" stop-color="#0CBA65" />
         </linearGradient>

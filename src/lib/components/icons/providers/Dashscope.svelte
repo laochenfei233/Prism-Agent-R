@@ -56,7 +56,7 @@
           x2="4245.26"
           y1="1310.26"
           y2="1841.02"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#148FB4" />
           <stop offset="1" stop-color="#14B4BE" />
         </linearGradient>
@@ -66,7 +66,7 @@
           x2="4128.7"
           y1="1318.03"
           y2="1766.68"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#148FB4" />
           <stop offset="1" stop-color="#14B4BE" />
         </linearGradient>
@@ -76,7 +76,7 @@
           x2="4190.9"
           y1="1347.41"
           y2="1676.24"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#148FB4" />
           <stop offset="1" stop-color="#14B4BE" />
         </linearGradient>
@@ -86,7 +86,7 @@
           x2="245.904"
           y1={-28.113}
           y2="5647.17"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#3311D4" />
           <stop offset="0.272" stop-color="#5314E0" />
           <stop offset="0.545" stop-color="#6C16E9" />
@@ -99,7 +99,7 @@
           x2="254.219"
           y1="415.843"
           y2="5331.44"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#3311D4" />
           <stop offset="0.203" stop-color="#4513DB" />
           <stop offset="0.731" stop-color="#7017EA" />
@@ -111,7 +111,7 @@
           x2="263.229"
           y1={-893.002}
           y2="9094.66"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#3311D4" />
           <stop offset="0.628" stop-color="#8018F0" />
         </linearGradient>
@@ -121,7 +121,7 @@
           x2="4227.45"
           y1="655.808"
           y2="3426.51"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.149" stop-color="#645AFF" />
           <stop offset="1" stop-color="#AA64FA" />
         </linearGradient>
@@ -131,7 +131,7 @@
           x2="2996.99"
           y1="523.347"
           y2="2454.88"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.188" stop-color="#645AFF" />
           <stop offset="1" stop-color="#AA64FA" />
         </linearGradient>
@@ -141,7 +141,7 @@
           x2="2634.79"
           y1="364.801"
           y2="2055.11"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop offset="0.212" stop-color="#645AFF" />
           <stop offset="0.468" stop-color="#775DFE" />
           <stop offset="0.986" stop-color="#A964FA" />
@@ -153,7 +153,7 @@
           x2="2968.49"
           y1="2853.9"
           y2="135.059"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#AA64FA" />
           <stop offset="1" stop-color="#645AFF" />
         </linearGradient>
@@ -163,7 +163,7 @@
           x2="3994.18"
           y1="1717.3"
           y2="1717.3"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#2DF7F7" />
           <stop offset="1" stop-color="#17C8D2" />
         </linearGradient>
@@ -173,7 +173,7 @@
           x2="3719.62"
           y1="1689.09"
           y2="1689.09"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#17C8D2" />
           <stop offset="1" stop-color="#2DF7F7" />
         </linearGradient>

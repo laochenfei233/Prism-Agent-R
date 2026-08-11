@@ -116,7 +116,7 @@ pub async fn settings_save_provider_key(
     Ok(())
 }
 
-/// 更新 Provider 连接信息（Base URL / API Key / 名称），对齐 Cherry Studio 连接设置可编辑
+/// 更新 Provider 连接信息（Base URL / API Key / 名称 / 图标），对齐 Cherry Studio 连接设置可编辑
 #[tauri::command]
 pub async fn settings_update_provider(
     state: State<'_, crate::AppState>,
@@ -124,6 +124,7 @@ pub async fn settings_update_provider(
     name: Option<String>,
     base_url: Option<String>,
     api_key: Option<String>,
+    avatar: Option<String>,
 ) -> Result<(), AppError> {
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -156,6 +157,16 @@ pub async fn settings_update_provider(
         };
         sqlx::query("UPDATE providers SET api_key_enc = ?, updated_at = ? WHERE id = ?")
             .bind(&stored)
+            .bind(now)
+            .bind(&provider_id)
+            .execute(&state.db.pool)
+            .await?;
+    }
+    if let Some(avatar) = avatar {
+        let trimmed = avatar.trim();
+        let stored = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
+        sqlx::query("UPDATE providers SET avatar = ?, updated_at = ? WHERE id = ?")
+            .bind(stored)
             .bind(now)
             .bind(&provider_id)
             .execute(&state.db.pool)

@@ -12,7 +12,7 @@
           x2="89.645"
           y1="30.386"
           y2="95.212"
-          gradient-units="userSpaceOnUse">
+          gradientUnits="userSpaceOnUse">
           <stop stop-color="#FEC13E" />
           <stop offset="1" stop-color="#FF6933" />
         </linearGradient>

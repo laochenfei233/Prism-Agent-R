@@ -8,7 +8,7 @@
           height="83"
           x="19"
           y="18"
-          mask-units="userSpaceOnUse"
+          maskUnits="userSpaceOnUse"
           style="mask-type:luminance">
           <path fill="#fff" d="M102 18H19V101H102V18Z" />
         </mask>

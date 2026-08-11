@@ -24,7 +24,7 @@ impl ModelService {
 
     pub async fn list_providers(&self) -> Result<Vec<ProviderDto>, AppError> {
         let rows = sqlx::query_as::<_, ProviderRow>(
-            "SELECT id, name, kind, base_url, api_key_enc, is_enabled, created_at, updated_at FROM providers ORDER BY name"
+            "SELECT id, name, kind, base_url, api_key_enc, is_enabled, created_at, updated_at, avatar FROM providers ORDER BY name"
         )
         .fetch_all(&self.pool)
         .await?;
@@ -36,6 +36,7 @@ impl ModelService {
             base_url: r.base_url,
             is_enabled: r.is_enabled != 0,
             has_key: r.api_key_enc.as_deref().map(str::trim).filter(|s| !s.is_empty()).is_some(),
+            avatar: r.avatar,
         }).collect())
     }
 

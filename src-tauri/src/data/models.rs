@@ -12,6 +12,9 @@ pub struct ProviderRow {
     pub is_enabled: i32,
     pub created_at: i64,
     pub updated_at: i64,
+    /// 自定义图标（预置 Logo 或用户上传路径）；旧查询未 select 时默认 None
+    #[sqlx(default)]
+    pub avatar: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +26,8 @@ pub struct ProviderDto {
     pub is_enabled: bool,
     /// 是否已配置 API Key（仅暴露布尔值，不回传密文）
     pub has_key: bool,
+    /// 自定义图标（预置 Logo 或用户上传路径）
+    pub avatar: Option<String>,
 }
 
 // ── Model ─────────────────────────────────────────────────
