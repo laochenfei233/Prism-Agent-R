@@ -1417,16 +1417,18 @@
 		margin-bottom: var(--space-4);
 	}
 	.content-title {
-		font-size: 18px;
-		font-weight: 600;
+		font-size: 20px;
+		font-weight: 700;
 		color: var(--color-fg);
 		margin: 0 0 4px;
-		line-height: 1.25;
+		line-height: 1.15;
+		letter-spacing: -0.02em;
 	}
 	.content-desc {
 		font-size: 13px;
 		color: var(--color-fg-secondary);
 		margin: 0;
+		letter-spacing: 0;
 	}
 
 	/* ── Provider 两栏（Cherry Studio 风格） ──── */
@@ -1461,9 +1463,13 @@
 		margin: 0 8px 8px;
 		padding: 6px 10px;
 		border: 1px solid var(--color-separator);
-		border-radius: 8px;
-		background: var(--color-bg);
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--color-bg) 72%, transparent);
+		backdrop-filter: blur(20px) saturate(180%);
+		-webkit-backdrop-filter: blur(20px) saturate(180%);
+		transition: border-color var(--duration-fast) var(--ease-default);
 	}
+	.pane-search:focus-within { border-color: var(--color-accent); }
 	.pane-search-icon { flex-shrink: 0; color: var(--color-fg-tertiary); }
 	.pane-search input {
 		flex: 1;
@@ -1483,16 +1489,17 @@
 		width: 100%;
 		padding: 8px 10px;
 		border: none;
-		border-radius: 8px;
+		border-radius: 10px;
 		background: transparent;
 		color: var(--color-fg);
 		font-size: 13px;
 		cursor: pointer;
 		text-align: left;
 		position: relative;
-		transition: background 0.15s ease;
+		transition: background var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--spring);
 	}
 	.pane-item:hover { background: var(--color-bg-tertiary); }
+	.pane-item:active { transform: scale(0.98); }
 	.pane-item.active { background: var(--color-bg-tertiary); font-weight: 500; }
 	.pane-item.active::before {
 		content: '';
@@ -1714,10 +1721,14 @@
 		gap: 6px;
 		padding: 5px 10px;
 		border: 1px solid var(--color-separator);
-		border-radius: 8px;
-		background: var(--color-bg);
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--color-bg) 72%, transparent);
+		backdrop-filter: blur(20px) saturate(180%);
+		-webkit-backdrop-filter: blur(20px) saturate(180%);
 		width: 180px;
+		transition: border-color var(--duration-fast) var(--ease-default);
 	}
+	.model-search:focus-within { border-color: var(--color-accent); }
 	.model-search svg { flex-shrink: 0; color: var(--color-fg-tertiary); }
 	.model-search input {
 		flex: 1;
@@ -1865,13 +1876,21 @@
 	}
 	.provider-title-icon:hover { border-color: var(--color-border-strong); box-shadow: var(--shadow-sm); }
 	.provider-title-icon .icon-preview { width: 100%; height: 100%; border-radius: 8px; border: none; }
-	/* ── 图标选择弹窗 ──── */
+	/* ── 图标选择弹窗（毛玻璃材质 + 弹簧入场） ──── */
 	.icon-picker-panel {
-		background: var(--color-bg-secondary);
+		background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
+		backdrop-filter: blur(30px) saturate(180%);
+		-webkit-backdrop-filter: blur(30px) saturate(180%);
 		border: 1px solid var(--color-separator);
-		border-radius: 12px;
+		border-radius: 14px;
 		padding: 14px;
 		margin-bottom: 20px;
+		box-shadow: var(--shadow-md);
+		animation: icon-panel-in var(--duration-normal) var(--spring);
+	}
+	@keyframes icon-panel-in {
+		from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+		to { opacity: 1; transform: translateY(0) scale(1); }
 	}
 	.preset-row {
 		display: grid;
@@ -1923,10 +1942,11 @@
 		font-size: 14px;
 		font-weight: 500;
 		cursor: pointer;
-		transition: background 0.15s ease;
+		transition: background var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--spring);
 	}
 	.btn-primary:hover { background: var(--color-accent-hover, var(--color-accent)); opacity: 0.92; }
-	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn-primary:active { transform: scale(0.97); }
+	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 	.btn-secondary {
 		width: fit-content;
@@ -1938,9 +1958,11 @@
 		font-size: 13px;
 		font-weight: 500;
 		cursor: pointer;
+		transition: background var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--spring);
 	}
 	.btn-secondary:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
-	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn-secondary:active { transform: scale(0.97); }
+	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 	.btn-sm {
 		padding: 4px 12px;
@@ -1950,10 +1972,11 @@
 		color: var(--color-fg-secondary);
 		font-size: 13px;
 		cursor: pointer;
-		transition: background 0.15s ease;
+		transition: background var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--spring);
 	}
 	.btn-sm:hover { background: var(--color-bg-hover); }
-	.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn-sm:active { transform: scale(0.97); }
+	.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 	.btn-sm.danger { color: var(--color-red, var(--color-red)); border-color: var(--color-red, var(--color-red)); }
 	.btn-icon {
 		display: inline-flex;
@@ -1966,10 +1989,11 @@
 		background: transparent;
 		color: var(--color-fg-secondary);
 		cursor: pointer;
-		transition: background 0.15s ease, color 0.15s ease;
+		transition: background var(--duration-fast) var(--ease-default), color var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--spring);
 		flex-shrink: 0;
 	}
 	.btn-icon:hover { background: var(--color-bg-hover); color: var(--color-fg); }
+	.btn-icon:active { transform: scale(0.93); }
 
 	/* ── ASR 表单 ─────────────────────────── */
 	.asr-form {
@@ -2023,5 +2047,22 @@
 		.pane-list { display: flex; gap: 4px; overflow-x: auto; }
 		.pane-item { width: auto; flex-shrink: 0; }
 		.settings-content { padding: 8px; }
+	}
+
+	/* ── 减动效 / 减透明度（apple-design） ──── */
+	@media (prefers-reduced-motion: reduce) {
+		.btn-primary, .btn-secondary, .btn-sm, .btn-icon, .pane-item {
+			transform: none !important;
+			transition: none !important;
+		}
+		.icon-picker-panel { animation: none !important; }
+		.icon-preset-item { transition: none !important; transform: none !important; }
+	}
+	@media (prefers-reduced-transparency: reduce) {
+		.pane-search, .model-search, .icon-picker-panel {
+			background: var(--color-bg);
+			backdrop-filter: none;
+			-webkit-backdrop-filter: none;
+		}
 	}
 </style>
