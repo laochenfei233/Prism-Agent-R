@@ -219,6 +219,12 @@
 		}
 	});
 
+	// 选中 Provider 变化时自动拉取可用模型
+	$effect(() => {
+		const pid = selectedProviderId;
+		if (pid) { mProvider = pid; fetchModels(); }
+	});
+
 	// ASR 语音识别（从会议页移入）
 	let asrBackends = $state<any[]>([]);
 	let asrCatalog = $state<any[]>([]);
@@ -379,6 +385,16 @@
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
 
+	async function quickAddModel(modelId: string) {
+		const providerId = selectedProviderId;
+		if (!providerId) { msg = '请先选择服务商'; return; }
+		try {
+			await invoke('settings_add_model', { providerId, modelId, displayName: null, isDefault: false });
+			await load();
+			msg = '✓ 模型已添加';
+		} catch (e) { msg = '错误: ' + String(e); }
+	}
+
 	// MCP
 	async function addMcp() {
 		if (!mcName.trim()) { msg = '请输入 MCP 名称'; return; }
@@ -478,8 +494,8 @@
 		<div class="nav-scroll">
 			<div class="nav-group-title">模型管理</div>
 			<button class="nav-item" class:active={section === 'providers'} onclick={() => section = 'providers'}>
-				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-				<span>Provider & 模型</span>
+				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+				<span>LLM 模型管理</span>
 			</button>
 			<button class="nav-item" class:active={section === 'asr'} onclick={() => section = 'asr'}>
 				<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
@@ -604,48 +620,24 @@
 							</div>
 						</div>
 
-						<!-- 模型管理 -->
+						<!-- 模型管理（Cherry Studio 风格：列表展示） -->
 						<div class="card detail-card">
 							<div class="section-title">模型</div>
-							<div class="form-row">
-								<select bind:value={mProvider} onchange={() => { availableModels = []; mModelId = ''; }}>
-									<option value="">选择 Provider</option>
-									{#each providers as p}<option value={p.id}>{p.name}</option>{/each}
-								</select>
-								<input bind:value={mModelId} placeholder="模型 ID，如 gpt-4o" aria-label="模型 ID,如 gpt-4o" />
-								<button class="btn-secondary" onclick={fetchModels} disabled={loadingModels}>
-									{loadingModels ? '拉取中...' : '拉取'}
-								</button>
+							<!-- 快速添加行 -->
+							<div class="form-row quick-add-row">
+								<input bind:value={mModelId} placeholder="输入模型 ID（如 gpt-4o）" aria-label="模型 ID" />
 								<button class="btn-primary" onclick={saveModel}>添加</button>
 							</div>
-							{#if availableModels.length > 0}
-								<div class="form-row">
-									<select bind:value={mModelId}>
-										<option value="">选择模型</option>
-										{#each availableModels as m}<option value={m}>{m}</option>{/each}
-									</select>
-								</div>
-							{/if}
-							<div class="form-row">
-								<select value={presetFor(sel.kind || 'custom')[0] ?? ''} onchange={(e) => applyPreset(sel.kind || 'custom', (e.currentTarget as HTMLSelectElement).value)}>
-									<option value="">预置模型库…</option>
-									{#each presetFor(sel.kind || 'custom') as pm}<option value={pm}>{pm}</option>{/each}
-								</select>
-								<span class="preset-hint">选择预置模型填充上方输入框</span>
-							</div>
 
-							<div class="divider"></div>
-							{#if models.filter(m => m.provider_id === sel.id).length === 0}
-								<p class="hint">该服务商暂无模型，请在上面添加</p>
-							{:else}
+							<!-- 已添加的模型列表 -->
+							{#if models.filter(m => m.provider_id === sel.id).length > 0}
+								<div class="model-section-label">已添加</div>
 								{#each models.filter(m => m.provider_id === sel.id) as m}
-									<div class="config-row">
-										<div class="config-info">
-											<span class="config-name">{m.display_name || m.model_id}</span>
-											<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
-											{#if m.is_default}<span class="config-badge default">默认</span>{/if}
-										</div>
-										<div class="config-actions">
+									<div class="model-row added">
+										<span class="model-name">{m.display_name || m.model_id}</span>
+										<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
+										{#if m.is_default}<span class="config-badge default">默认</span>{/if}
+										<div class="model-actions">
 											{#if !m.is_default}
 												<button class="btn-sm" onclick={() => setDefaultModel(m.id)}>设默认</button>
 											{/if}
@@ -654,11 +646,31 @@
 									</div>
 								{/each}
 							{/if}
+
+							<!-- 可用模型列表（API 拉取） -->
+							{#if loadingModels}
+								<div class="model-loading">拉取模型列表中...</div>
+							{:else if availableModels.length > 0}
+								<div class="model-section-label">可用模型 <span class="model-section-hint">（点击添加）</span></div>
+								{#each availableModels as modelId}
+									{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
+									<div class="model-row available" class:added={isAdded}>
+										<span class="model-name">{modelId}</span>
+										{#if isAdded}
+											<span class="config-badge default">已添加</span>
+										{:else}
+											<button class="btn-sm" onclick={() => quickAddModel(modelId)}>添加</button>
+										{/if}
+									</div>
+								{/each}
+							{:else if models.filter(m => m.provider_id === sel.id).length === 0}
+								<p class="hint">该服务商暂无模型，输入模型 ID 添加或等待自动拉取</p>
+							{/if}
 						</div>
 					{:else}
 						<!-- 添加 Provider 模式 -->
 						<div class="content-header">
-							<h2 class="content-title">Provider & 模型</h2>
+							<h2 class="content-title">LLM 模型管理</h2>
 							<p class="content-desc">添加模型服务商并配置其模型</p>
 						</div>
 						<div class="card detail-card">
@@ -1128,7 +1140,7 @@
 	/* ── Provider 两栏（Cherry Studio 风格） ──── */
 	.provider-shell {
 		display: flex;
-		gap: 20px;
+		gap: 12px;
 		height: 100%;
 		min-height: 0;
 	}
@@ -1138,7 +1150,8 @@
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg-secondary);
-		border-right: 1px solid var(--color-separator);
+		border: 1px solid var(--color-separator);
+		border-radius: 12px;
 		overflow: hidden;
 	}
 	.pane-title {
@@ -1242,7 +1255,6 @@
 	.add-provider-btn:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); border-color: var(--color-border-strong); }
 	.provider-detail-pane { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
 	.detail-card { margin-bottom: 16px; }
-	.detail-card .form-row .btn-secondary { flex-shrink: 0; }
 	.detail-card .form-row .btn-primary { flex-shrink: 0; }
 	.card {
 		background: var(--color-bg-secondary);
@@ -1395,6 +1407,37 @@
 		border-color: var(--color-accent);
 		color: var(--color-accent);
 	}
+
+	/* ── 模型列表（Cherry Studio 风格） ──── */
+	.quick-add-row { margin-bottom: 12px; }
+	.quick-add-row input { flex: 1; }
+	.quick-add-row .btn-primary { flex-shrink: 0; }
+	.model-section-label {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-fg-secondary);
+		margin: 12px 0 6px;
+	}
+	.model-section-hint { font-weight: 400; color: var(--color-fg-tertiary); }
+	.model-loading {
+		padding: 12px 0;
+		font-size: 13px;
+		color: var(--color-fg-tertiary);
+	}
+	.model-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		border-radius: 8px;
+		font-size: 13px;
+		transition: background 0.12s ease;
+	}
+	.model-row.available { cursor: pointer; }
+	.model-row.available:hover { background: var(--color-bg-tertiary); }
+	.model-row.added { background: color-mix(in srgb, var(--color-green) 6%, transparent); }
+	.model-name { flex: 1; min-width: 0; word-break: break-all; }
+	.model-actions { display: flex; gap: 6px; flex-shrink: 0; }
 	.config-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
 	.key-input {
 		width: 200px;
@@ -1499,7 +1542,7 @@
 	}
 	@media (max-width: 720px) {
 		.provider-shell { flex-direction: column; }
-		.provider-list-pane { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid var(--color-separator); }
+		.provider-list-pane { width: 100%; min-width: 0; border: 1px solid var(--color-separator); }
 		.pane-list { display: flex; gap: 4px; overflow-x: auto; }
 		.pane-item { width: auto; flex-shrink: 0; }
 		.settings-content { padding: 20px; }
