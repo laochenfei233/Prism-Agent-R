@@ -178,6 +178,38 @@
 		}
 	}
 
+	// 供应商预设库（Cherry Studio 风格：选中自动填充名称/Base URL）
+	const PROVIDER_PRESETS = [
+		{ kind: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
+		{ kind: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com' },
+		{ kind: 'google', name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+		{ kind: 'dashscope', name: '阿里云百炼', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+		{ kind: 'mimo', name: 'Xiaomi MiMo', baseUrl: 'https://api.xiaomimimo.com/v1' },
+		{ kind: 'ollama', name: 'Ollama', baseUrl: 'http://localhost:11434/v1' },
+		{ kind: 'custom', name: '自定义', baseUrl: '' },
+	] as const;
+	function applyProviderPreset(preset: { kind: string; name: string; baseUrl: string }) {
+		pKind = preset.kind;
+		pName = preset.name;
+		pUrl = preset.baseUrl;
+	}
+	function providerColor(kind: string): string {
+		switch (kind) {
+			case 'openai': return 'var(--color-green)';
+			case 'anthropic': return 'var(--color-orange)';
+			case 'google': return 'var(--color-accent)';
+			case 'dashscope': return 'var(--color-purple)';
+			case 'mimo': return 'var(--color-red)';
+			case 'ollama': return 'var(--color-fg-secondary)';
+			default: return 'var(--color-fg-secondary)';
+		}
+	}
+	function providerInitial(name: string): string {
+		return (name || '?').trim()[0]?.toUpperCase() ?? '?';
+	}
+	// Provider 列表搜索过滤
+	let providerFilter = $state('');
+
 	// 切换 Provider 分类时自动选中第一个
 	$effect(() => {
 		if (section === 'providers') {
@@ -506,25 +538,32 @@
 				<!-- Provider 列表（Cherry Studio 风格左子栏） -->
 				<div class="provider-list-pane">
 					<div class="pane-title">Provider</div>
-					<button class="add-provider-btn" onclick={() => { pName = ''; pUrl = ''; pKey = ''; pKind = 'openai'; addingProvider = true; }}>
-						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-						添加 Provider
-					</button>
+					<div class="pane-search">
+						<svg class="pane-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+						<input bind:value={providerFilter} placeholder="搜索服务商" aria-label="搜索服务商" />
+					</div>
 					<div class="pane-list">
-						{#each providers as p}
+						{#each providers.filter(p => !providerFilter.trim() || p.name.toLowerCase().includes(providerFilter.trim().toLowerCase()) || p.kind.toLowerCase().includes(providerFilter.trim().toLowerCase())) as p}
 							<button
 								class="pane-item"
 								class:active={selectedProviderId === p.id}
 								onclick={() => selectedProviderId = p.id}
 							>
+								<span class="pane-avatar" style={`background: ${providerColor(p.kind)}`}>{providerInitial(p.name)}</span>
 								<span class="pane-item-name">{p.name}</span>
-								<span class="pane-item-kind">{p.kind}</span>
+								<span class="pane-status" class:on={p.is_enabled} title={p.is_enabled ? '可用' : '未配置'}></span>
 							</button>
 						{/each}
 						{#if providers.length === 0}
 							<div class="pane-empty">{loaded ? '暂无 Provider' : '加载中...'}</div>
+						{:else if providers.filter(p => !providerFilter.trim() || p.name.toLowerCase().includes(providerFilter.trim().toLowerCase()) || p.kind.toLowerCase().includes(providerFilter.trim().toLowerCase())).length === 0}
+							<div class="pane-empty">无匹配服务商</div>
 						{/if}
 					</div>
+					<button class="add-provider-btn" onclick={() => { pName = ''; pUrl = ''; pKey = ''; pKind = 'openai'; addingProvider = true; }}>
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+						添加服务商
+					</button>
 				</div>
 
 				<!-- Provider 详情（连接 + 模型管理） -->
@@ -626,10 +665,24 @@
 							<div class="section-title">添加 Provider</div>
 							<div class="form-row">
 								<select bind:value={pKind}>
-									<option value="openai">OpenAI 兼容</option>
-									<option value="ollama">Ollama</option>
+									{#each PROVIDER_PRESETS as pr}<option value={pr.kind}>{pr.name}</option>{/each}
 								</select>
 								<input bind:value={pName} placeholder="名称" aria-label="名称" />
+							</div>
+							<div class="form-row">
+								<div class="preset-picker">
+									<span class="preset-picker-label">预置服务商：</span>
+									<div class="preset-chips">
+										{#each PROVIDER_PRESETS as pr}
+											<button
+												type="button"
+												class="preset-chip"
+												class:active={pKind === pr.kind}
+												onclick={() => applyProviderPreset(pr)}
+											>{pr.name}</button>
+										{/each}
+									</div>
+								</div>
 							</div>
 							<div class="form-row">
 								<input bind:value={pUrl} placeholder="Base URL" aria-label="Base URL" />
@@ -654,8 +707,10 @@
 					<div class="pane-list">
 						{#each asrBackends as b}
 							<div class="pane-item" class:active={true}>
+								<span class="pane-avatar" style={`background: ${providerColor('asr')}`}>{providerInitial(b.name)}</span>
 								<span class="pane-item-name">{b.name}</span>
 								<span class="pane-item-kind">{b.languages.join(', ')}</span>
+								<span class="pane-status on" title="可用"></span>
 							</div>
 						{/each}
 						{#if asrBackends.length === 0}
@@ -1078,8 +1133,8 @@
 		min-height: 0;
 	}
 	.provider-list-pane {
-		width: 160px;
-		min-width: 160px;
+		width: 200px;
+		min-width: 200px;
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg-secondary);
@@ -1094,30 +1149,34 @@
 		text-transform: uppercase;
 		letter-spacing: 0.4px;
 	}
-	.add-provider-btn {
+	.pane-search {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		margin: 0 8px 8px;
-		padding: 8px 10px;
-		border: none;
+		padding: 6px 10px;
+		border: 1px solid var(--color-separator);
 		border-radius: 8px;
-		background: transparent;
-		color: var(--color-accent);
-		font-size: 13px;
-		cursor: pointer;
-		text-align: left;
-		transition: background 0.15s ease;
+		background: var(--color-bg);
 	}
-	.add-provider-btn:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+	.pane-search-icon { flex-shrink: 0; color: var(--color-fg-tertiary); }
+	.pane-search input {
+		flex: 1;
+		min-width: 0;
+		border: none;
+		outline: none;
+		background: transparent;
+		color: var(--color-fg);
+		font-size: 13px;
+	}
+	.pane-search input::placeholder { color: var(--color-fg-tertiary); }
 	.pane-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
 	.pane-item {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 		gap: 8px;
 		width: 100%;
-		padding: 9px 10px;
+		padding: 8px 10px;
 		border: none;
 		border-radius: 8px;
 		background: transparent;
@@ -1125,13 +1184,62 @@
 		font-size: 13px;
 		cursor: pointer;
 		text-align: left;
+		position: relative;
 		transition: background 0.15s ease;
 	}
 	.pane-item:hover { background: var(--color-bg-tertiary); }
 	.pane-item.active { background: var(--color-bg-tertiary); font-weight: 500; }
+	.pane-item.active::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 8px;
+		bottom: 8px;
+		width: 3px;
+		border-radius: 2px;
+		background: var(--color-accent);
+	}
+	.pane-avatar {
+		width: 24px;
+		height: 24px;
+		min-width: 24px;
+		border-radius: 6px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: #fff;
+		font-size: 12px;
+		font-weight: 600;
+	}
 	.pane-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.pane-item-kind { font-size: 11px; color: var(--color-fg-secondary); flex-shrink: 0; }
+	.pane-status {
+		width: 8px;
+		height: 8px;
+		min-width: 8px;
+		border-radius: 50%;
+		background: var(--color-fg-tertiary);
+		flex-shrink: 0;
+	}
+	.pane-status.on { background: var(--color-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-green) 20%, transparent); }
 	.pane-empty { padding: 16px 10px; font-size: 13px; color: var(--color-fg-tertiary); }
+	.add-provider-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		margin: 0 8px 10px;
+		padding: 8px 10px;
+		border: 1px dashed var(--color-separator);
+		border-radius: 8px;
+		background: transparent;
+		color: var(--color-accent);
+		font-size: 13px;
+		cursor: pointer;
+		text-align: center;
+		transition: background 0.15s ease, border-color 0.15s ease;
+	}
+	.add-provider-btn:hover { background: color-mix(in srgb, var(--color-accent) 8%, transparent); border-color: var(--color-border-strong); }
 	.provider-detail-pane { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
 	.detail-card { margin-bottom: 16px; }
 	.detail-card .form-row .btn-secondary { flex-shrink: 0; }
@@ -1268,6 +1376,25 @@
 		color: var(--color-orange);
 	}
 	.preset-hint { font-size: 12px; color: var(--color-fg-tertiary); }
+	.preset-picker { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+	.preset-picker-label { font-size: 12px; color: var(--color-fg-secondary); }
+	.preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+	.preset-chip {
+		padding: 4px 10px;
+		border: 1px solid var(--color-separator);
+		border-radius: 999px;
+		background: var(--color-bg);
+		color: var(--color-fg-secondary);
+		font-size: 12px;
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+	}
+	.preset-chip:hover { border-color: var(--color-border-strong); color: var(--color-fg); }
+	.preset-chip.active {
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
 	.config-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
 	.key-input {
 		width: 200px;
@@ -1368,7 +1495,7 @@
 		.nav-item span { display: none; }
 		.nav-item { justify-content: center; padding: 10px 0; }
 		.nav-group-title { display: none; }
-		.provider-list-pane { width: 140px; min-width: 140px; }
+		.provider-list-pane { width: 170px; min-width: 170px; }
 	}
 	@media (max-width: 720px) {
 		.provider-shell { flex-direction: column; }
