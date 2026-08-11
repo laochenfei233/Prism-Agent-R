@@ -9,7 +9,7 @@
           x="17"
           y="17"
           mask-units="userSpaceOnUse"
-          style="mask-type: luminance">
+          style="mask-type:luminance">
           <path fill="#fff" d="M103 17H17V103H103V17Z" />
         </mask>
         <g mask="url(#openrouter-i-openrouterlight__b)">

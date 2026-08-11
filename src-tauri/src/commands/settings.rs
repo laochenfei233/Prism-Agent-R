@@ -116,6 +116,55 @@ pub async fn settings_save_provider_key(
     Ok(())
 }
 
+/// 更新 Provider 连接信息（Base URL / API Key / 名称），对齐 Cherry Studio 连接设置可编辑
+#[tauri::command]
+pub async fn settings_update_provider(
+    state: State<'_, crate::AppState>,
+    provider_id: String,
+    name: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+) -> Result<(), AppError> {
+    let now = chrono::Utc::now().timestamp_millis();
+
+    if let Some(name) = name {
+        if name.trim().is_empty() {
+            return Err(AppError::Validation("名称不能为空".into()));
+        }
+        sqlx::query("UPDATE providers SET name = ?, updated_at = ? WHERE id = ?")
+            .bind(name.trim())
+            .bind(now)
+            .bind(&provider_id)
+            .execute(&state.db.pool)
+            .await?;
+    }
+    if let Some(base_url) = base_url {
+        let trimmed = base_url.trim();
+        let stored = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
+        sqlx::query("UPDATE providers SET base_url = ?, updated_at = ? WHERE id = ?")
+            .bind(stored)
+            .bind(now)
+            .bind(&provider_id)
+            .execute(&state.db.pool)
+            .await?;
+    }
+    if let Some(api_key) = api_key {
+        let stored = if api_key.trim().is_empty() {
+            String::new()
+        } else {
+            encrypt_key(api_key.trim())?
+        };
+        sqlx::query("UPDATE providers SET api_key_enc = ?, updated_at = ? WHERE id = ?")
+            .bind(&stored)
+            .bind(now)
+            .bind(&provider_id)
+            .execute(&state.db.pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
 /// 解密已加密的 key；失败（如旧明文数据）则原样返回，保持向后兼容
 pub fn decrypt_provider_key(encoded: &str) -> String {
     decrypt_key(encoded).unwrap_or_else(|_| encoded.to_string())

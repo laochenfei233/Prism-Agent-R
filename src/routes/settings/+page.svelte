@@ -148,37 +148,13 @@
 	let editKeyProviderId = $state<string | null>(null);
 	let editKeyValue = $state('');
 	let keySaving = $state(false);
+	let editBaseUrl = $state('');
+	let connSaving = $state(false);
 	let mProvider = $state('');
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
 
-	// 预置模型库（Cherry Studio 风格：按服务商类型分类的常见模型，选择后填充输入框）
-	const PRESET_MODELS: Record<string, string[]> = {
-		openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3', 'o4-mini', 'text-embedding-3-small', 'text-embedding-3-large'],
-		ollama: ['llama3.1', 'qwen2.5', 'qwen2.5-coder', 'deepseek-r1', 'gemma2', 'mistral', 'phi4', 'nomic-embed-text'],
-		anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-haiku-4-5'],
-		google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-embedding-001'],
-		dashscope: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen-vl-max', 'qwen-embedding'],
-		mimo: ['mimo-v2.5', 'mimo-v2.5-pro'],
-		deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-		zhipu: ['glm-4-plus', 'glm-4-flash', 'glm-4v-plus', 'glm-4'],
-		moonshot: ['kimi-k2', 'kimi-latest', 'moonshot-v1-32k', 'moonshot-v1-128k'],
-		doubao: ['doubao-pro-32k', 'doubao-lite-32k', 'doubao-1-5-pro', 'doubao-embedding'],
-		minimax: ['MiniMax-M2', 'MiniMax-M1', 'abab6.5s-chat'],
-		baichuan: ['Baichuan4', 'Baichuan4-Turbo'],
-		silicon: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct', 'BAAI/bge-m3'],
-		groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-		openrouter: ['openai/gpt-4o', 'anthropic/claude-sonnet-4.5', 'deepseek/deepseek-chat'],
-		mistral: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest'],
-		custom: [],
-	};
-	function applyPreset(kind: string, modelId: string) {
-		mModelId = modelId;
-	}
-	function presetFor(kind: string): string[] {
-		return PRESET_MODELS[kind] ?? PRESET_MODELS.custom;
-	}
 	function kindLabel(kind: string): string {
 		switch (kind) {
 			case 'chat': return '对话';
@@ -312,7 +288,7 @@
 		loadingModels = true;
 		availableModels = [];
 		try {
-			const result = await invoke<{models: string[]}>('model_fetch_available', { provider_id: mProvider });
+			const result = await invoke<{models: string[]}>('model_fetch_available', { providerId: mProvider });
 			availableModels = result.models || [];
 		} catch (e) {
 			msg = '拉取失败: ' + String(e);
@@ -400,6 +376,31 @@
 		editKeyProviderId = null;
 		editKeyValue = '';
 	}
+
+	async function saveProviderConn(providerId: string) {
+		if (connSaving) return;
+		connSaving = true;
+		try {
+			await invoke('settings_update_provider', { providerId, baseUrl: editBaseUrl.trim() });
+			await load();
+			msg = '✓ 连接已保存';
+		} catch (e) { msg = '错误: ' + String(e); }
+		finally { connSaving = false; }
+	}
+
+	function cancelEditConn() {
+		const sel2 = providers.find((p) => p.id === selectedProviderId);
+		editBaseUrl = sel2?.base_url ?? '';
+	}
+
+	// 选中 Provider 变化时同步编辑缓冲
+	$effect(() => {
+		if (selectedProviderId) {
+			const p = providers.find((x) => x.id === selectedProviderId);
+			editBaseUrl = p?.base_url ?? '';
+			cancelEditKey();
+		}
+	});
 
 	async function saveProviderKey(providerId: string) {
 		if (!editKeyValue.trim() || keySaving) return;
@@ -653,15 +654,26 @@
 							<p class="content-desc">配置连接参数并管理该服务商的模型</p>
 						</div>
 
-						<!-- 连接设置 -->
+						<!-- 连接设置（Cherry Studio 风格：Base URL / API Key 均可编辑） -->
 						<div class="card detail-card">
 							<div class="section-title">连接设置</div>
-							<div class="form-row">
-								<input value={sel.base_url || ''} disabled placeholder="Base URL" aria-label="Base URL" />
+							<div class="config-row">
+								<div class="config-info">
+									<span class="config-name">API 地址 (Base URL)</span>
+								</div>
+								<div class="config-input-group">
+									<input bind:value={editBaseUrl} placeholder="https://api.example.com/v1" aria-label="Base URL" />
+									{#if editBaseUrl !== (sel.base_url ?? '')}
+										<button class="btn-sm" onclick={() => saveProviderConn(sel.id)}>保存</button>
+										<button class="btn-sm" onclick={cancelEditConn}>取消</button>
+									{/if}
+								</div>
 							</div>
 							<div class="config-row">
 								<div class="config-info">
 									<span class="config-name">API Key</span>
+								</div>
+								<div class="config-input-group">
 									{#if editKeyProviderId === sel.id}
 										<input
 											class="key-input"
@@ -1177,8 +1189,13 @@
 		overflow-y: auto;
 		padding: 8px;
 	}
-	.settings-content > :is(.content-header, .card, .provider-shell) {
+	.settings-content > :is(.content-header, .card) {
 		max-width: 720px;
+	}
+	/* Provider 两栏铺满右侧（Cherry Studio：详情贴近窗口右缘） */
+	.settings-content > .provider-shell {
+		max-width: none;
+		width: 100%;
 	}
 	.content-header { margin-bottom: var(--space-4); }
 	.content-title {

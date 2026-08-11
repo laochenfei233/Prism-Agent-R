@@ -102,6 +102,7 @@ pub fn run() {
             commands::model::model_list,
             commands::model::model_providers,
             commands::settings::settings_save_provider_key,
+            commands::settings::settings_update_provider,
             commands::settings::settings_add_provider,
             commands::settings::settings_add_model,
             commands::settings::model_delete,

@@ -9,7 +9,7 @@
           x="19"
           y="18"
           mask-units="userSpaceOnUse"
-          style="mask-type: luminance">
+          style="mask-type:luminance">
           <path fill="#fff" d="M102 18H19V101H102V18Z" />
         </mask>
         <g mask="url(#anthropic-i-anthropiclight__b)">
