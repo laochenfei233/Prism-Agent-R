@@ -1119,7 +1119,7 @@
 		flex: 1;
 		min-width: 0;
 		overflow-y: auto;
-		padding: 4px;
+		padding: 8px;
 	}
 	.settings-content > :is(.content-header, .card, .provider-shell) {
 		max-width: 720px;
@@ -1140,7 +1140,7 @@
 	/* ── Provider 两栏（Cherry Studio 风格） ──── */
 	.provider-shell {
 		display: flex;
-		gap: 4px;
+		gap: 8px;
 		height: 100%;
 		min-height: 0;
 	}
@@ -1541,10 +1541,10 @@
 		.provider-list-pane { width: 170px; min-width: 170px; }
 	}
 	@media (max-width: 720px) {
-		.provider-shell { flex-direction: column; gap: 4px; }
+		.provider-shell { flex-direction: column; gap: 8px; }
 		.provider-list-pane { width: 100%; min-width: 0; border: 1px solid var(--color-separator); }
 		.pane-list { display: flex; gap: 4px; overflow-x: auto; }
 		.pane-item { width: auto; flex-shrink: 0; }
-		.settings-content { padding: 4px; }
+		.settings-content { padding: 8px; }
 	}
 </style>
