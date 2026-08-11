@@ -5,6 +5,7 @@
 	import type { SettingSpecDto } from '$lib/api';
 	import Switch from '$lib/components/base/Switch.svelte';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
+	import ProviderLogo from '$lib/components/icons/ProviderLogo.svelte';
 
 	// ── 注册表设置项（系统分组） ─────────────────────────
 	let specs = $state<SettingSpecDto[]>([]);
@@ -158,9 +159,19 @@
 		ollama: ['llama3.1', 'qwen2.5', 'qwen2.5-coder', 'deepseek-r1', 'gemma2', 'mistral', 'phi4', 'nomic-embed-text'],
 		anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-haiku-4-5'],
 		google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-embedding-001'],
-		dashscope: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen-vl-max'],
+		dashscope: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen-vl-max', 'qwen-embedding'],
 		mimo: ['mimo-v2.5', 'mimo-v2.5-pro'],
-		custom: ['gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4-5'],
+		deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+		zhipu: ['glm-4-plus', 'glm-4-flash', 'glm-4v-plus', 'glm-4'],
+		moonshot: ['kimi-k2', 'kimi-latest', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+		doubao: ['doubao-pro-32k', 'doubao-lite-32k', 'doubao-1-5-pro', 'doubao-embedding'],
+		minimax: ['MiniMax-M2', 'MiniMax-M1', 'abab6.5s-chat'],
+		baichuan: ['Baichuan4', 'Baichuan4-Turbo'],
+		silicon: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct', 'BAAI/bge-m3'],
+		groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+		openrouter: ['openai/gpt-4o', 'anthropic/claude-sonnet-4.5', 'deepseek/deepseek-chat'],
+		mistral: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest'],
+		custom: [],
 	};
 	function applyPreset(kind: string, modelId: string) {
 		mModelId = modelId;
@@ -183,8 +194,18 @@
 		{ kind: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
 		{ kind: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com' },
 		{ kind: 'google', name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+		{ kind: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com' },
+		{ kind: 'zhipu', name: '智谱', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
+		{ kind: 'moonshot', name: 'Moonshot AI', baseUrl: 'https://api.moonshot.cn' },
 		{ kind: 'dashscope', name: '阿里云百炼', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+		{ kind: 'doubao', name: '豆包', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3' },
+		{ kind: 'minimax', name: 'MiniMax', baseUrl: 'https://api.minimaxi.com/v1' },
+		{ kind: 'baichuan', name: '百川', baseUrl: 'https://api.baichuan-ai.com' },
+		{ kind: 'silicon', name: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1' },
 		{ kind: 'mimo', name: 'Xiaomi MiMo', baseUrl: 'https://api.xiaomimimo.com/v1' },
+		{ kind: 'groq', name: 'Groq', baseUrl: 'https://api.groq.com/openai' },
+		{ kind: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+		{ kind: 'mistral', name: 'Mistral', baseUrl: 'https://api.mistral.ai' },
 		{ kind: 'ollama', name: 'Ollama', baseUrl: 'http://localhost:11434/v1' },
 		{ kind: 'custom', name: '自定义', baseUrl: '' },
 	] as const;
@@ -565,7 +586,7 @@
 								class:active={selectedProviderId === p.id}
 								onclick={() => selectedProviderId = p.id}
 							>
-								<span class="pane-avatar" style={`background: ${providerColor(p.kind)}`}>{providerInitial(p.name)}</span>
+								<span class="pane-avatar"><ProviderLogo kind={p.kind} /></span>
 								<span class="pane-item-name">{p.name}</span>
 								<span class="pane-status" class:on={p.is_enabled} title={p.is_enabled ? '可用' : '未配置'}></span>
 							</button>
@@ -1220,10 +1241,11 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		color: #fff;
-		font-size: 12px;
-		font-weight: 600;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-separator);
+		overflow: hidden;
 	}
+	.pane-avatar :global(svg) { display: block; }
 	.pane-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.pane-item-kind { font-size: 11px; color: var(--color-fg-secondary); flex-shrink: 0; }
 	.pane-status {
