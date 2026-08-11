@@ -231,7 +231,45 @@
 	// Provider 列表搜索过滤
 	let providerFilter = $state('');
 
-	// 切换 Provider 分类时自动选中第一个
+	// 中间栏条目 = 预置供应商（未添加显示为可配置项）+ 已添加的自定义 Provider
+	type PaneProvider = {
+		kind: string;
+		name: string;
+		existing: (typeof providers)[number] | null;
+	};
+	const paneProviders = $derived.by(() => {
+		const rows: PaneProvider[] = PROVIDER_PRESETS
+			.filter((pr) => pr.kind !== 'custom')
+			.map((pr) => ({
+				kind: pr.kind,
+				name: pr.name,
+				existing: providers.find((p) => p.kind === pr.kind) ?? null,
+			}));
+		// 已添加但不在预置库中的 Provider（自定义 kind）追加在末尾
+		for (const p of providers) {
+			if (!PROVIDER_PRESETS.some((pr) => pr.kind === p.kind)) {
+				rows.push({ kind: p.kind, name: p.name, existing: p });
+			}
+		}
+		return rows;
+	});
+
+	function selectPaneProvider(item: PaneProvider) {
+		if (item.existing) {
+			selectedProviderId = item.existing.id;
+			addingProvider = false;
+		} else {
+			// 未添加 → 进入添加模式并预填充预设（name/base_url）
+			const preset = PROVIDER_PRESETS.find((pr) => pr.kind === item.kind);
+			if (preset) applyProviderPreset(preset);
+			else { pKind = item.kind; pName = item.name; pUrl = ''; }
+			pKey = '';
+			selectedProviderId = null;
+			addingProvider = true;
+		}
+	}
+
+	// 切换 Provider 分类时自动选中第一个（已添加的）
 	$effect(() => {
 		if (section === 'providers') {
 			if (!selectedProviderId && providers.length > 0) {
@@ -337,6 +375,7 @@
 
 	async function saveProvider() {
 		if (!pName.trim()) { msg = '请输入名称'; return; }
+		const savedKind = pKind;
 		try {
 			await invoke('settings_add_provider', {
 				name: pName.trim(), kind: pKind,
@@ -345,10 +384,9 @@
 			pName = ''; pUrl = ''; pKey = '';
 			addingProvider = false;
 			await load();
-			// 显式选中新添加的 Provider（位于列表首位）
-			if (providers.length > 0) {
-				selectedProviderId = providers[0].id;
-			}
+			// 选中新添加的 Provider（按 kind 匹配，找不到则回退列表首位）
+			const added = providers.find((p) => p.kind === savedKind);
+			selectedProviderId = added?.id ?? providers[0]?.id ?? null;
 			msg = '✓ Provider 已添加';
 		} catch (e) { msg = '错误: ' + String(e); }
 	}
@@ -580,20 +618,24 @@
 						<input bind:value={providerFilter} placeholder="搜索服务商" aria-label="搜索服务商" />
 					</div>
 					<div class="pane-list">
-						{#each providers.filter(p => !providerFilter.trim() || p.name.toLowerCase().includes(providerFilter.trim().toLowerCase()) || p.kind.toLowerCase().includes(providerFilter.trim().toLowerCase())) as p}
+						{#each paneProviders.filter(pp => !providerFilter.trim() || pp.name.toLowerCase().includes(providerFilter.trim().toLowerCase()) || pp.kind.toLowerCase().includes(providerFilter.trim().toLowerCase())) as pp}
 							<button
 								class="pane-item"
-								class:active={selectedProviderId === p.id}
-								onclick={() => selectedProviderId = p.id}
+								class:active={pp.existing ? selectedProviderId === pp.existing.id : false}
+								onclick={() => selectPaneProvider(pp)}
 							>
-								<span class="pane-avatar"><ProviderLogo kind={p.kind} /></span>
-								<span class="pane-item-name">{p.name}</span>
-								<span class="pane-status" class:on={p.is_enabled} title={p.is_enabled ? '可用' : '未配置'}></span>
+								<span class="pane-avatar"><ProviderLogo kind={pp.kind} /></span>
+								<span class="pane-item-name">{pp.name}</span>
+								<span
+									class="pane-status"
+									class:on={pp.existing?.is_enabled ?? false}
+									title={pp.existing ? (pp.existing.is_enabled ? '可用' : '未启用') : '未配置'}
+								></span>
 							</button>
 						{/each}
-						{#if providers.length === 0}
+						{#if paneProviders.length === 0}
 							<div class="pane-empty">{loaded ? '暂无 Provider' : '加载中...'}</div>
-						{:else if providers.filter(p => !providerFilter.trim() || p.name.toLowerCase().includes(providerFilter.trim().toLowerCase()) || p.kind.toLowerCase().includes(providerFilter.trim().toLowerCase())).length === 0}
+						{:else if paneProviders.filter(pp => !providerFilter.trim() || pp.name.toLowerCase().includes(providerFilter.trim().toLowerCase()) || pp.kind.toLowerCase().includes(providerFilter.trim().toLowerCase())).length === 0}
 							<div class="pane-empty">无匹配服务商</div>
 						{/if}
 					</div>
