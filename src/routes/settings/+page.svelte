@@ -150,7 +150,7 @@
 	let keySaving = $state(false);
 	let editBaseUrl = $state('');
 	let connSaving = $state(false);
-	let avatarMode = $state<'preset' | 'upload'>('preset');
+	let avatarMode = $state<string | null>(null);
 	let mProvider = $state('');
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
@@ -730,9 +730,48 @@
 				<div class="provider-detail-pane">
 					{#if sel && !addingProvider}
 						<div class="content-header">
-							<h2 class="content-title">{sel.name}</h2>
-							<p class="content-desc">配置连接参数并管理该服务商的模型</p>
+							<button class="provider-title-icon" onclick={() => avatarMode = avatarMode ? '' : 'preset'} title="更换图标">
+								{#if sel.avatar && sel.avatar.startsWith('preset:')}
+									<ProviderLogo kind={sel.avatar.slice(7)} size={36} />
+								{:else if sel.avatar}
+									<img class="icon-preview" src={sel.avatar} alt="" />
+								{:else}
+									<ProviderLogo kind={sel.kind} size={36} />
+								{/if}
+							</button>
+							<div>
+								<h2 class="content-title">{sel.name}</h2>
+								<p class="content-desc">配置连接参数并管理该服务商的模型</p>
+							</div>
 						</div>
+
+						<!-- 图标选择弹窗（点击标题图标触发） -->
+						{#if avatarMode === 'preset'}
+							<div class="icon-picker-panel">
+								<div class="preset-row">
+									{#each PROVIDER_PRESETS.filter(pr => pr.kind !== 'custom') as pr}
+										<button
+											type="button"
+											class="icon-preset-item"
+											class:active={sel.avatar === `preset:${pr.kind}`}
+											title={pr.name}
+											onclick={() => setAvatarKind(pr.kind)}
+										>
+											<ProviderLogo kind={pr.kind} size={20} />
+										</button>
+									{/each}
+								</div>
+								<div class="picker-actions">
+									<label class="btn-sm upload-label">
+										上传图片
+										<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange={(e) => uploadAvatar(e)} />
+									</label>
+									{#if sel.avatar}
+										<button class="btn-sm danger" onclick={clearAvatar}>移除图标</button>
+									{/if}
+								</div>
+							</div>
+						{/if}
 
 						<!-- 连接设置（Cherry Studio 风格：Base URL / API Key 均可编辑） -->
 						<div class="card detail-card">
@@ -772,47 +811,6 @@
 										<button class="btn-sm" onclick={() => startEditKey(sel.id)}>编辑 Key</button>
 									{/if}
 								</div>
-							</div>
-							<div class="config-row icon-row">
-								<div class="config-info">
-									<span class="config-name">图标</span>
-								</div>
-								<div class="icon-picker">
-									<div class="icon-picker-current">
-										{#if sel.avatar && sel.avatar.startsWith('preset:')}
-											<span class="pane-avatar"><ProviderLogo kind={sel.avatar.slice(7)} /></span>
-										{:else if sel.avatar}
-											<img class="icon-preview" src={sel.avatar} alt="图标" />
-										{:else}
-											<span class="pane-avatar"><ProviderLogo kind={sel.kind} /></span>
-										{/if}
-									</div>
-									<div class="icon-picker-actions">
-										<button class="btn-sm" onclick={() => avatarMode = 'preset'}>选择预置</button>
-										<label class="btn-sm upload-label">
-											上传图片
-											<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onchange={(e) => uploadAvatar(e)} />
-										</label>
-										{#if sel.avatar}
-											<button class="btn-sm danger" onclick={clearAvatar}>移除</button>
-										{/if}
-									</div>
-								</div>
-								{#if avatarMode === 'preset'}
-									<div class="icon-preset-grid">
-										{#each PROVIDER_PRESETS.filter(pr => pr.kind !== 'custom') as pr}
-											<button
-												type="button"
-												class="icon-preset-item"
-												class:active={sel.avatar === `preset:${pr.kind}`}
-												title={pr.name}
-												onclick={() => setAvatarKind(pr.kind)}
-											>
-												<ProviderLogo kind={pr.kind} size={20} />
-											</button>
-										{/each}
-									</div>
-								{/if}
 							</div>
 						</div>
 
@@ -1705,6 +1703,39 @@
 	}
 	.icon-picker-actions { display: flex; gap: 6px; }
 	.upload-label { cursor: pointer; }
+	/* ── 标题区可点击图标 ──── */
+	.provider-title-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 40px;
+		height: 40px;
+		min-width: 40px;
+		border-radius: 12px;
+		border: 1px solid var(--color-separator);
+		background: #fff;
+		cursor: pointer;
+		overflow: hidden;
+		transition: box-shadow 0.15s ease, border-color 0.15s ease;
+		flex-shrink: 0;
+	}
+	.provider-title-icon:hover { border-color: var(--color-border-strong); box-shadow: var(--shadow-sm); }
+	.provider-title-icon .icon-preview { width: 100%; height: 100%; border-radius: 10px; border: none; }
+	/* ── 图标选择弹窗 ──── */
+	.icon-picker-panel {
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-separator);
+		border-radius: 12px;
+		padding: 12px;
+		margin-bottom: 16px;
+	}
+	.preset-row {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+		gap: 6px;
+		margin-bottom: 10px;
+	}
+	.picker-actions { display: flex; gap: 6px; }
 	.icon-preset-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
