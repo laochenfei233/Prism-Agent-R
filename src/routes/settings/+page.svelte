@@ -662,7 +662,7 @@
 									<span class="config-name">API 地址 (Base URL)</span>
 								</div>
 								<div class="config-input-group">
-									<input bind:value={editBaseUrl} placeholder="https://api.example.com/v1" aria-label="Base URL" />
+									<input class="conn-input" bind:value={editBaseUrl} placeholder="https://api.example.com/v1" aria-label="Base URL" />
 									{#if editBaseUrl !== (sel.base_url ?? '')}
 										<button class="btn-sm" onclick={() => saveProviderConn(sel.id)}>保存</button>
 										<button class="btn-sm" onclick={cancelEditConn}>取消</button>
@@ -1476,10 +1476,13 @@
 	}
 	.model-section-hint { font-weight: 400; color: var(--color-fg-tertiary); }
 	.model-list-box {
-		border: 1px solid var(--color-separator);
+		border: 1px solid var(--color-border-strong);
 		border-radius: 10px;
 		background: var(--color-bg);
 		overflow: hidden;
+	}
+	.model-list-box .model-row + .model-row {
+		border-top: 1px solid var(--color-separator);
 	}
 	.model-loading {
 		padding: 12px 0;
@@ -1496,11 +1499,32 @@
 		transition: background 0.12s ease;
 	}
 	.model-row.available { cursor: pointer; }
-	.model-row.available:hover { background: var(--color-bg-tertiary); }
+	.model-row.available:hover { background: var(--color-bg-hover); }
 	.model-row.added { background: color-mix(in srgb, var(--color-green) 6%, transparent); }
 	.model-name { flex: 1; min-width: 0; word-break: break-all; }
 	.model-actions { display: flex; gap: 6px; flex-shrink: 0; }
 	.config-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+	.config-input-group {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex: 1;
+		min-width: 0;
+	}
+	.conn-input {
+		flex: 1;
+		min-width: 0;
+		padding: 7px 10px;
+		border-radius: 8px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg);
+		color: var(--color-fg);
+		font-size: 13px;
+		outline: none;
+		transition: border-color 0.15s ease;
+	}
+	.conn-input:focus { border-color: var(--color-accent); }
+	.conn-input::placeholder { color: var(--color-fg-tertiary); }
 	.key-input {
 		width: 200px;
 		padding: 6px 10px;
@@ -1552,7 +1576,7 @@
 		cursor: pointer;
 		transition: background 0.15s ease;
 	}
-	.btn-sm:hover { background: var(--color-bg-tertiary); }
+	.btn-sm:hover { background: var(--color-bg-hover); }
 	.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 	.btn-sm.danger { color: var(--color-red, var(--color-red)); border-color: var(--color-red, var(--color-red)); }
 
