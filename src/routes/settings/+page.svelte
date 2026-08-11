@@ -909,6 +909,21 @@
 								{/if}
 							</div>
 						</div>
+
+						<!-- 模型列表（添加模式下也显示，使用 pKind 预置模型） -->
+						<div class="model-section">
+							<div class="model-section-label">预置模型 <span class="model-section-hint">（点击添加）</span></div>
+							<div class="model-list-box">
+								{#each presetModelsFor(pKind) as modelId}
+									<div class="model-row available">
+										<span class="model-name">{modelId}</span>
+										<button class="btn-sm" disabled title="请先添加 Provider 后再添加模型">添加</button>
+									</div>
+								{:else}
+									<div class="model-row model-empty">暂无该服务商的预置模型</div>
+								{/each}
+							</div>
+						</div>
 					{/if}
 				</div>
 			</div>
