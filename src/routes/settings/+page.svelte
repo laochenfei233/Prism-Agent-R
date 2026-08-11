@@ -704,11 +704,13 @@
 								<button class="btn-primary" onclick={saveModel}>添加</button>
 							</div>
 
-							<!-- 已添加的模型列表 -->
-							{#if models.filter(m => m.provider_id === sel.id).length > 0}
-								<div class="model-section">
-									<div class="model-section-label">已添加</div>
-									<div class="model-list-box">
+							<!-- 已添加的模型列表（框始终显示） -->
+							<div class="model-section">
+								<div class="model-section-label">已添加</div>
+								<div class="model-list-box">
+									{#if models.filter(m => m.provider_id === sel.id).length === 0}
+										<div class="model-row model-empty">暂无已添加的模型</div>
+									{:else}
 										{#each models.filter(m => m.provider_id === sel.id) as m}
 											<div class="model-row added">
 												<span class="model-name">{m.display_name || m.model_id}</span>
@@ -722,17 +724,17 @@
 												</div>
 											</div>
 										{/each}
-									</div>
+									{/if}
 								</div>
-							{/if}
+							</div>
 
-							<!-- 可用模型列表（API 拉取） -->
-							{#if loadingModels}
-								<div class="model-loading">拉取模型列表中...</div>
-							{:else if availableModels.length > 0}
-								<div class="model-section">
-									<div class="model-section-label">可用模型 <span class="model-section-hint">（点击添加）</span></div>
-									<div class="model-list-box">
+							<!-- 可用模型列表（API 拉取，框始终显示） -->
+							<div class="model-section">
+								<div class="model-section-label">可用模型 <span class="model-section-hint">（点击添加）</span></div>
+								<div class="model-list-box">
+									{#if loadingModels}
+										<div class="model-row model-empty">拉取模型列表中...</div>
+									{:else if availableModels.length > 0}
 										{#each availableModels as modelId}
 											{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
 											<div class="model-row available" class:added={isAdded}>
@@ -744,11 +746,11 @@
 												{/if}
 											</div>
 										{/each}
-									</div>
+									{:else}
+										<div class="model-row model-empty">未配置 API Key 或无法拉取，可手动输入模型 ID 添加</div>
+									{/if}
 								</div>
-							{:else if models.filter(m => m.provider_id === sel.id).length === 0}
-								<p class="hint">该服务商暂无模型，输入模型 ID 添加或等待自动拉取</p>
-							{/if}
+							</div>
 						</div>
 					{:else}
 						<!-- 添加 Provider 模式 -->
@@ -1501,6 +1503,13 @@
 	.model-row.available { cursor: pointer; }
 	.model-row.available:hover { background: var(--color-bg-hover); }
 	.model-row.added { background: color-mix(in srgb, var(--color-green) 6%, transparent); }
+	.model-row.model-empty {
+		justify-content: center;
+		color: var(--color-fg-tertiary);
+		font-size: 12px;
+		padding: 14px 12px;
+		cursor: default;
+	}
 	.model-name { flex: 1; min-width: 0; word-break: break-all; }
 	.model-actions { display: flex; gap: 6px; flex-shrink: 0; }
 	.config-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
