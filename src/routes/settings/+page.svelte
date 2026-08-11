@@ -156,6 +156,8 @@
 	let mModelId = $state('');
 	let availableModels = $state<string[]>([]);
 	let loadingModels = $state(false);
+	let modelFilter = $state('');
+	let modelMenuId = $state<string | null>(null);
 
 	function kindLabel(kind: string): string {
 		switch (kind) {
@@ -748,7 +750,7 @@
 
 						<!-- 图标选择弹窗（点击标题图标触发） -->
 						{#if avatarMode === 'preset'}
-							<div class="icon-picker-panel">
+							<div class="icon-picker-panel" role="dialog" aria-label="图标选择">
 								<div class="preset-row">
 									{#each PROVIDER_PRESETS.filter(pr => pr.kind !== 'custom') as pr}
 										<button
@@ -774,15 +776,14 @@
 							</div>
 						{/if}
 
-						<!-- 连接设置（Cherry Studio 风格：API Key 在上 + 眼睛图标） -->
-						<div class="card detail-card">
-							<div class="section-title">连接设置</div>
+						<!-- 连接设置（无卡片边框，平铺展示） -->
+						<div class="conn-section">
 							<div class="config-row">
 								<div class="config-info">
 									<span class="config-name">API 地址</span>
 								</div>
 								<div class="config-input-group">
-									<input class="conn-input" bind:value={editBaseUrl} placeholder="https://api.example.com/v1" aria-label="Base URL" />
+									<input class="conn-input" bind:value={editBaseUrl} placeholder="https://api.openai.com/v1" aria-label="Base URL" />
 									{#if editBaseUrl !== (sel.base_url ?? '')}
 										<button class="btn-sm" onclick={() => saveProviderConn(sel.id)}>保存</button>
 										<button class="btn-sm" onclick={cancelEditConn}>取消</button>
@@ -820,79 +821,93 @@
 										</button>
 										<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
 									{:else}
-										<button class="btn-sm" onclick={() => startEditKey(sel.id)}>编辑密钥</button>
+										<div class="key-display">
+											<span class="key-masked">{sel.has_key ? '••••••••••••••••' : '未设置'}</span>
+											<button class="btn-icon" onclick={() => showKeyText = true} title="查看密钥">
+												<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+													<circle cx="12" cy="12" r="3"/>
+												</svg>
+											</button>
+											<button class="btn-icon" onclick={() => startEditKey(sel.id)} title="编辑密钥">
+												<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+													<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+												</svg>
+											</button>
+										</div>
 									{/if}
 								</div>
 							</div>
 						</div>
 
-						<!-- 模型管理（Cherry Studio 风格：列表展示） -->
-						<div class="card detail-card">
-							<div class="section-title">模型</div>
-							<!-- 快速添加行 -->
-							<div class="form-row quick-add-row">
-								<input bind:value={mModelId} placeholder="输入模型 ID（如 gpt-4o）" aria-label="模型 ID" />
-								<button class="btn-primary" onclick={saveModel}>添加</button>
+						<!-- 模型列表（Cherry Studio 风格） -->
+						<div class="model-section">
+							<div class="model-header">
+								<span class="model-section-label">模型列表</span>
+								<div class="model-toolbar">
+									<div class="model-search">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+										<input bind:value={modelFilter} placeholder="搜索模型..." aria-label="搜索模型" />
+									</div>
+									<button class="btn-sm" onclick={() => fetchModels()} disabled={loadingModels || !sel.has_key}>
+										{loadingModels ? '拉取中...' : '获取模型列表'}
+									</button>
+									<button class="btn-sm btn-save" onclick={() => { saveProviderConn(sel.id); }}>保存</button>
+								</div>
 							</div>
 
-							<!-- 已添加的模型列表（框始终显示） -->
-							<div class="model-section">
-								<div class="model-section-label">已添加</div>
-								<div class="model-list-box">
-									{#if models.filter(m => m.provider_id === sel.id).length === 0}
-										<div class="model-row model-empty">暂无已添加的模型</div>
-									{:else}
-										{#each models.filter(m => m.provider_id === sel.id) as m}
-											<div class="model-row added">
-												<span class="model-name">{m.display_name || m.model_id}</span>
-												<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
-												{#if m.is_default}<span class="config-badge default">默认</span>{/if}
-												<div class="model-actions">
+							<!-- 已保存的模型列表（本地有存储才显示） -->
+							{#if models.filter(m => m.provider_id === sel.id).length > 0}
+								<div class="model-sub-header">已启用</div>
+								{#each models.filter(m => m.provider_id === sel.id) as m}
+									<div class="model-row">
+										<span class="model-name">{m.display_name || m.model_id}</span>
+										<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
+										<div class="model-row-actions">
+											<button class="btn-icon" title="更多" onclick={(e) => { e.stopPropagation(); modelMenuId = modelMenuId === m.id ? null : m.id; }}>
+												<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+											</button>
+											{#if modelMenuId === m.id}
+												<div class="model-menu" role="menu">
+													<button class="model-menu-item" onclick={() => { deleteModel(m.id); modelMenuId = null; }}>删除</button>
 													{#if !m.is_default}
-														<button class="btn-sm" onclick={() => setDefaultModel(m.id)}>设默认</button>
+														<button class="model-menu-item" onclick={() => { setDefaultModel(m.id); modelMenuId = null; }}>设为默认</button>
 													{/if}
-													<button class="btn-sm danger" onclick={() => deleteModel(m.id)}>删除</button>
 												</div>
-											</div>
-										{/each}
-									{/if}
-								</div>
-							</div>
+											{/if}
+										</div>
+									</div>
+								{/each}
+							{/if}
 
-							<!-- 可用模型列表（有 Key 拉取；无 Key 显示预置模型，均可点选添加） -->
-							<div class="model-section">
-								<div class="model-section-label">
-									{#if sel.has_key && sel.base_url}
-										可用模型 <span class="model-section-hint">（点击添加）</span>
+							<!-- 拉取的模型列表（只有拉取后有数据才展示） -->
+							{#if availableModels.length > 0}
+								<div class="model-sub-header">模型列表</div>
+								{#each availableModels.filter(m => !modelFilter.trim() || m.toLowerCase().includes(modelFilter.trim().toLowerCase())) as modelId}
+									{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
+									<div class="model-row">
+										<span class="model-name">{modelId}</span>
+										<div class="model-row-actions">
+											{#if isAdded}
+												<span class="config-badge default">已添加</span>
+											{:else}
+												<button class="btn-sm btn-add" onclick={() => quickAddModel(modelId)}>添加</button>
+											{/if}
+										</div>
+									</div>
+								{:else}
+									{#if !modelFilter.trim()}
+										<div class="model-empty-hint">点击「获取模型列表」拉取可用模型</div>
 									{:else}
-										预置模型 <span class="model-section-hint">（未配置 Key，点击添加）</span>
+										<div class="model-empty-hint">无匹配结果</div>
 									{/if}
-								</div>
-								<div class="model-list-box">
-									{#if loadingModels}
-										<div class="model-row model-empty">拉取模型列表中...</div>
-									{:else}
-										{@const modelsShown = (sel.has_key && sel.base_url) ? availableModels : presetModelsFor(sel.kind)}
-										{#if modelsShown.length > 0}
-											{#each modelsShown as modelId}
-												{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
-												<div class="model-row available" class:added={isAdded}>
-													<span class="model-name">{modelId}</span>
-													{#if isAdded}
-														<span class="config-badge default">已添加</span>
-													{:else}
-														<button class="btn-sm" onclick={() => quickAddModel(modelId)}>添加</button>
-													{/if}
-												</div>
-											{/each}
-										{:else if !(sel.has_key && sel.base_url)}
-											<div class="model-row model-empty">暂无该服务商的预置模型，可手动输入模型 ID 添加</div>
-										{:else}
-											<div class="model-row model-empty">未拉取到模型，可手动输入模型 ID 添加</div>
-										{/if}
-									{/if}
-								</div>
-							</div>
+								{/each}
+							{:else if !sel.has_key}
+								<div class="model-empty-hint">请先配置 API 密钥，然后点击「获取模型列表」</div>
+							{:else if !loadingModels}
+								<div class="model-empty-hint">点击「获取模型列表」拉取可用模型</div>
+							{/if}
 						</div>
 					{:else}
 						<!-- 添加 Provider 模式 -->
@@ -1630,10 +1645,60 @@
 	.preset-hint { font-size: 12px; color: var(--color-fg-tertiary); }
 
 	/* ── 模型列表（Cherry Studio 风格） ──── */
-	.quick-add-row { margin-bottom: 12px; }
-	.quick-add-row input { flex: 1; }
-	.quick-add-row .btn-primary { flex-shrink: 0; }
-	.model-section { margin-top: 12px; }
+	/* ── 模型列表（Cherry Studio 风格） ──── */
+	.model-section { margin-top: 20px; }
+	.model-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 12px;
+	}
+	.model-section-label {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--color-fg);
+		margin: 0;
+	}
+	.model-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.model-search {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 5px 10px;
+		border: 1px solid var(--color-separator);
+		border-radius: 8px;
+		background: var(--color-bg);
+		width: 180px;
+	}
+	.model-search svg { flex-shrink: 0; color: var(--color-fg-tertiary); }
+	.model-search input {
+		flex: 1;
+		min-width: 0;
+		border: none;
+		outline: none;
+		background: transparent;
+		color: var(--color-fg);
+		font-size: 13px;
+	}
+	.model-search input::placeholder { color: var(--color-fg-tertiary); }
+	.btn-save {
+		background: var(--color-accent);
+		color: #fff;
+		border-color: var(--color-accent);
+	}
+	.btn-save:hover { background: var(--color-accent-hover, var(--color-accent)); opacity: 0.9; }
+	.btn-save:disabled { opacity: 0.5; }
+	.model-sub-header {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-fg-secondary);
+		margin: 14px 0 6px;
+		padding: 0 4px;
+	}
 	.model-section-label {
 		font-size: 12px;
 		font-weight: 500;
@@ -1676,6 +1741,42 @@
 	}
 	.model-name { flex: 1; min-width: 0; word-break: break-all; }
 	.model-actions { display: flex; gap: 6px; flex-shrink: 0; }
+	.model-row-actions { position: relative; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+	.model-menu {
+		position: absolute;
+		right: 0;
+		top: 100%;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-separator);
+		border-radius: 8px;
+		box-shadow: var(--shadow-md);
+		z-index: 10;
+		min-width: 100px;
+		overflow: hidden;
+	}
+	.model-menu-item {
+		display: block;
+		width: 100%;
+		padding: 6px 12px;
+		border: none;
+		background: transparent;
+		color: var(--color-fg);
+		font-size: 13px;
+		text-align: left;
+		cursor: pointer;
+	}
+	.model-menu-item:hover { background: var(--color-bg-hover); }
+	.model-empty-hint {
+		padding: 16px 12px;
+		font-size: 13px;
+		color: var(--color-fg-tertiary);
+		text-align: center;
+	}
+	.btn-add {
+		background: var(--color-accent);
+		color: #fff;
+		border-color: var(--color-accent);
+	}
 	.config-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
 	.config-input-group {
 		display: flex;
@@ -1698,12 +1799,19 @@
 	}
 	.conn-input:focus { border-color: var(--color-accent); }
 	.conn-input::placeholder { color: var(--color-fg-tertiary); }
+	.conn-section { margin-bottom: 24px; }
+	.key-display {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.key-masked {
+		font-family: monospace;
+		color: var(--color-fg-secondary);
+		letter-spacing: 2px;
+	}
 
 	/* ── 图标选择 ─────────────────────────── */
-	.icon-row { flex-direction: column; align-items: stretch; gap: 8px; }
-	.icon-picker { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-	.icon-picker-current { flex-shrink: 0; }
-	.icon-picker-current .pane-avatar { width: 32px; height: 32px; border-radius: 8px; }
 	.icon-preview {
 		width: 32px;
 		height: 32px;
