@@ -694,38 +694,46 @@
 
 							<!-- 已添加的模型列表 -->
 							{#if models.filter(m => m.provider_id === sel.id).length > 0}
-								<div class="model-section-label">已添加</div>
-								{#each models.filter(m => m.provider_id === sel.id) as m}
-									<div class="model-row added">
-										<span class="model-name">{m.display_name || m.model_id}</span>
-										<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
-										{#if m.is_default}<span class="config-badge default">默认</span>{/if}
-										<div class="model-actions">
-											{#if !m.is_default}
-												<button class="btn-sm" onclick={() => setDefaultModel(m.id)}>设默认</button>
-											{/if}
-											<button class="btn-sm danger" onclick={() => deleteModel(m.id)}>删除</button>
-										</div>
+								<div class="model-section">
+									<div class="model-section-label">已添加</div>
+									<div class="model-list-box">
+										{#each models.filter(m => m.provider_id === sel.id) as m}
+											<div class="model-row added">
+												<span class="model-name">{m.display_name || m.model_id}</span>
+												<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
+												{#if m.is_default}<span class="config-badge default">默认</span>{/if}
+												<div class="model-actions">
+													{#if !m.is_default}
+														<button class="btn-sm" onclick={() => setDefaultModel(m.id)}>设默认</button>
+													{/if}
+													<button class="btn-sm danger" onclick={() => deleteModel(m.id)}>删除</button>
+												</div>
+											</div>
+										{/each}
 									</div>
-								{/each}
+								</div>
 							{/if}
 
 							<!-- 可用模型列表（API 拉取） -->
 							{#if loadingModels}
 								<div class="model-loading">拉取模型列表中...</div>
 							{:else if availableModels.length > 0}
-								<div class="model-section-label">可用模型 <span class="model-section-hint">（点击添加）</span></div>
-								{#each availableModels as modelId}
-									{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
-									<div class="model-row available" class:added={isAdded}>
-										<span class="model-name">{modelId}</span>
-										{#if isAdded}
-											<span class="config-badge default">已添加</span>
-										{:else}
-											<button class="btn-sm" onclick={() => quickAddModel(modelId)}>添加</button>
-										{/if}
+								<div class="model-section">
+									<div class="model-section-label">可用模型 <span class="model-section-hint">（点击添加）</span></div>
+									<div class="model-list-box">
+										{#each availableModels as modelId}
+											{@const isAdded = models.some(m => m.provider_id === sel.id && m.model_id === modelId)}
+											<div class="model-row available" class:added={isAdded}>
+												<span class="model-name">{modelId}</span>
+												{#if isAdded}
+													<span class="config-badge default">已添加</span>
+												{:else}
+													<button class="btn-sm" onclick={() => quickAddModel(modelId)}>添加</button>
+												{/if}
+											</div>
+										{/each}
 									</div>
-								{/each}
+								</div>
 							{:else if models.filter(m => m.provider_id === sel.id).length === 0}
 								<p class="hint">该服务商暂无模型，输入模型 ID 添加或等待自动拉取</p>
 							{/if}
@@ -743,21 +751,6 @@
 									{#each PROVIDER_PRESETS as pr}<option value={pr.kind}>{pr.name}</option>{/each}
 								</select>
 								<input bind:value={pName} placeholder="名称" aria-label="名称" />
-							</div>
-							<div class="form-row">
-								<div class="preset-picker">
-									<span class="preset-picker-label">预置服务商：</span>
-									<div class="preset-chips">
-										{#each PROVIDER_PRESETS as pr}
-											<button
-												type="button"
-												class="preset-chip"
-												class:active={pKind === pr.kind}
-												onclick={() => applyProviderPreset(pr)}
-											>{pr.name}</button>
-										{/each}
-									</div>
-								</div>
 							</div>
 							<div class="form-row">
 								<input bind:value={pUrl} placeholder="Base URL" aria-label="Base URL" />
@@ -1452,37 +1445,25 @@
 		color: var(--color-orange);
 	}
 	.preset-hint { font-size: 12px; color: var(--color-fg-tertiary); }
-	.preset-picker { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-	.preset-picker-label { font-size: 12px; color: var(--color-fg-secondary); }
-	.preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-	.preset-chip {
-		padding: 4px 10px;
-		border: 1px solid var(--color-separator);
-		border-radius: 999px;
-		background: var(--color-bg);
-		color: var(--color-fg-secondary);
-		font-size: 12px;
-		cursor: pointer;
-		transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-	}
-	.preset-chip:hover { border-color: var(--color-border-strong); color: var(--color-fg); }
-	.preset-chip.active {
-		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-		border-color: var(--color-accent);
-		color: var(--color-accent);
-	}
 
 	/* ── 模型列表（Cherry Studio 风格） ──── */
 	.quick-add-row { margin-bottom: 12px; }
 	.quick-add-row input { flex: 1; }
 	.quick-add-row .btn-primary { flex-shrink: 0; }
+	.model-section { margin-top: 12px; }
 	.model-section-label {
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--color-fg-secondary);
-		margin: 12px 0 6px;
+		margin: 0 0 6px;
 	}
 	.model-section-hint { font-weight: 400; color: var(--color-fg-tertiary); }
+	.model-list-box {
+		border: 1px solid var(--color-separator);
+		border-radius: 10px;
+		background: var(--color-bg);
+		overflow: hidden;
+	}
 	.model-loading {
 		padding: 12px 0;
 		font-size: 13px;
