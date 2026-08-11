@@ -910,44 +910,83 @@
 							{/if}
 						</div>
 					{:else}
-						<!-- 添加 Provider 模式 -->
+						<!-- 添加 Provider 模式（与已添加视图一致的平铺设计） -->
 						<div class="content-header">
-							<h2 class="content-title">LLM 模型管理</h2>
-							<p class="content-desc">添加模型服务商并配置其模型</p>
-						</div>
-						<div class="card detail-card">
-							<div class="section-title">添加 Provider</div>
-							<div class="form-row">
-								<select bind:value={pKind}>
-									{#each PROVIDER_PRESETS as pr}<option value={pr.kind}>{pr.name}</option>{/each}
-								</select>
-								<input bind:value={pName} placeholder="名称" aria-label="名称" />
-							</div>
-							<div class="form-row">
-								<input bind:value={pUrl} placeholder="Base URL" aria-label="Base URL" />
-								<input bind:value={pKey} type="password" placeholder="API Key" aria-label="API Key" />
-							</div>
-							<div class="form-row">
-								<button class="btn-primary" onclick={saveProvider}>添加 Provider</button>
-								{#if sel}
-									<button class="btn-sm" onclick={() => addingProvider = false}>取消</button>
-								{/if}
+							<button class="provider-title-icon" title="预置图标">
+								<ProviderLogo kind={pKind} size={36} />
+							</button>
+							<div>
+								<h2 class="content-title">{PROVIDER_PRESETS.find(pr => pr.kind === pKind)?.name ?? pKind}</h2>
+								<p class="content-desc">配置连接参数并管理该服务商的模型</p>
 							</div>
 						</div>
 
-						<!-- 模型列表（添加模式下也显示，使用 pKind 预置模型） -->
-						<div class="model-section">
-							<div class="model-section-label">预置模型 <span class="model-section-hint">（点击添加）</span></div>
-							<div class="model-list-box">
-								{#each presetModelsFor(pKind) as modelId}
-									<div class="model-row available">
-										<span class="model-name">{modelId}</span>
-										<button class="btn-sm" disabled title="请先添加 Provider 后再添加模型">添加</button>
-									</div>
-								{:else}
-									<div class="model-row model-empty">暂无该服务商的预置模型</div>
-								{/each}
+						<div class="conn-section">
+							<div class="config-row">
+								<div class="config-info">
+									<span class="config-name">服务商类型</span>
+								</div>
+								<div class="config-input-group">
+									<select class="conn-input" bind:value={pKind}>
+										{#each PROVIDER_PRESETS as pr}<option value={pr.kind}>{pr.name}</option>{/each}
+									</select>
+									<input class="conn-input" bind:value={pName} placeholder="名称" aria-label="名称" />
+								</div>
 							</div>
+							<div class="config-row">
+								<div class="config-info">
+									<span class="config-name">API 地址</span>
+								</div>
+								<div class="config-input-group">
+									<input class="conn-input" bind:value={pUrl} placeholder="https://api.openai.com/v1" aria-label="Base URL" />
+								</div>
+							</div>
+							<div class="config-row">
+								<div class="config-info">
+									<span class="config-name">API 密钥</span>
+								</div>
+								<div class="config-input-group">
+									<input
+										class="conn-input"
+										bind:value={pKey}
+										type={showKeyText ? 'text' : 'password'}
+										placeholder="输入 API 密钥"
+										aria-label="API 密钥"
+									/>
+									<button class="btn-icon" onclick={() => showKeyText = !showKeyText} title={showKeyText ? '隐藏' : '显示'}>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											{#if showKeyText}
+												<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+												<line x1="1" y1="1" x2="23" y2="23"/>
+											{:else}
+												<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+												<circle cx="12" cy="12" r="3"/>
+											{/if}
+										</svg>
+									</button>
+									<button class="btn-primary" onclick={saveProvider}>添加服务商</button>
+									{#if sel}
+										<button class="btn-sm" onclick={() => addingProvider = false}>取消</button>
+									{/if}
+								</div>
+							</div>
+						</div>
+
+						<!-- 模型列表（添加模式下展示预置模型） -->
+						<div class="model-section">
+							<div class="model-header">
+								<span class="model-section-label">模型列表</span>
+								<div class="model-toolbar">
+									<button class="btn-sm" disabled title="请先添加服务商">获取模型列表</button>
+								</div>
+							</div>
+							{#each presetModelsFor(pKind) as modelId}
+								<div class="model-row">
+									<span class="model-name">{modelId}</span>
+								</div>
+							{:else}
+								<div class="model-empty-hint">暂无该服务商的预置模型</div>
+							{/each}
 						</div>
 					{/if}
 				</div>
@@ -1706,20 +1745,6 @@
 		margin: 0 0 6px;
 	}
 	.model-section-hint { font-weight: 400; color: var(--color-fg-tertiary); }
-	.model-list-box {
-		border: 1px solid var(--color-border-strong);
-		border-radius: 10px;
-		background: var(--color-bg);
-		overflow: hidden;
-	}
-	.model-list-box .model-row + .model-row {
-		border-top: 1px solid var(--color-separator);
-	}
-	.model-loading {
-		padding: 12px 0;
-		font-size: 13px;
-		color: var(--color-fg-tertiary);
-	}
 	.model-row {
 		display: flex;
 		align-items: center;
