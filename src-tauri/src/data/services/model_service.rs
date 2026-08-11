@@ -35,6 +35,7 @@ impl ModelService {
             kind: r.kind,
             base_url: r.base_url,
             is_enabled: r.is_enabled != 0,
+            has_key: r.api_key_enc.as_deref().map(str::trim).filter(|s| !s.is_empty()).is_some(),
         }).collect())
     }
 

@@ -21,6 +21,8 @@ pub struct ProviderDto {
     pub kind: String,
     pub base_url: Option<String>,
     pub is_enabled: bool,
+    /// 是否已配置 API Key（仅暴露布尔值，不回传密文）
+    pub has_key: bool,
 }
 
 // ── Model ─────────────────────────────────────────────────

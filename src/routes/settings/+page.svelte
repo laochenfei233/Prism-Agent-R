@@ -254,10 +254,19 @@
 		}
 	});
 
-	// 选中 Provider 变化时自动拉取可用模型
+	// 选中 Provider 变化时：仅当已配置 API Key 且地址有效才自动拉取可用模型
 	$effect(() => {
 		const pid = selectedProviderId;
-		if (pid) { mProvider = pid; fetchModels(); }
+		if (!pid) return;
+		mProvider = pid;
+		const p = providers.find((x) => x.id === pid);
+		if (p?.has_key && p.base_url) {
+			fetchModels();
+		} else {
+			// 未配置 Key/地址 → 不发起任何拉取请求
+			availableModels = [];
+			loadingModels = false;
+		}
 	});
 
 	// ASR 语音识别（从会议页移入）
@@ -746,8 +755,10 @@
 												{/if}
 											</div>
 										{/each}
+									{:else if !(sel.has_key && sel.base_url)}
+										<div class="model-row model-empty">填写 API Key 并确认地址无误后自动拉取模型列表</div>
 									{:else}
-										<div class="model-row model-empty">未配置 API Key 或无法拉取，可手动输入模型 ID 添加</div>
+										<div class="model-row model-empty">未拉取到模型，可手动输入模型 ID 添加</div>
 									{/if}
 								</div>
 							</div>
