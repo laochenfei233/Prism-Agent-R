@@ -148,6 +148,7 @@
 	let editKeyProviderId = $state<string | null>(null);
 	let editKeyValue = $state('');
 	let keySaving = $state(false);
+	let showKeyText = $state(false);
 	let editBaseUrl = $state('');
 	let connSaving = $state(false);
 	let avatarMode = $state<string | null>(null);
@@ -773,12 +774,12 @@
 							</div>
 						{/if}
 
-						<!-- 连接设置（Cherry Studio 风格：Base URL / API Key 均可编辑） -->
+						<!-- 连接设置（Cherry Studio 风格：API Key 在上 + 眼睛图标） -->
 						<div class="card detail-card">
 							<div class="section-title">连接设置</div>
 							<div class="config-row">
 								<div class="config-info">
-									<span class="config-name">API 地址 (Base URL)</span>
+									<span class="config-name">API 地址</span>
 								</div>
 								<div class="config-input-group">
 									<input class="conn-input" bind:value={editBaseUrl} placeholder="https://api.example.com/v1" aria-label="Base URL" />
@@ -790,25 +791,36 @@
 							</div>
 							<div class="config-row">
 								<div class="config-info">
-									<span class="config-name">API Key</span>
+									<span class="config-name">API 密钥</span>
 								</div>
 								<div class="config-input-group">
 									{#if editKeyProviderId === sel.id}
 										<input
 											class="key-input"
 											bind:value={editKeyValue}
-											type="password"
-											placeholder="新 API Key"
+											type={showKeyText ? 'text' : 'password'}
+											placeholder="输入 API 密钥"
 											onkeydown={(e) => { if (e.key === 'Enter') saveProviderKey(sel.id); }}
 											disabled={keySaving}
-											aria-label="新 API Key"
+											aria-label="API 密钥"
 										/>
+										<button class="btn-icon" onclick={() => showKeyText = !showKeyText} title={showKeyText ? '隐藏' : '显示'}>
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												{#if showKeyText}
+													<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+													<line x1="1" y1="1" x2="23" y2="23"/>
+												{:else}
+													<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+													<circle cx="12" cy="12" r="3"/>
+												{/if}
+											</svg>
+										</button>
 										<button class="btn-sm" onclick={() => saveProviderKey(sel.id)} disabled={keySaving || !editKeyValue.trim()}>
 											{keySaving ? '保存中…' : '保存'}
 										</button>
 										<button class="btn-sm" onclick={cancelEditKey} disabled={keySaving}>取消</button>
 									{:else}
-										<button class="btn-sm" onclick={() => startEditKey(sel.id)}>编辑 Key</button>
+										<button class="btn-sm" onclick={() => startEditKey(sel.id)}>编辑密钥</button>
 									{/if}
 								</div>
 							</div>
@@ -1811,6 +1823,21 @@
 	.btn-sm:hover { background: var(--color-bg-hover); }
 	.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 	.btn-sm.danger { color: var(--color-red, var(--color-red)); border-color: var(--color-red, var(--color-red)); }
+	.btn-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 6px;
+		border: 1px solid var(--color-separator);
+		background: transparent;
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+		transition: background 0.15s ease, color 0.15s ease;
+		flex-shrink: 0;
+	}
+	.btn-icon:hover { background: var(--color-bg-hover); color: var(--color-fg); }
 
 	/* ── ASR 表单 ─────────────────────────── */
 	.asr-form {
