@@ -4,8 +4,10 @@
 	import { asrApi, mcpApi, memoryApi, projectIndexApi, ragApi, settingsApi, skillApi, translateApi, workspaceApi } from '$lib/api';
 	import type { SettingSpecDto } from '$lib/api';
 	import Switch from '$lib/components/base/Switch.svelte';
+	import Slider from '$lib/components/base/Slider.svelte';
 	import SkillMarket from '$lib/components/market/SkillMarket.svelte';
 	import ProviderLogo from '$lib/components/icons/ProviderLogo.svelte';
+	import { ttsState, ttsSpeak, ttsStop, ttsVoices, ttsSetRate } from '$lib/tts.svelte';
 
 	// ── 注册表设置项（系统分组） ─────────────────────────
 	let specs = $state<SettingSpecDto[]>([]);
@@ -159,16 +161,6 @@
 	let modelFilter = $state('');
 	let modelMenuId = $state<string | null>(null);
 
-	function kindLabel(kind: string): string {
-		switch (kind) {
-			case 'chat': return '对话';
-			case 'embedding': return '嵌入';
-			case 'vision': return '视觉';
-			case 'asr': return '语音';
-			default: return kind;
-		}
-	}
-
 	// 预置模型库（未配置 Key 时也可选择添加；有 Key 时以 API 拉取结果为准）
 	const PRESET_MODELS: Record<string, string[]> = {
 		openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3', 'o4-mini', 'text-embedding-3-small'],
@@ -309,6 +301,58 @@
 		model_path: '', lang: 'zh'
 	});
 	let asrModelPathInput = $state('');
+
+	// ── TTS 语音合成 ─────────────────────────────────────
+	let ttsVoicesList = $state<SpeechSynthesisVoice[]>([]);
+	let ttsSelectedVoiceURI = $state('');
+	let ttsRate = $state(1);
+	let ttsTesting = $state(false);
+
+	function loadTTSConfig() {
+		try {
+			ttsSelectedVoiceURI = localStorage.getItem('prism-tts-voice') ?? '';
+			const r = localStorage.getItem('prism-tts-rate');
+			ttsRate = r ? Number(r) : 1;
+		} catch (e) {}
+	}
+
+	function loadTTSVoices() {
+		ttsVoicesList = ttsVoices();
+		if (!ttsSelectedVoiceURI && ttsVoicesList.length > 0) {
+			const zh = ttsVoicesList.find(v => v.lang.startsWith('zh'));
+			ttsSelectedVoiceURI = (zh ?? ttsVoicesList[0]).voiceURI;
+		}
+	}
+
+	function onTTSVoiceChange(uri: string) {
+		ttsSelectedVoiceURI = uri;
+		try { localStorage.setItem('prism-tts-voice', uri); } catch (e) {}
+	}
+
+	function onTTSRateChange(rate: number) {
+		ttsRate = rate;
+		ttsSetRate(rate);
+		try { localStorage.setItem('prism-tts-rate', String(rate)); } catch (e) {}
+	}
+
+	function testTTS() {
+		if (ttsTesting) return;
+		ttsTesting = true;
+		ttsState.rate = ttsRate;
+		ttsSpeak('你好，这是语音合成测试。当前语速为' + ttsRate.toFixed(1) + '倍。', ttsRate);
+		setTimeout(() => { ttsTesting = false; }, 4000);
+	}
+
+	// ── 跨部分联动 ─────────────────────────────────────
+	// 有 ASR 模型的 LLM 服务商（用于 ASR 配置自动关联）
+	const asrLinkedProviders = $derived(
+		providers.filter(p => models.some(m => m.provider_id === p.id && m.kind === 'asr'))
+	);
+
+	// 支持 TTS 的 LLM 服务商（信息展示）
+	const ttsLinkedProviders = $derived(
+		providers.filter(p => ['openai', 'dashscope', 'minimax', 'custom'].includes(p.kind) && p.has_key)
+	);
 
 	// MCP
 	let mcName = $state('');
@@ -615,6 +659,13 @@
 			if (e.progress >= 1) loadAsr();
 		});
 		asrListenerCleanup = un;
+
+		// TTS 语音加载
+		loadTTSConfig();
+		loadTTSVoices();
+		if (typeof window !== 'undefined' && window.speechSynthesis) {
+			window.speechSynthesis.addEventListener('voiceschanged', loadTTSVoices);
+		}
 	});
 </script>
 
@@ -863,7 +914,9 @@
 								{#each models.filter(m => m.provider_id === sel.id) as m}
 									<div class="model-row">
 										<span class="model-name">{m.display_name || m.model_id}</span>
-										<span class="config-badge kind-badge kind-{m.kind || 'chat'}">{kindLabel(m.kind || 'chat')}</span>
+										{#if m.kind === 'asr'}
+											<span class="model-asr-hint">可用于语音识别</span>
+										{/if}
 										<div class="model-row-actions">
 											<button class="btn-icon" title="更多" onclick={(e) => { e.stopPropagation(); modelMenuId = modelMenuId === m.id ? null : m.id; }}>
 												<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
@@ -1019,17 +1072,18 @@
 						<p class="content-desc">配置会议录音的转写模型与后端连接</p>
 					</div>
 
+					<!-- 模型管理卡片 -->
 					<div class="card detail-card">
 						<div class="section-title">模型管理</div>
 						{#each asrCatalog as m}
-							<div class="config-row">
-								<div class="config-info">
-									<span class="config-name">{m.name}</span>
-									<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
-								</div>
-								<div class="config-actions">
+							<div class="model-row">
+								<span class="model-name">{m.name}</span>
+								<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
+								<div class="model-row-actions">
 									{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
-										<span class="config-badge default">{(asrDownloadProgress[m.id] * 100).toFixed(0)}%</span>
+										<div class="download-progress" title="{(asrDownloadProgress[m.id] * 100).toFixed(0)}%">
+											<div class="download-progress-bar" style="width: {asrDownloadProgress[m.id] * 100}%"></div>
+										</div>
 									{:else if asrInstalled.some(i => i.id === m.id)}
 										<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
 									{:else}
@@ -1037,15 +1091,36 @@
 									{/if}
 								</div>
 							</div>
+						{:else}
+							<div class="empty-state">{loaded ? '暂无可用模型' : '加载中...'}</div>
 						{/each}
-						{#if asrCatalog.length === 0}<p class="hint">{loaded ? '暂无可用模型' : '加载中...'}</p>{/if}
 					</div>
 
+					<!-- ASR 配置卡片 -->
 					<div class="card detail-card">
-						<div class="section-title">ASR 配置</div>
-						<button class="btn-secondary" onclick={() => asrShowAddConfig = !asrShowAddConfig}>+ 新建配置</button>
+						<div class="card-header-row">
+							<div class="section-title">ASR 配置</div>
+							<button class="btn-sm" onclick={() => asrShowAddConfig = !asrShowAddConfig}>
+								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+								新建配置
+							</button>
+						</div>
+
+						{#if !asrShowAddConfig && asrLinkedProviders.length > 0}
+							<div class="asr-linked-hint">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+								<span>已关联 {asrLinkedProviders.length} 个 LLM 服务商：{asrLinkedProviders.map(p => p.name).join('、')}</span>
+							</div>
+						{/if}
+
 						{#if asrShowAddConfig}
 							<div class="asr-form">
+								{#if asrLinkedProviders.length > 0}
+									<div class="asr-linked-hint">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+										<span>已关联 {asrLinkedProviders.length} 个 LLM 服务商（{asrLinkedProviders.map(p => p.name).join('、')}）</span>
+									</div>
+								{/if}
 								<input bind:value={asrNewConfig.name} placeholder="名称（如 本地 SenseVoice）" aria-label="名称如 本地 SenseVoice" />
 								<select bind:value={asrNewConfig.kind}>
 									{#each asrBackends as b}<option value={b.kind}>{b.name}</option>{/each}
@@ -1053,6 +1128,9 @@
 								<input bind:value={asrModelPathInput} placeholder="模型路径（本地后端，如 asr_models/sherpa-sensevoice-small）" aria-label="模型路径本地后端,如 asr_models/sherpa-sensevoice-small" />
 								{#if asrNewConfig.kind.includes('Http') || asrNewConfig.kind === 'Custom' || asrNewConfig.kind === 'WhisperApi'}
 									<input bind:value={asrNewConfig.api_key} placeholder="API Key" aria-label="API Key" />
+									{#if asrLinkedProviders.length > 0}
+										<p class="asr-import-hint">使用关联服务商的 API 密钥：{asrLinkedProviders[0].name}</p>
+									{/if}
 								{/if}
 								<div class="form-row">
 									<button class="btn-sm" onclick={asrTestConfig}>测试连接</button>
@@ -1060,6 +1138,7 @@
 								</div>
 							</div>
 						{/if}
+
 						{#each asrConfigs as c}
 							<div class="config-row">
 								<div class="config-info">
@@ -1069,8 +1148,9 @@
 								</div>
 								<button class="btn-sm danger" onclick={() => asrDeleteConfig(c.id)}>删除</button>
 							</div>
+						{:else}
+							<div class="empty-state">暂无配置</div>
 						{/each}
-						{#if asrConfigs.length === 0}<p class="hint">暂无配置</p>{/if}
 					</div>
 				</div>
 			</div>
@@ -1078,11 +1158,80 @@
 		{:else if section === 'tts'}
 			<div class="content-header">
 				<h2 class="content-title">语音合成 (TTS)</h2>
-				<p class="content-desc">配置文本转语音的后端与音色</p>
+				<p class="content-desc">配置文本转语音的音色与语速</p>
 			</div>
+
+			<!-- 信息卡 -->
+			<div class="card tts-info-card">
+				<div class="tts-info-icon">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+				</div>
+				<div>
+					<p class="hint">TTS 使用浏览器内置的 Web Speech API 播报（如会议待办播报），无需额外安装模型。</p>
+					{#if !ttsState.supported}
+						<p class="hint tts-unsupported">当前环境不支持 Web Speech API</p>
+					{/if}
+				</div>
+			</div>
+
+			<!-- 音色与语速配置 -->
 			<div class="card">
-				<p class="hint">TTS 使用浏览器内置的 Web Speech API 播报（如会议待办播报），无需额外配置模型。</p>
+				<div class="section-title">音色与语速</div>
+
+				<!-- 音色选择 -->
+				<div class="config-row">
+					<div class="config-info">
+						<span class="config-name">音色</span>
+					</div>
+					<select class="tts-select" value={ttsSelectedVoiceURI} onchange={(e) => onTTSVoiceChange(e.currentTarget.value)} disabled={!ttsState.supported}>
+						{#each ttsVoicesList as v}
+							<option value={v.voiceURI}>{v.name} ({v.lang})</option>
+						{/each}
+					</select>
+				</div>
+
+				<!-- 语速滑块 -->
+				<div class="config-row tts-rate-row">
+					<div class="config-info">
+						<span class="config-name">语速</span>
+						<span class="config-badge">{ttsRate.toFixed(1)}x</span>
+					</div>
+					<div class="tts-slider-wrap">
+						<Slider value={ttsRate} min={0.5} max={2} step={0.1} disabled={!ttsState.supported} />
+						<div class="tts-rate-labels">
+							<span>0.5x</span>
+							<span>1.0x</span>
+							<span>2.0x</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- 试听按钮 -->
+				<div class="tts-test-row">
+					<button class="btn-primary" onclick={testTTS} disabled={!ttsState.supported || ttsTesting}>
+						{ttsTesting ? '播报中…' : '试听'}
+					</button>
+				</div>
 			</div>
+
+			<!-- 关联服务商信息卡 -->
+			{#if ttsLinkedProviders.length > 0}
+				<div class="card">
+					<div class="section-title">可用的 API TTS 服务商</div>
+					{#each ttsLinkedProviders as p}
+						<div class="config-row">
+							<div class="config-info">
+								<span class="config-name">{p.name}</span>
+								<span class="config-badge">{p.base_url}</span>
+								{#if p.has_key}
+									<span class="config-badge default">已配置密钥</span>
+								{/if}
+							</div>
+						</div>
+					{/each}
+					<p class="hint" style="margin-top: 8px">这些服务商支持 TTS API，当前 TTS 使用浏览器内置 Web Speech API。如需使用 API TTS，请在对应服务商配置中添加 TTS 模型。</p>
+				</div>
+			{/if}
 
 		{:else if section === 'agents'}
 			<div class="content-header">
@@ -1345,7 +1494,10 @@
 	.settings-nav {
 		width: 220px;
 		min-width: 220px;
-		background: var(--color-bg-secondary);
+		background: var(--glass-medium-bg);
+		backdrop-filter: var(--glass-medium-blur);
+		-webkit-backdrop-filter: var(--glass-medium-blur);
+		box-shadow: var(--glass-edge-highlight);
 		border-right: 1px solid var(--color-separator);
 		display: flex;
 		flex-direction: column;
@@ -1415,6 +1567,18 @@
 		align-items: center;
 		gap: var(--space-3);
 		margin-bottom: var(--space-4);
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		background: var(--glass-medium-bg);
+		backdrop-filter: var(--glass-medium-blur);
+		-webkit-backdrop-filter: var(--glass-medium-blur);
+		box-shadow: var(--glass-edge-highlight);
+		padding: 12px 8px;
+		margin-left: -8px;
+		margin-right: -8px;
+		padding-left: 8px;
+		padding-right: 8px;
 	}
 	.content-title {
 		font-size: 20px;
@@ -1443,7 +1607,10 @@
 		min-width: 200px;
 		display: flex;
 		flex-direction: column;
-		background: var(--color-bg-secondary);
+		background: var(--glass-solid-bg);
+		backdrop-filter: var(--glass-solid-blur);
+		-webkit-backdrop-filter: var(--glass-solid-blur);
+		box-shadow: var(--glass-edge-highlight), var(--glass-inner-shadow);
 		border: 1px solid var(--color-separator);
 		border-radius: 12px;
 		overflow: hidden;
@@ -1464,9 +1631,10 @@
 		padding: 6px 10px;
 		border: 1px solid var(--color-separator);
 		border-radius: 10px;
-		background: color-mix(in srgb, var(--color-bg) 72%, transparent);
-		backdrop-filter: blur(20px) saturate(180%);
-		-webkit-backdrop-filter: blur(20px) saturate(180%);
+		background: var(--glass-light-bg);
+		backdrop-filter: var(--glass-light-blur);
+		-webkit-backdrop-filter: var(--glass-light-blur);
+		box-shadow: var(--glass-edge-highlight);
 		transition: border-color var(--duration-fast) var(--ease-default);
 	}
 	.pane-search:focus-within { border-color: var(--color-accent); }
@@ -1566,12 +1734,13 @@
 	.card {
 		background: var(--color-bg-secondary);
 		border: 1px solid var(--color-separator);
-		border-radius: 12px;
+		border-radius: var(--radius-md);
 		padding: var(--space-4);
 		margin-bottom: var(--space-4);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
+		box-shadow: var(--glass-edge-highlight);
 	}
 	.card:last-child { margin-bottom: 0; }
 	.card-head { display: flex; flex-direction: column; gap: var(--space-3); }
@@ -1635,12 +1804,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: var(--space-3) 0;
+		padding: 12px 8px;
 		gap: var(--space-2);
-		border-bottom: 1px solid var(--color-separator);
+		border-bottom: 0.5px solid var(--color-separator);
+		border-radius: 8px;
 	}
 	.config-row:last-child { border-bottom: none; }
-	.config-row + .config-row { padding-top: var(--space-3); }
+	.config-row + .config-row { padding-top: 12px; }
 	.config-info {
 		display: flex;
 		align-items: center;
@@ -1677,24 +1847,33 @@
 		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 		color: var(--color-accent);
 	}
-	.config-badge.kind-badge { font-size: 11px; padding: 2px 6px; }
-	.config-badge.kind-chat {
-		background: color-mix(in srgb, var(--color-green) 14%, transparent);
-		color: var(--color-green);
+
+	.empty-state {
+		text-align: center;
+		padding: 32px 16px;
+		color: var(--color-fg-tertiary);
 	}
-	.config-badge.kind-embedding {
-		background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-		color: var(--color-accent);
+	.card-header-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 4px;
 	}
-	.config-badge.kind-vision {
-		background: color-mix(in srgb, var(--color-purple, var(--color-accent)) 14%, transparent);
-		color: var(--color-purple, var(--color-accent));
+	.card-header-row .section-title { margin-bottom: 0; }
+	.download-progress {
+		width: 80px;
+		height: 4px;
+		background: var(--color-bg);
+		border-radius: 2px;
+		overflow: hidden;
+		flex-shrink: 0;
 	}
-	.config-badge.kind-asr {
-		background: color-mix(in srgb, var(--color-orange) 14%, transparent);
-		color: var(--color-orange);
+	.download-progress-bar {
+		height: 100%;
+		background: var(--color-accent);
+		border-radius: 2px;
+		transition: width 0.2s ease;
 	}
-	.preset-hint { font-size: 12px; color: var(--color-fg-tertiary); }
 
 	/* ── 模型列表（Cherry Studio 风格） ──── */
 	.model-section { margin-top: 28px; }
@@ -1722,9 +1901,10 @@
 		padding: 5px 10px;
 		border: 1px solid var(--color-separator);
 		border-radius: 10px;
-		background: color-mix(in srgb, var(--color-bg) 72%, transparent);
-		backdrop-filter: blur(20px) saturate(180%);
-		-webkit-backdrop-filter: blur(20px) saturate(180%);
+		background: var(--glass-light-bg);
+		backdrop-filter: var(--glass-light-blur);
+		-webkit-backdrop-filter: var(--glass-light-blur);
+		box-shadow: var(--glass-edge-highlight);
 		width: 180px;
 		transition: border-color var(--duration-fast) var(--ease-default);
 	}
@@ -1754,37 +1934,28 @@
 		margin: 14px 0 6px;
 		padding: 0 4px;
 	}
-	.model-section-hint { font-weight: 400; color: var(--color-fg-tertiary); }
 	.model-row {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 9px 12px;
+		padding: 10px 12px;
 		border-radius: 8px;
 		font-size: 13px;
-		transition: background 0.12s ease;
-	}
-	.model-row.available { cursor: pointer; }
-	.model-row.available:hover { background: var(--color-bg-hover); }
-	.model-row.added { background: color-mix(in srgb, var(--color-green) 6%, transparent); }
-	.model-row.model-empty {
-		justify-content: center;
-		color: var(--color-fg-tertiary);
-		font-size: 12px;
-		padding: 16px 12px;
-		cursor: default;
+		transition: background 0.12s ease, box-shadow 0.15s ease;
 	}
 	.model-name { flex: 1; min-width: 0; word-break: break-all; }
-	.model-actions { display: flex; gap: 6px; flex-shrink: 0; }
+	.model-asr-hint { font-size: 11px; color: var(--color-fg-tertiary); flex-shrink: 0; }
 	.model-row-actions { position: relative; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 	.model-menu {
 		position: absolute;
 		right: 0;
 		top: 100%;
-		background: var(--color-bg-secondary);
+		background: var(--glass-solid-bg);
+		backdrop-filter: var(--glass-solid-blur);
+		-webkit-backdrop-filter: var(--glass-solid-blur);
+		box-shadow: var(--glass-edge-highlight), var(--shadow-md);
 		border: 1px solid var(--color-separator);
 		border-radius: 8px;
-		box-shadow: var(--shadow-md);
 		z-index: 10;
 		min-width: 100px;
 		overflow: hidden;
@@ -1856,7 +2027,6 @@
 		display: block;
 		background: #fff;
 	}
-	.icon-picker-actions { display: flex; gap: 6px; }
 	.upload-label { cursor: pointer; }
 	/* ── 标题区可点击图标（名称旁，非上方） ──── */
 	.provider-title-icon {
@@ -1878,14 +2048,14 @@
 	.provider-title-icon .icon-preview { width: 100%; height: 100%; border-radius: 8px; border: none; }
 	/* ── 图标选择弹窗（毛玻璃材质 + 弹簧入场） ──── */
 	.icon-picker-panel {
-		background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
-		backdrop-filter: blur(30px) saturate(180%);
-		-webkit-backdrop-filter: blur(30px) saturate(180%);
+		background: var(--glass-solid-bg);
+		backdrop-filter: var(--glass-solid-blur);
+		-webkit-backdrop-filter: var(--glass-solid-blur);
+		box-shadow: var(--glass-edge-highlight), var(--glass-inner-shadow);
 		border: 1px solid var(--color-separator);
 		border-radius: 14px;
 		padding: 14px;
 		margin-bottom: 20px;
-		box-shadow: var(--shadow-md);
 		animation: icon-panel-in var(--duration-normal) var(--spring);
 	}
 	@keyframes icon-panel-in {
@@ -1899,12 +2069,6 @@
 		margin-bottom: 12px;
 	}
 	.picker-actions { display: flex; gap: 6px; }
-	.icon-preset-grid {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 8px;
-		margin-top: 4px;
-	}
 	.icon-preset-item {
 		display: inline-flex;
 		align-items: center;
@@ -2000,7 +2164,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		margin: 10px 0;
+		background: var(--color-bg);
+		border-radius: var(--radius-sm);
+		padding: 12px;
 	}
 	.asr-form input,
 	.asr-form select {
@@ -2008,7 +2174,7 @@
 		padding: 9px 12px;
 		border-radius: 8px;
 		border: 1px solid var(--color-separator);
-		background: var(--color-bg);
+		background: var(--color-bg-secondary);
 		color: var(--color-fg);
 		font-size: 14px;
 		outline: none;
@@ -2017,6 +2183,77 @@
 	.asr-form input:focus,
 	.asr-form select:focus { border-color: var(--color-accent); }
 	.asr-form .btn-primary { width: fit-content; }
+
+	/* ── TTS 语音合成 ─────────────────────────── */
+	.tts-info-card {
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 12px;
+		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-bg-secondary));
+	}
+	.tts-info-icon {
+		width: 32px;
+		height: 32px;
+		min-width: 32px;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--color-accent);
+	}
+	.tts-unsupported {
+		color: var(--color-red);
+		margin-top: 4px;
+	}
+	.tts-select {
+		max-width: 280px;
+		padding: 7px 10px;
+		border-radius: 8px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg);
+		color: var(--color-fg);
+		font-size: 13px;
+		outline: none;
+		cursor: pointer;
+	}
+	.tts-select:focus { border-color: var(--color-accent); }
+	.tts-rate-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+	.tts-slider-wrap {
+		flex: 1;
+		max-width: 300px;
+	}
+	.tts-rate-labels {
+		display: flex;
+		justify-content: space-between;
+		font-size: 11px;
+		color: var(--color-fg-tertiary);
+		margin-top: 4px;
+	}
+	.tts-test-row {
+		margin-top: 8px;
+	}
+
+	/* ── 跨部分联动 ─────────────────────────── */
+	.asr-linked-hint {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: var(--color-accent);
+		padding: 6px 10px;
+		background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+		border-radius: 6px;
+	}
+	.asr-import-hint {
+		font-size: 11px;
+		color: var(--color-fg-tertiary);
+		margin: 0;
+	}
 
 	/* ── Toast ─────────────────────────────── */
 	.toast {
