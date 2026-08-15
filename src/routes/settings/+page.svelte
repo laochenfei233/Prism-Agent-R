@@ -1890,8 +1890,17 @@
 	}
 
 	/* ── 模型列表（Cherry Studio 风格） ──── */
-	.model-section { margin-top: 28px; }
-	.model-section .model-row + .model-row { margin-top: 6px; }
+	.model-section {
+		margin-top: 28px;
+		border: 1px solid var(--color-separator);
+		border-radius: var(--radius-md);
+		overflow: hidden;
+	}
+	.model-section .model-header {
+		padding: 12px 12px 0;
+	}
+	.model-section .model-row + .model-row { border-top: none; }
+	.model-section .model-row:first-of-type { border-top: none; }
 	.model-header {
 		display: flex;
 		align-items: center;
@@ -1954,12 +1963,12 @@
 		align-items: center;
 		gap: 8px;
 		padding: 10px 12px;
-		border-radius: 8px;
 		font-size: 13px;
-		border: 1px solid var(--color-separator);
+		border-bottom: 0.5px solid var(--color-separator);
 		background: var(--color-bg);
-		transition: background 0.12s ease, box-shadow 0.15s ease;
+		transition: background 0.12s ease;
 	}
+	.model-row:last-child { border-bottom: none; }
 	.model-name { flex: 1; min-width: 0; word-break: break-all; }
 	.model-asr-hint { font-size: 11px; color: var(--color-fg-tertiary); flex-shrink: 0; }
 	.model-row-actions { position: relative; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
