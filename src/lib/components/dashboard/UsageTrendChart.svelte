@@ -119,8 +119,12 @@
 
 <style>
 	.chart-card {
-		background: var(--color-bg-secondary);
+		background: var(--glass-solid-bg);
+		backdrop-filter: var(--glass-solid-blur);
+		-webkit-backdrop-filter: var(--glass-solid-blur);
+		border: 1px solid var(--color-separator);
 		border-radius: var(--radius-md);
+		box-shadow: var(--glass-edge-highlight);
 		padding: 16px;
 		height: 100%;
 		display: flex;

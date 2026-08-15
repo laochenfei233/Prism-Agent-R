@@ -29,10 +29,12 @@
 
 <style>
 	.skill-card {
-		background: var(--color-bg-elevated);
+		background: var(--glass-solid-bg);
+		backdrop-filter: var(--glass-solid-blur);
+		-webkit-backdrop-filter: var(--glass-solid-blur);
 		border: 1px solid var(--color-separator);
 		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-sm);
+		box-shadow: var(--glass-edge-highlight), var(--shadow-sm);
 		padding: 20px;
 	}
 
