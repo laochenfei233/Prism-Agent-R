@@ -301,6 +301,7 @@
 		model_path: '', lang: 'zh'
 	});
 	let asrModelPathInput = $state('');
+	let selectedAsrBackend = $state<string | null>(null);
 
 	// ── TTS 语音合成 ─────────────────────────────────────
 	let ttsVoicesList = $state<SpeechSynthesisVoice[]>([]);
@@ -1052,12 +1053,16 @@
 					<div class="pane-title">ASR 后端</div>
 					<div class="pane-list">
 						{#each asrBackends as b}
-							<div class="pane-item" class:active={true}>
+							<button
+								class="pane-item"
+								class:active={selectedAsrBackend === b.kind}
+								onclick={() => selectedAsrBackend = b.kind}
+							>
 								<span class="pane-avatar" style={`background: ${providerColor('asr')}`}>{providerInitial(b.name)}</span>
 								<span class="pane-item-name">{b.name}</span>
 								<span class="pane-item-kind">{b.languages.join(', ')}</span>
 								<span class="pane-status on" title="可用"></span>
-							</div>
+							</button>
 						{/each}
 						{#if asrBackends.length === 0}
 							<div class="pane-empty">{loaded ? '暂无后端' : '加载中...'}</div>
@@ -1156,6 +1161,7 @@
 			</div>
 
 		{:else if section === 'tts'}
+			<div class="tts-full-width">
 			<div class="content-header">
 				<h2 class="content-title">语音合成 (TTS)</h2>
 				<p class="content-desc">配置文本转语音的音色与语速</p>
@@ -1232,6 +1238,7 @@
 					<p class="hint" style="margin-top: 8px">这些服务商支持 TTS API，当前 TTS 使用浏览器内置 Web Speech API。如需使用 API TTS，请在对应服务商配置中添加 TTS 模型。</p>
 				</div>
 			{/if}
+			</div>
 
 		{:else if section === 'agents'}
 			<div class="content-header">
@@ -1562,6 +1569,13 @@
 		max-width: none;
 		width: 100%;
 	}
+	/* TTS 区域铺满宽度 */
+	.tts-full-width {
+		width: 100%;
+	}
+	.tts-full-width > :is(.content-header, .card) {
+		max-width: none;
+	}
 	.content-header {
 		display: flex;
 		align-items: center;
@@ -1877,6 +1891,7 @@
 
 	/* ── 模型列表（Cherry Studio 风格） ──── */
 	.model-section { margin-top: 28px; }
+	.model-section .model-row + .model-row { margin-top: 6px; }
 	.model-header {
 		display: flex;
 		align-items: center;
@@ -1941,6 +1956,8 @@
 		padding: 10px 12px;
 		border-radius: 8px;
 		font-size: 13px;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg);
 		transition: background 0.12s ease, box-shadow 0.15s ease;
 	}
 	.model-name { flex: 1; min-width: 0; word-break: break-all; }
