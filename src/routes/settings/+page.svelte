@@ -1895,9 +1895,10 @@
 		border: 1px solid var(--color-separator);
 		border-radius: var(--radius-md);
 		overflow: hidden;
+		background: var(--color-bg);
 	}
 	.model-section .model-header {
-		padding: 12px 12px 0;
+		padding: 14px 16px 0;
 	}
 	.model-section .model-row + .model-row { border-top: none; }
 	.model-section .model-row:first-of-type { border-top: none; }
@@ -1955,14 +1956,13 @@
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--color-fg-secondary);
-		margin: 14px 0 6px;
-		padding: 0 4px;
+		padding: 12px 16px 6px;
 	}
 	.model-row {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 10px 12px;
+		padding: 12px 16px;
 		font-size: 13px;
 		border-bottom: 0.5px solid var(--color-separator);
 		background: var(--color-bg);
