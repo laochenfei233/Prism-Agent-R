@@ -495,11 +495,17 @@ export interface AsrModelInfoDto {
 	id: string;
 	name: string;
 	backend: string;
+	/** 模型类别：online（在线 API）或 local（本地离线） */
+	category: 'online' | 'local';
 	size_mb: number;
 	lang: string[];
 	url: string;
 	requires_vad: boolean;
 	user_placed: boolean;
+	/** 在线模型：默认模型 ID */
+	default_model_id?: string;
+	/** 在线模型：是否需要 API Key */
+	requires_api_key: boolean;
 }
 
 export interface InstalledAsrModelDto {

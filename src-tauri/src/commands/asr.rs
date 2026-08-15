@@ -83,8 +83,14 @@ fn backend_desc(kind: &str) -> String {
 pub async fn asr_model_catalog() -> Result<Vec<AsrModelInfoDto>, AppError> {
     let mgr = AsrModelManager::new(paths::app_data_dir().join("asr_models"));
     Ok(mgr.catalog().into_iter().map(|m| AsrModelInfoDto {
-        id: m.id, name: m.name, backend: m.backend, size_mb: m.size_mb,
-        lang: m.lang, url: m.url, requires_vad: m.requires_vad, user_placed: m.user_placed,
+        id: m.id, name: m.name, backend: m.backend,
+        category: match m.category {
+            crate::data::services::asr::AsrModelCategory::Online => "online".into(),
+            crate::data::services::asr::AsrModelCategory::Local => "local".into(),
+        },
+        size_mb: m.size_mb, lang: m.lang, url: m.url,
+        requires_vad: m.requires_vad, user_placed: m.user_placed,
+        default_model_id: m.default_model_id, requires_api_key: m.requires_api_key,
     }).collect())
 }
 
@@ -354,11 +360,17 @@ pub struct AsrModelInfoDto {
     pub id: String,
     pub name: String,
     pub backend: String,
+    /// 模型类别：online（在线 API）或 local（本地离线）
+    pub category: String,
     pub size_mb: u64,
     pub lang: Vec<String>,
     pub url: String,
     pub requires_vad: bool,
     pub user_placed: bool,
+    /// 在线模型：默认模型 ID
+    pub default_model_id: Option<String>,
+    /// 在线模型：是否需要 API Key
+    pub requires_api_key: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

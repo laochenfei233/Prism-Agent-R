@@ -1095,25 +1095,65 @@
 						<!-- 模型管理卡片 -->
 						<div class="card detail-card">
 							<div class="section-title">模型管理</div>
-							{#each filteredAsrCatalog as m}
-								<div class="model-row">
-									<span class="model-name">{m.name}</span>
-									<span class="config-badge">{m.size_mb}MB</span>
-									<div class="model-row-actions">
-										{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
-											<div class="download-progress" title="{(asrDownloadProgress[m.id] * 100).toFixed(0)}%">
-												<div class="download-progress-bar" style="width: {asrDownloadProgress[m.id] * 100}%"></div>
-											</div>
-										{:else if asrInstalled.some(i => i.id === m.id)}
-											<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
-										{:else}
-											<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
-										{/if}
+
+							<!-- 在线模型（API 调用） -->
+							{#if filteredAsrCatalog.filter(m => m.category === 'online').length > 0}
+								<div class="asr-model-group">
+									<div class="asr-group-label">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+										在线模型（API 调用）
 									</div>
+									{#each filteredAsrCatalog.filter(m => m.category === 'online') as m}
+										<div class="model-row asr-online-model">
+											<span class="model-name">{m.name}</span>
+											<span class="config-badge online-badge">在线</span>
+											{#if m.requires_api_key}
+												<span class="config-badge">需 API Key</span>
+											{/if}
+											<div class="model-row-actions">
+												<button class="btn-sm" onclick={() => {
+													// 自动创建 ASR 配置
+													asrNewConfig.name = m.name;
+													asrNewConfig.kind = m.backend;
+													if (m.default_model_id) asrModelPathInput = m.default_model_id;
+													asrShowAddConfig = true;
+												}}>配置</button>
+											</div>
+										</div>
+									{/each}
 								</div>
-							{:else}
+							{/if}
+
+							<!-- 本地模型（下载离线运行） -->
+							{#if filteredAsrCatalog.filter(m => m.category === 'local').length > 0}
+								<div class="asr-model-group">
+									<div class="asr-group-label">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+										本地模型（下载离线运行）
+									</div>
+									{#each filteredAsrCatalog.filter(m => m.category === 'local') as m}
+										<div class="model-row">
+											<span class="model-name">{m.name}</span>
+											<span class="config-badge">{m.size_mb}MB</span>
+											<div class="model-row-actions">
+												{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
+													<div class="download-progress" title="{(asrDownloadProgress[m.id] * 100).toFixed(0)}%">
+														<div class="download-progress-bar" style="width: {asrDownloadProgress[m.id] * 100}%"></div>
+													</div>
+												{:else if asrInstalled.some(i => i.id === m.id)}
+													<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
+												{:else}
+													<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
+												{/if}
+											</div>
+										</div>
+									{/each}
+								</div>
+							{/if}
+
+							{#if filteredAsrCatalog.length === 0}
 								<div class="empty-state">暂无可用模型</div>
-							{/each}
+							{/if}
 						</div>
 
 						<!-- ASR 配置卡片 -->
@@ -2288,6 +2328,26 @@
 	}
 
 	/* ── 跨部分联动 ─────────────────────────── */
+	.asr-model-group {
+		margin-top: 12px;
+	}
+	.asr-group-label {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-fg-secondary);
+		margin-bottom: 8px;
+		padding: 0 4px;
+	}
+	.asr-online-model {
+		background: color-mix(in srgb, var(--color-accent) 4%, var(--color-bg));
+	}
+	.online-badge {
+		background: color-mix(in srgb, var(--color-green) 14%, transparent);
+		color: var(--color-green);
+	}
 	.asr-linked-hint {
 		display: flex;
 		align-items: center;
