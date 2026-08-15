@@ -30,6 +30,16 @@
 	--color-glass: rgba(255, 255, 255, 0.94);
 	--color-glass-border: rgba(255, 255, 255, 0.5);
 
+	/* iOS 26 Liquid Glass Material Tiers */
+	--glass-light-bg: rgba(255, 255, 255, 0.55);
+	--glass-light-blur: blur(20px) saturate(180%);
+	--glass-medium-bg: rgba(255, 255, 255, 0.65);
+	--glass-medium-blur: blur(40px) saturate(180%);
+	--glass-solid-bg: rgba(255, 255, 255, 0.82);
+	--glass-solid-blur: blur(80px) saturate(180%);
+	--glass-edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+	--glass-inner-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
+
 	/* Typography - iOS 18 */
 	--font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 	--font-mono: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
@@ -139,6 +149,16 @@
 	--color-separator: rgba(84, 84, 88, 0.65);
 	--color-glass: rgba(28, 28, 30, 0.94);
 	--color-glass-border: rgba(255, 255, 255, 0.08);
+
+	/* iOS 26 Liquid Glass — Dark Mode */
+	--glass-light-bg: rgba(30, 30, 30, 0.55);
+	--glass-light-blur: blur(20px) saturate(150%);
+	--glass-medium-bg: rgba(30, 30, 30, 0.65);
+	--glass-medium-blur: blur(40px) saturate(150%);
+	--glass-solid-bg: rgba(30, 30, 30, 0.82);
+	--glass-solid-blur: blur(80px) saturate(150%);
+	--glass-edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+	--glass-inner-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.04);
 
 	/* Dark Mode System Colors */
 	--color-accent: #FF8533;
