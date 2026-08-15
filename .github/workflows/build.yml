@@ -69,6 +69,10 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             bundles: ''
+          # Intel Mac 需要 x86_64 版本；macos-15-intel 是 GitHub 官方 Intel runner
+          - platform: macos-15-intel
+            target: x86_64-apple-darwin
+            bundles: ''
           # Linux 交付 deb+rpm；AppImage 需 FUSE，GitHub Actions ubuntu runner 无 /dev/fuse
           # 且 linuxdeploy AppImage 在 extract-and-run 下运行异常 → 暂缓，后续单独处理
           - platform: ubuntu-22.04
