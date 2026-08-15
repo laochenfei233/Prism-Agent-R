@@ -351,6 +351,10 @@ impl MeetingService {
             file.write_all(&pcm_to_wav_header()).await?;
         }
         file.write_all(pcm).await?;
+        // tokio File::write_all 仅把数据交给后台 blocking task 异步落盘，返回时可能未写完；
+        // 不 flush 则紧随其后的 metadata()（独立 asyncify 任务）可能读到写入前的旧大小，
+        // 导致录音时长偶发少算（CI Linux 上多次 flaky 失败）
+        file.flush().await?;
 
         // 更新录音时长（写入后按「文件大小 - WAV 头」推算，避免用写入前大小）
         let final_len = file.metadata().await?.len();
