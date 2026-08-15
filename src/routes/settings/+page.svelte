@@ -303,6 +303,14 @@
 	let asrModelPathInput = $state('');
 	let selectedAsrBackend = $state<string | null>(null);
 
+	// 根据选中的后端过滤 ASR 数据
+	const filteredAsrCatalog = $derived(
+		selectedAsrBackend ? asrCatalog.filter(m => m.backend === selectedAsrBackend) : asrCatalog
+	);
+	const filteredAsrConfigs = $derived(
+		selectedAsrBackend ? asrConfigs.filter(c => c.kind === selectedAsrBackend) : asrConfigs
+	);
+
 	// ── TTS 语音合成 ─────────────────────────────────────
 	let ttsVoicesList = $state<SpeechSynthesisVoice[]>([]);
 	let ttsSelectedVoiceURI = $state('');
@@ -1074,51 +1082,58 @@
 				<div class="provider-detail-pane">
 					<div class="content-header">
 						<h2 class="content-title">语音识别 (ASR)</h2>
-						<p class="content-desc">配置会议录音的转写模型与后端连接</p>
+						<p class="content-desc">
+							{#if selectedAsrBackend}
+								{asrBackends.find(b => b.kind === selectedAsrBackend)?.name ?? selectedAsrBackend} — 配置会议录音的转写模型与后端连接
+							{:else}
+								选择左侧后端查看对应的模型与配置
+							{/if}
+						</p>
 					</div>
 
-					<!-- 模型管理卡片 -->
-					<div class="card detail-card">
-						<div class="section-title">模型管理</div>
-						{#each asrCatalog as m}
-							<div class="model-row">
-								<span class="model-name">{m.name}</span>
-								<span class="config-badge">{m.backend} · {m.size_mb}MB</span>
-								<div class="model-row-actions">
-									{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
-										<div class="download-progress" title="{(asrDownloadProgress[m.id] * 100).toFixed(0)}%">
-											<div class="download-progress-bar" style="width: {asrDownloadProgress[m.id] * 100}%"></div>
-										</div>
-									{:else if asrInstalled.some(i => i.id === m.id)}
-										<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
-									{:else}
-										<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
-									{/if}
+					{#if selectedAsrBackend}
+						<!-- 模型管理卡片 -->
+						<div class="card detail-card">
+							<div class="section-title">模型管理</div>
+							{#each filteredAsrCatalog as m}
+								<div class="model-row">
+									<span class="model-name">{m.name}</span>
+									<span class="config-badge">{m.size_mb}MB</span>
+									<div class="model-row-actions">
+										{#if asrDownloadProgress[m.id] !== undefined && asrDownloadProgress[m.id] < 1}
+											<div class="download-progress" title="{(asrDownloadProgress[m.id] * 100).toFixed(0)}%">
+												<div class="download-progress-bar" style="width: {asrDownloadProgress[m.id] * 100}%"></div>
+											</div>
+										{:else if asrInstalled.some(i => i.id === m.id)}
+											<button class="btn-sm danger" onclick={() => asrRemoveModel(m.id)}>删除</button>
+										{:else}
+											<button class="btn-sm" onclick={() => asrDownloadModel(m.id)}>下载</button>
+										{/if}
+									</div>
 								</div>
-							</div>
-						{:else}
-							<div class="empty-state">{loaded ? '暂无可用模型' : '加载中...'}</div>
-						{/each}
-					</div>
-
-					<!-- ASR 配置卡片 -->
-					<div class="card detail-card">
-						<div class="card-header-row">
-							<div class="section-title">ASR 配置</div>
-							<button class="btn-sm" onclick={() => asrShowAddConfig = !asrShowAddConfig}>
-								<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-								新建配置
-							</button>
+							{:else}
+								<div class="empty-state">暂无可用模型</div>
+							{/each}
 						</div>
 
-						{#if !asrShowAddConfig && asrLinkedProviders.length > 0}
-							<div class="asr-linked-hint">
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-								<span>已关联 {asrLinkedProviders.length} 个 LLM 服务商：{asrLinkedProviders.map(p => p.name).join('、')}</span>
+						<!-- ASR 配置卡片 -->
+						<div class="card detail-card">
+							<div class="card-header-row">
+								<div class="section-title">ASR 配置</div>
+								<button class="btn-sm" onclick={() => asrShowAddConfig = !asrShowAddConfig}>
+									<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+									新建配置
+								</button>
 							</div>
-						{/if}
 
-						{#if asrShowAddConfig}
+							{#if !asrShowAddConfig && asrLinkedProviders.length > 0}
+								<div class="asr-linked-hint">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+									<span>已关联 {asrLinkedProviders.length} 个 LLM 服务商：{asrLinkedProviders.map(p => p.name).join('、')}</span>
+								</div>
+							{/if}
+
+							{#if asrShowAddConfig}
 							<div class="asr-form">
 								{#if asrLinkedProviders.length > 0}
 									<div class="asr-linked-hint">
@@ -1144,7 +1159,7 @@
 							</div>
 						{/if}
 
-						{#each asrConfigs as c}
+						{#each filteredAsrConfigs as c}
 							<div class="config-row">
 								<div class="config-info">
 									<span class="config-name">{c.name}</span>
@@ -1157,6 +1172,14 @@
 							<div class="empty-state">暂无配置</div>
 						{/each}
 					</div>
+					{:else}
+						<div class="card">
+							<div class="empty-state">
+								<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 8px; opacity: 0.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+								<p>请在左侧选择一个 ASR 后端</p>
+							</div>
+						</div>
+					{/if}
 				</div>
 			</div>
 
