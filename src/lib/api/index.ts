@@ -42,9 +42,15 @@ export const agentApi = {
 	list: () => invoke<AgentDto[]>('agent_list'),
 	get: (id: string) => invoke<AgentDto>('agent_get', { id }),
 	create: (name: string, description?: string, system_prompt?: string) =>
-		invoke<AgentDto>('agent_create', { name, description, system_prompt }),
-	update: (id: string, data: Partial<AgentDto>) =>
-		invoke<AgentDto>('agent_update', { id, ...data }),
+		invoke<AgentDto>('agent_create', { name, description, systemPrompt: system_prompt }),
+	update: (id: string, data: Partial<AgentDto>) => {
+		const payload: Record<string, unknown> = { id };
+		if (data.name !== undefined) payload.name = data.name;
+		if (data.description !== undefined) payload.description = data.description;
+		if (data.system_prompt !== undefined) payload.systemPrompt = data.system_prompt;
+		if (data.model_id !== undefined) payload.modelId = data.model_id;
+		return invoke<AgentDto>('agent_update', payload);
+	},
 	delete: (id: string) => invoke<void>('agent_delete', { id }),
 };
 
