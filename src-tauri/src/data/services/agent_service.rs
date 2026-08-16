@@ -192,6 +192,7 @@ impl AgentService {
                 .bind(sp).bind(now).bind(id).execute(&self.pool).await?;
         }
         if let Some(m) = model_id {
+            tracing::info!("[agent_update] Saving model_id={} for agent id={}", m, id);
             sqlx::query("UPDATE agents SET model_id = ?, updated_at = ? WHERE id = ?")
                 .bind(m).bind(now).bind(id).execute(&self.pool).await?;
         }

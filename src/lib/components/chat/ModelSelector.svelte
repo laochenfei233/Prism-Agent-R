@@ -27,6 +27,7 @@
 	}
 
 	function select(option: ModelOption) {
+		console.log('[ModelSelector] select: option.id=', option.id, 'option.model_id=', option.model_id);
 		open = false;
 		onSelect?.(option.id);
 	}

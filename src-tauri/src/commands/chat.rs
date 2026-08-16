@@ -56,6 +56,11 @@ pub async fn chat_send(
     .await?
     .ok_or_else(|| AppError::AgentNotFound(session_row.agent_id.clone()))?;
 
+    tracing::info!(
+        "[chat_send] agent_id={}, agent.model_id={:?}, session.agent_id={}",
+        agent_row.id, agent_row.model_id, session_row.agent_id
+    );
+
     // 3. Find model
     //    Try by agent.model_id (UUID → models.id), then fallback to model_id string (→ models.model_id),
     //    then fallback to default model.
@@ -87,8 +92,12 @@ pub async fn chat_send(
     };
 
     let model_row = match model_row {
-        Some(m) => m,
+        Some(m) => {
+            tracing::info!("[chat_send] model found: id={}, model_id={}, display_name={:?}", m.id, m.model_id, m.display_name);
+            m
+        }
         None => {
+            tracing::warn!("[chat_send] NO model found for agent.model_id={:?}", agent_row.model_id);
             let err_msg = "未配置模型。请在设置中添加 Provider 并设置默认模型。";
             let msg = svc.save_message(&session_id, "assistant", err_msg, None, None, None, None).await?;
             app.emit("chat:stream:done", serde_json::json!({
