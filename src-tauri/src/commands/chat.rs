@@ -109,14 +109,6 @@ pub async fn chat_send(
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    tracing::info!(
-        "[chat_send] provider_id={} provider_name={} kind={} base_url={:?} api_key_enc_len={} api_key_enc_prefix={} model_row.id={} model_row.model_id={}",
-        model_row.provider_id, provider_row.name, provider_row.kind, provider_row.base_url,
-        provider_row.api_key_enc.as_deref().map(|s| s.len()).unwrap_or(0),
-        provider_row.api_key_enc.as_deref().map(|s| if s.len() > 12 { &s[..12] } else { s }).unwrap_or(""),
-        model_row.id, model_row.model_id
-    );
-
     let base_url = provider_row.base_url.unwrap_or_else(|| {
         match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
@@ -127,17 +119,7 @@ pub async fn chat_send(
     let api_key = provider_row
         .api_key_enc
         .as_deref()
-        .map(|enc| {
-            let decrypted = crate::commands::settings::decrypt_provider_key(enc);
-            tracing::info!(
-                "[chat_send] api_key decrypt: enc_len={} decrypted_len={} decrypted_prefix={} is_likely_ciphertext={}",
-                enc.len(),
-                decrypted.len(),
-                if decrypted.len() > 8 { &decrypted[..8] } else { &decrypted },
-                decrypted.starts_with("bIw") || decrypted.contains('+') || decrypted.contains('/')
-            );
-            decrypted
-        })
+        .map(crate::commands::settings::decrypt_provider_key)
         .unwrap_or_default();
 
     // 5. Build history
