@@ -11,10 +11,10 @@
 	let { data, onStartChat, onCreateAgent, onDeleteAgent }: Props = $props();
 
 	const columns = [
-		{ key: 'idle' as const, title: '空闲', dotVar: 'var(--color-muted)' },
-		{ key: 'running' as const, title: '运行中', dotVar: 'var(--color-green)' },
-		{ key: 'done' as const, title: '已完成', dotVar: 'var(--color-accent)' },
-		{ key: 'failed' as const, title: '失败', dotVar: 'var(--color-red)' },
+		{ key: 'idle' as const, title: '空闲', dotVar: 'var(--color-muted)', bgColor: 'rgba(128, 128, 128, 0.06)', borderColor: 'rgba(128, 128, 128, 0.15)' },
+		{ key: 'running' as const, title: '运行中', dotVar: 'var(--color-green)', bgColor: 'rgba(52, 199, 89, 0.06)', borderColor: 'rgba(52, 199, 89, 0.18)' },
+		{ key: 'done' as const, title: '已完成', dotVar: 'var(--color-accent)', bgColor: 'rgba(0, 122, 255, 0.06)', borderColor: 'rgba(0, 122, 255, 0.18)' },
+		{ key: 'failed' as const, title: '失败', dotVar: 'var(--color-red)', bgColor: 'rgba(255, 59, 48, 0.06)', borderColor: 'rgba(255, 59, 48, 0.18)' },
 	];
 
 	function cards(colKey: 'idle' | 'running' | 'done' | 'failed'): KanbanCard[] {
@@ -48,11 +48,11 @@
 
 	<div class="board">
 		{#each columns as col (col.key)}
-			<div class="column">
+			<div class="column" style="background: {col.bgColor}; border: 1px solid {col.borderColor}; border-radius: var(--radius-md); padding: 12px;">
 				<div class="column-header">
 					<span class="col-dot" style="background: {col.dotVar}"></span>
 					<span class="col-title">{col.title}</span>
-					<span class="col-count">{cards(col.key).length}</span>
+					<span class="col-count" style="color: {col.dotVar}; background: {col.bgColor};">{cards(col.key).length}</span>
 				</div>
 
 				<div class="column-body">
@@ -177,7 +177,7 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		padding: 4px 2px 8px;
+		padding: 0 0 4px;
 	}
 	.col-dot {
 		width: 8px;

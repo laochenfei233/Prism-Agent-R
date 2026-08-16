@@ -37,7 +37,7 @@ impl DashboardService {
         &self,
         session_state: &std::sync::Arc<crate::core::session::state::SessionStateManager>,
     ) -> Result<KanbanData, AppError> {
-        // 1. Load all agents (same query as load_agents but we need agent_id, name, avatar, model_name)
+        // 1. Load all agents with system_prompt configured
         let agent_rows = sqlx::query(
             r#"
             SELECT
@@ -49,6 +49,7 @@ impl DashboardService {
                 m.display_name AS model_name
             FROM agents a
             LEFT JOIN models m ON m.id = a.model_id
+            WHERE a.system_prompt IS NOT NULL AND a.system_prompt != ''
             ORDER BY a.order_key
             "#,
         )
