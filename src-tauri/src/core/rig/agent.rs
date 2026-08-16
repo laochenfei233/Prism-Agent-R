@@ -42,6 +42,8 @@ pub struct RigAgent {
     pub cancel_token: Option<CancellationToken>,
     /// Invoked for every streamed text delta.
     pub on_delta: Option<Arc<dyn Fn(&str) + Send + Sync>>,
+    /// Invoked for every streamed reasoning/thinking delta.
+    pub on_reasoning: Option<Arc<dyn Fn(&str) + Send + Sync>>,
     /// Invoked for every streamed tool call.
     pub on_tool_call: Option<Arc<dyn Fn(&ToolCall) + Send + Sync>>,
     /// Optional MCP runtime; enables MCP tool fallback when a tool is not in the registry.
@@ -83,6 +85,7 @@ impl RigAgent {
             session_id: None,
             cancel_token: None,
             on_delta: None,
+            on_reasoning: None,
             on_tool_call: None,
             mcp_runtime: None,
             guardrails: None,
@@ -115,6 +118,11 @@ impl RigAgent {
 
     pub fn with_on_delta(mut self, cb: impl Fn(&str) + Send + Sync + 'static) -> Self {
         self.on_delta = Some(Arc::new(cb));
+        self
+    }
+
+    pub fn with_on_reasoning(mut self, cb: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        self.on_reasoning = Some(Arc::new(cb));
         self
     }
 
@@ -228,6 +236,11 @@ impl RigAgent {
                                 total_text_len += t.len();
                                 final_text.push_str(&t);
                                 if let Some(cb) = &self.on_delta {
+                                    cb(&t);
+                                }
+                            }
+                            Some(StreamEvent::Reasoning(t)) => {
+                                if let Some(cb) = &self.on_reasoning {
                                     cb(&t);
                                 }
                             }

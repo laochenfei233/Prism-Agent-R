@@ -109,6 +109,10 @@ export const streamEvents = {
 		listen<StreamDelta>('chat:stream:delta', (e) => {
 			if (e.session_id === sessionId) handler(e.delta);
 		}),
+	onReasoning: (sessionId: string, handler: (delta: string) => void) =>
+		listen<StreamDelta>('chat:stream:reasoning', (e) => {
+			if (e.session_id === sessionId) handler(e.delta);
+		}),
 	onToolCall: (sessionId: string, handler: (call: StreamToolCall['call']) => void) =>
 		listen<StreamToolCall>('chat:stream:tool_call', (e) => {
 			if (e.session_id === sessionId) handler(e.call);

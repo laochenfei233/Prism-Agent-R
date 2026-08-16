@@ -20,6 +20,16 @@
 		if (value && typeof value === 'object') return [value];
 		return [];
 	}
+
+	// Extract thinking/reasoning content from message metadata
+	// Reasoning is stored in usage.reasoning_content or as a separate field
+	function getReasoning(): string {
+		if (!message.usage) return '';
+		const usage = message.usage as any;
+		return usage?.reasoning_content ?? '';
+	}
+
+	const reasoning = $derived(getReasoning());
 </script>
 
 <div class="bubble-wrap" class:user={message.role === 'user'}>
@@ -27,6 +37,13 @@
 		{#if message.role === 'user'}
 			{message.content}
 		{:else}
+			{#if reasoning}
+				<div class="thinking-section">
+					{#await import('./ThinkingBlock.svelte') then { default: ThinkingBlock }}
+						<ThinkingBlock content={reasoning} />
+					{/await}
+				</div>
+			{/if}
 			{#if message.content}
 				<MarkdownViewer content={message.content} />
 			{/if}
@@ -78,5 +95,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
+	}
+
+	.thinking-section {
+		margin-bottom: 8px;
 	}
 </style>

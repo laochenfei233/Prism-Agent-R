@@ -6,11 +6,13 @@
 	let {
 		messages = [],
 		streaming = false,
-		streamingText = ''
+		streamingText = '',
+		streamingReasoningText = ''
 	}: {
 		messages: MessageDto[];
 		streaming?: boolean;
 		streamingText?: string;
+		streamingReasoningText?: string;
 	} = $props();
 
 	let listEl = $state<HTMLElement | null>(null);
@@ -23,9 +25,9 @@
 	}
 
 	$effect(() => {
-		// 追踪内容变化以便自动滚动
 		void messages.length;
 		void streamingText;
+		void streamingReasoningText;
 		const el = listEl;
 		if (el && stick) el.scrollTop = el.scrollHeight;
 	});
@@ -48,10 +50,19 @@
 		{#if streaming}
 			<div class="bubble-wrap">
 				<div class="bubble streaming">
+					{#if streamingReasoningText}
+						<div class="thinking-section">
+							{#await import('./ThinkingBlock.svelte') then { default: ThinkingBlock }}
+								<ThinkingBlock content={streamingReasoningText} streaming={true} />
+							{/await}
+						</div>
+					{/if}
 					{#if streamingText}
 						<MarkdownViewer content={streamingText} streaming={true} />
 					{/if}
-					<span class="cursor">|</span>
+					{#if !streamingText && !streamingReasoningText}
+						<span class="cursor">|</span>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -117,6 +128,10 @@
 		animation: blink 1s infinite;
 		color: var(--color-accent);
 		font-weight: var(--font-weight-bold);
+	}
+
+	.thinking-section {
+		margin-bottom: 8px;
 	}
 
 	@keyframes blink {

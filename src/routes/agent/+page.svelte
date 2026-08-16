@@ -170,6 +170,7 @@
 				messages={chatStore.messages}
 				streaming={chatStore.streaming}
 				streamingText={chatStore.streamingText}
+				streamingReasoningText={chatStore.streamingReasoningText}
 			/>
 			<Composer
 				disabled={chatStore.isGenerating}

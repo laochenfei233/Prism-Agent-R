@@ -38,6 +38,9 @@ impl StreamPipeline {
                         Some(StreamEvent::Text(delta)) => {
                             self.emit_delta(&session_id, &message_id, &delta);
                         }
+                        Some(StreamEvent::Reasoning(delta)) => {
+                            self.emit_reasoning(&session_id, &message_id, &delta);
+                        }
                         Some(StreamEvent::ToolCall(call)) => {
                             self.emit_tool_call(&session_id, &message_id, &call);
                         }
@@ -70,6 +73,16 @@ impl StreamPipeline {
     fn emit_delta(&self, session_id: &str, message_id: &str, delta: &str) {
         if let Some(app) = &self.app {
             let _ = app.emit("chat:stream:delta", serde_json::json!({
+                "session_id": session_id,
+                "message_id": message_id,
+                "delta": delta,
+            }));
+        }
+    }
+
+    fn emit_reasoning(&self, session_id: &str, message_id: &str, delta: &str) {
+        if let Some(app) = &self.app {
+            let _ = app.emit("chat:stream:reasoning", serde_json::json!({
                 "session_id": session_id,
                 "message_id": message_id,
                 "delta": delta,

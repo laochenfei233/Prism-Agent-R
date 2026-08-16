@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use futures::SinkExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -138,15 +139,43 @@ impl ModelProvider for OpenAiProvider {
             return Err(AgentError::Provider(format!("HTTP {status}: {text}")));
         }
 
-        // Collect the full response text, then parse all SSE events at once.
-        // This handles multi-event chunks, partial-event splits, and reasoning_content correctly.
-        let resp_text = resp.text().await
-            .map_err(|e| AgentError::Provider(e.to_string()))?;
+        // Buffered SSE streaming: collect bytes, split on \n\n, parse each complete event.
+        let (tx, rx) = futures::channel::mpsc::channel::<StreamEvent>(64);
+        let stream = resp.bytes_stream();
 
-        let events: Vec<StreamEvent> = parse_sse_buffer(&resp_text);
-        let mapped = futures::stream::iter(events);
+        tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            use futures::StreamExt;
+            let mut stream = stream;
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(bytes) => {
+                        buffer.extend_from_slice(&bytes);
+                        // Process all complete SSE events (separated by \n\n)
+                        while let Some(pos) = find_event_boundary(&buffer) {
+                            let event_bytes = buffer[..pos].to_vec();
+                            buffer = buffer[pos..].to_vec();
+                            let event_text = String::from_utf8_lossy(&event_bytes).to_string();
+                            for evt in parse_sse_buffer(&event_text) {
+                                if tx.clone().send(evt).await.is_err() {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            // Process any remaining data in buffer
+            if !buffer.is_empty() {
+                let event_text = String::from_utf8_lossy(&buffer).to_string();
+                for evt in parse_sse_buffer(&event_text) {
+                    let _ = tx.clone().send(evt).await;
+                }
+            }
+        });
 
-        Ok(Box::pin(mapped))
+        Ok(Box::pin(rx))
     }
 }
 
@@ -318,6 +347,17 @@ pub fn parse_sse_chunk(text: &str) -> Option<StreamEvent> {
     None
 }
 
+/// Find the position of the next SSE event boundary (\n\n) in the buffer.
+/// Returns the byte position AFTER the \n\n separator, or None if not found.
+fn find_event_boundary(buf: &[u8]) -> Option<usize> {
+    for i in 0..buf.len().saturating_sub(1) {
+        if buf[i] == b'\n' && buf[i + 1] == b'\n' {
+            return Some(i + 2);
+        }
+    }
+    None
+}
+
 /// Parse all SSE events from a buffered text block (handles multi-event chunks).
 fn parse_sse_buffer(text: &str) -> Vec<StreamEvent> {
     let mut events = Vec::new();
@@ -368,10 +408,10 @@ fn parse_sse_data(data: &str) -> Option<StreamEvent> {
             }
         }
 
-        // Reasoning content (thinking process — MiMo API specific)
+        // Reasoning content (thinking process — MiMo/DeepSeek API specific)
         if let Some(reasoning) = &delta.reasoning_content {
             if !reasoning.is_empty() {
-                return Some(StreamEvent::Text(reasoning.clone()));
+                return Some(StreamEvent::Reasoning(reasoning.clone()));
             }
         }
     }

@@ -5,11 +5,13 @@ class ChatStore {
 	messages = $state<MessageDto[]>([]);
 	streaming = $state(false);
 	streamingText = $state('');
+	streamingReasoningText = $state('');
 	isGenerating = $state(false);
 	private unsubs: (() => void)[] = [];
 	// Throttle: deltas accumulate here and flush to streamingText at most once
 	// per ~30ms so the markdown renderer isn't re-run on every token.
 	private pendingDelta = '';
+	private pendingReasoning = '';
 	private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 	private scheduleFlush() {
@@ -19,6 +21,10 @@ class ChatStore {
 			if (this.pendingDelta) {
 				this.streamingText += this.pendingDelta;
 				this.pendingDelta = '';
+			}
+			if (this.pendingReasoning) {
+				this.streamingReasoningText += this.pendingReasoning;
+				this.pendingReasoning = '';
 			}
 		}, 30);
 	}
@@ -32,6 +38,10 @@ class ChatStore {
 			this.streamingText += this.pendingDelta;
 			this.pendingDelta = '';
 		}
+		if (this.pendingReasoning) {
+			this.streamingReasoningText += this.pendingReasoning;
+			this.pendingReasoning = '';
+		}
 	}
 
 	private discardPending() {
@@ -40,6 +50,7 @@ class ChatStore {
 			this.flushTimer = null;
 		}
 		this.pendingDelta = '';
+		this.pendingReasoning = '';
 	}
 
 	async loadHistory(sessionId: string) {
@@ -62,6 +73,7 @@ class ChatStore {
 		this.isGenerating = true;
 		this.streaming = true;
 		this.streamingText = '';
+		this.streamingReasoningText = '';
 
 		// Subscribe to stream events
 		this.cleanup();
@@ -69,6 +81,10 @@ class ChatStore {
 		const unsubs = await Promise.all([
 			streamEvents.onDelta(sessionId, (delta) => {
 				this.pendingDelta += delta;
+				this.scheduleFlush();
+			}),
+			streamEvents.onReasoning(sessionId, (delta) => {
+				this.pendingReasoning += delta;
 				this.scheduleFlush();
 			}),
 			streamEvents.onToolCall(sessionId, (call) => {
@@ -82,6 +98,7 @@ class ChatStore {
 				this.streaming = false;
 				this.isGenerating = false;
 				this.streamingText = '';
+				this.streamingReasoningText = '';
 				this.cleanup();
 			}),
 			streamEvents.onError(sessionId, (message) => {
@@ -90,6 +107,7 @@ class ChatStore {
 				this.streaming = false;
 				this.isGenerating = false;
 				this.streamingText = '';
+				this.streamingReasoningText = '';
 				this.cleanup();
 			}),
 		]);
@@ -114,6 +132,7 @@ class ChatStore {
 		this.streaming = false;
 		this.isGenerating = false;
 		this.streamingText = '';
+		this.streamingReasoningText = '';
 	}
 }
 

@@ -111,6 +111,7 @@ pub struct Usage {
 #[derive(Debug, Clone)]
 pub enum StreamEvent {
     Text(String),
+    Reasoning(String),
     ToolCall(ToolCall),
     Finish { usage: Option<Usage> },
     Error(String),

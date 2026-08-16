@@ -169,6 +169,17 @@ pub async fn chat_send(
         }));
     };
 
+    let reasoning_app = app.clone();
+    let reasoning_sid = session_id.clone();
+    let reasoning_mid = message_id.clone();
+    let on_reasoning = move |delta: &str| {
+        let _ = reasoning_app.emit("chat:stream:reasoning", serde_json::json!({
+            "session_id": reasoning_sid,
+            "message_id": reasoning_mid,
+            "delta": delta,
+        }));
+    };
+
     let call_app = app.clone();
     let call_sid = session_id.clone();
     let call_mid = message_id.clone();
@@ -228,6 +239,7 @@ pub async fn chat_send(
         .with_session_id(session_id.clone())
         .with_cancel_token(cancel.clone())
         .with_on_delta(on_delta)
+        .with_on_reasoning(on_reasoning)
         .with_on_tool_call(on_tool_call)
         .with_mcp_runtime(state.mcp_runtime.clone());
 
