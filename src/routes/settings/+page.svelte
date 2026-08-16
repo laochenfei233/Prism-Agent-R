@@ -883,7 +883,7 @@
 									{:else}
 										<div class="key-display">
 											<span class="key-masked">{sel.has_key ? '••••••••••••••••' : '未设置'}</span>
-											<button class="btn-icon" onclick={() => showKeyText = true} title="查看密钥">
+											<button class="btn-icon" onclick={() => { startEditKey(sel.id); showKeyText = true; }} title="查看/编辑密钥">
 												<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 													<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
 													<circle cx="12" cy="12" r="3"/>
