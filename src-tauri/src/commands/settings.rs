@@ -198,6 +198,34 @@ pub async fn settings_add_provider(
     base_url: Option<String>,
     api_key: Option<String>,
 ) -> Result<(), AppError> {
+    // 去重检查：同名或同 URL 的 Provider 已存在则拒绝
+    let name_trimmed = name.trim();
+    let url_trimmed = base_url.as_deref().map(|u| u.trim());
+
+    if let Some(url) = url_trimmed {
+        if !url.is_empty() {
+            let dup = sqlx::query_scalar::<_, String>(
+                "SELECT id FROM providers WHERE base_url = ? LIMIT 1"
+            )
+            .bind(url)
+            .fetch_optional(&state.db.pool)
+            .await?;
+            if dup.is_some() {
+                return Err(AppError::Validation(format!("已存在相同 URL 的 Provider: {url}")));
+            }
+        }
+    }
+
+    let dup_name = sqlx::query_scalar::<_, String>(
+        "SELECT id FROM providers WHERE name = ? LIMIT 1"
+    )
+    .bind(name_trimmed)
+    .fetch_optional(&state.db.pool)
+    .await?;
+    if dup_name.is_some() {
+        return Err(AppError::Validation(format!("已存在同名 Provider: {name_trimmed}")));
+    }
+
     let id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -211,7 +239,7 @@ pub async fn settings_add_provider(
         "INSERT INTO providers (id, name, kind, base_url, api_key_enc, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)"
     )
     .bind(&id)
-    .bind(&name)
+    .bind(name_trimmed)
     .bind(&kind)
     .bind(&base_url)
     .bind(&stored_key)
