@@ -110,9 +110,10 @@ pub async fn chat_send(
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
     tracing::info!(
-        "[chat_send] provider_id={} provider_name={} kind={} base_url={:?} api_key_enc_len={} model_row.id={} model_row.model_id={}",
+        "[chat_send] provider_id={} provider_name={} kind={} base_url={:?} api_key_enc_len={} api_key_enc_prefix={} model_row.id={} model_row.model_id={}",
         model_row.provider_id, provider_row.name, provider_row.kind, provider_row.base_url,
         provider_row.api_key_enc.as_deref().map(|s| s.len()).unwrap_or(0),
+        provider_row.api_key_enc.as_deref().map(|s| if s.len() > 12 { &s[..12] } else { s }).unwrap_or(""),
         model_row.id, model_row.model_id
     );
 
