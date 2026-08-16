@@ -109,6 +109,13 @@ pub async fn chat_send(
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
+    tracing::info!(
+        "[chat_send] provider_id={} provider_name={} kind={} base_url={:?} api_key_enc_len={} model_row.id={} model_row.model_id={}",
+        model_row.provider_id, provider_row.name, provider_row.kind, provider_row.base_url,
+        provider_row.api_key_enc.as_deref().map(|s| s.len()).unwrap_or(0),
+        model_row.id, model_row.model_id
+    );
+
     let base_url = provider_row.base_url.unwrap_or_else(|| {
         match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
@@ -121,13 +128,6 @@ pub async fn chat_send(
         .as_deref()
         .map(crate::commands::settings::decrypt_provider_key)
         .unwrap_or_default();
-
-    tracing::info!(
-        "[chat_send] provider={} base_url={} model={} api_key_len={} api_key_prefix={}",
-        provider_row.name, base_url, model_row.model_id,
-        api_key.len(),
-        if api_key.len() > 8 { &api_key[..8] } else { &api_key }
-    );
 
     // 5. Build history
     let history = svc.history(&session_id, Some(50)).await?;
