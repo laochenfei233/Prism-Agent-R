@@ -61,13 +61,10 @@
 	async function handleSelectModel(modelId: string) {
 		const agent = agentStore.currentAgent;
 		if (!agent) return;
-		console.log('[handleSelectModel] agent.id=', agent.id, 'modelId=', modelId, 'current model_id=', agent.model_id);
 		try {
 			await agentApi.update(agent.id, { model_id: modelId });
 			await agentStore.loadAgents();
-			const updated = agentStore.agents.find((a) => a.id === agent.id);
-			console.log('[handleSelectModel] after update, agent.model_id=', updated?.model_id);
-			agentStore.currentAgent = updated ?? agent;
+			agentStore.currentAgent = agentStore.agents.find((a) => a.id === agent.id) ?? agent;
 		} catch (e) {
 			console.error('Failed to update model:', e);
 		}

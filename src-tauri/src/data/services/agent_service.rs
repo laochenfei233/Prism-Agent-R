@@ -191,13 +191,9 @@ impl AgentService {
             sqlx::query("UPDATE agents SET system_prompt = ?, updated_at = ? WHERE id = ?")
                 .bind(sp).bind(now).bind(id).execute(&self.pool).await?;
         }
-        tracing::info!("[agent_update] id={}, model_id={:?}, name={:?}, description={:?}, system_prompt={:?}", id, model_id, name, description, system_prompt);
         if let Some(m) = model_id {
-            tracing::info!("[agent_update] Saving model_id={} for agent id={}", m, id);
             sqlx::query("UPDATE agents SET model_id = ?, updated_at = ? WHERE id = ?")
                 .bind(m).bind(now).bind(id).execute(&self.pool).await?;
-        } else {
-            tracing::warn!("[agent_update] model_id is None — NOT saving");
         }
 
         self.get(id).await
