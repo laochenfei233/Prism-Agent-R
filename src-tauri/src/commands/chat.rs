@@ -127,7 +127,17 @@ pub async fn chat_send(
     let api_key = provider_row
         .api_key_enc
         .as_deref()
-        .map(crate::commands::settings::decrypt_provider_key)
+        .map(|enc| {
+            let decrypted = crate::commands::settings::decrypt_provider_key(enc);
+            tracing::info!(
+                "[chat_send] api_key decrypt: enc_len={} decrypted_len={} decrypted_prefix={} is_likely_ciphertext={}",
+                enc.len(),
+                decrypted.len(),
+                if decrypted.len() > 8 { &decrypted[..8] } else { &decrypted },
+                decrypted.starts_with("bIw") || decrypted.contains('+') || decrypted.contains('/')
+            );
+            decrypted
+        })
         .unwrap_or_default();
 
     // 5. Build history
