@@ -357,6 +357,27 @@ pub struct DashboardOverview {
     pub models: Vec<ModelStatus>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct KanbanCard {
+    pub agent_id: String,
+    pub agent_name: String,
+    pub agent_avatar: Option<String>,
+    pub model_name: Option<String>,
+    pub session_id: Option<String>,
+    pub session_title: Option<String>,
+    pub session_updated_at: Option<i64>,
+    pub lifecycle: String,
+    pub message_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct KanbanData {
+    pub idle: Vec<KanbanCard>,
+    pub running: Vec<KanbanCard>,
+    pub done: Vec<KanbanCard>,
+    pub failed: Vec<KanbanCard>,
+}
+
 // ── RAG ───────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

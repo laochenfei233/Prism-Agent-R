@@ -6,7 +6,7 @@
 	import { agentApi } from '$lib/api';
 
 	import DashboardHeader from '$lib/components/dashboard/DashboardHeader.svelte';
-	import AgentStatusGrid from '$lib/components/dashboard/AgentStatusGrid.svelte';
+	import SessionKanban from '$lib/components/dashboard/SessionKanban.svelte';
 	import UsageStatsCard from '$lib/components/dashboard/UsageStatsCard.svelte';
 	import UsageTrendChart from '$lib/components/dashboard/UsageTrendChart.svelte';
 	import SkillOverviewCard from '$lib/components/dashboard/SkillOverviewCard.svelte';
@@ -37,6 +37,7 @@
 		await agentApi.delete(agentId);
 		await agentStore.loadAgents();
 		await dashboardStore.loadOverview();
+		await dashboardStore.loadKanban();
 	}
 
 	function handleOpenSession(sessionId: string) {
@@ -50,6 +51,7 @@
 	$effect(() => {
 		load();
 		dashboardStore.loadOverview();
+		dashboardStore.loadKanban();
 	});
 </script>
 
@@ -57,13 +59,9 @@
 	<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? agentStore.agents.length} />
 
 	<div class="dashboard-body">
-		<!-- Row 1: Agent 状态网格 -->
-		<AgentStatusGrid
-			agents={dashboardStore.overview?.agents ?? agentStore.agents.map(a => ({
-				id: a.id, name: a.name, description: a.description ?? '',
-				avatar: null, model_name: null, skill_count: 0, mcp_count: 0,
-				last_used: null, order_key: a.order_key ?? 0
-			}))}
+		<!-- Row 1: Session Kanban Board -->
+		<SessionKanban
+			data={dashboardStore.kanban}
 			onStartChat={handleStartChat}
 			onCreateAgent={handleCreateAgent}
 			onDeleteAgent={handleDeleteAgent}

@@ -1,3 +1,4 @@
+use crate::core::session::SessionLifecycle;
 use crate::data::models::*;
 use crate::data::Database;
 use crate::utils::error::AppError;
@@ -29,6 +30,125 @@ impl DashboardService {
             mcp_servers,
             recent_sessions,
             models,
+        })
+    }
+
+    pub async fn kanban(
+        &self,
+        session_state: &std::sync::Arc<crate::core::session::state::SessionStateManager>,
+    ) -> Result<KanbanData, AppError> {
+        // 1. Load all agents (same query as load_agents but we need agent_id, name, avatar, model_name)
+        let agent_rows = sqlx::query(
+            r#"
+            SELECT
+                a.id,
+                a.name,
+                COALESCE(a.description, '') AS description,
+                a.avatar,
+                a.order_key,
+                m.display_name AS model_name
+            FROM agents a
+            LEFT JOIN models m ON m.id = a.model_id
+            ORDER BY a.order_key
+            "#,
+        )
+        .fetch_all(&self.db.pool)
+        .await?;
+
+        let mut idle = Vec::new();
+        let mut running = Vec::new();
+        let mut done = Vec::new();
+        let mut failed = Vec::new();
+
+        for row in &agent_rows {
+            let agent_id: String = row.get("id");
+            let agent_name: String = row.get("name");
+            let agent_avatar: Option<String> = row.get("avatar");
+            let model_name: Option<String> = row.get("model_name");
+
+            // 2. For each agent, find their most recent session
+            let session_row = sqlx::query(
+                r#"
+                SELECT
+                    s.id,
+                    COALESCE(s.title, '新会话') AS title,
+                    s.updated_at,
+                    (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count
+                FROM sessions s
+                WHERE s.agent_id = ?
+                ORDER BY s.updated_at DESC
+                LIMIT 1
+                "#,
+            )
+            .bind(&agent_id)
+            .fetch_optional(&self.db.pool)
+            .await?;
+
+            let (session_id, session_title, session_updated_at, message_count): (
+                Option<String>,
+                Option<String>,
+                Option<i64>,
+                i64,
+            ) = match session_row {
+                Some(r) => (
+                    Some(r.get("id")),
+                    Some(r.get("title")),
+                    Some(r.get("updated_at")),
+                    r.get::<i64, _>("message_count"),
+                ),
+                None => (None, None, None, 0),
+            };
+
+            // 3. Query session_state to get SessionLifecycle
+            let lifecycle = match &session_id {
+                Some(sid) => session_state.get_state(sid).await,
+                None => SessionLifecycle::Created,
+            };
+
+            // 4 & 5. Map lifecycle to kanban column
+            let column = match lifecycle {
+                SessionLifecycle::Init
+                | SessionLifecycle::Running
+                | SessionLifecycle::Verifying
+                | SessionLifecycle::Paused => "running",
+                SessionLifecycle::Done => "done",
+                SessionLifecycle::InitFailed => "failed",
+                SessionLifecycle::Created | SessionLifecycle::Ready => {
+                    // Could be genuinely Created/Ready, or not in state manager (app restarted).
+                    // If the session has messages, it was likely completed before restart.
+                    if message_count > 0 {
+                        "done"
+                    } else {
+                        "idle"
+                    }
+                }
+            };
+
+            let card = KanbanCard {
+                agent_id,
+                agent_name,
+                agent_avatar,
+                model_name,
+                session_id,
+                session_title,
+                session_updated_at,
+                lifecycle: format!("{:?}", lifecycle),
+                message_count,
+            };
+
+            match column {
+                "running" => running.push(card),
+                "done" => done.push(card),
+                "failed" => failed.push(card),
+                _ => idle.push(card),
+            }
+        }
+
+        Ok(KanbanData {
+            idle,
+            running,
+            done,
+            failed,
         })
     }
 

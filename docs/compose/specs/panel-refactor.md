@@ -1,6 +1,6 @@
 ---
 feature: panel-refactor
-status: delivered
+status: in-progress
 updated: 2026-08-15
 branch: feat/panel-refactor
 commits: c72a3e0..HEAD
