@@ -3,14 +3,14 @@
 	import { invoke } from '$lib/api/client';
 	import { agentStore } from '$lib/stores/agents.svelte';
 	import { dashboardStore } from '$lib/stores/dashboard.svelte';
+	import { agentApi } from '$lib/api';
 
 	import DashboardHeader from '$lib/components/dashboard/DashboardHeader.svelte';
+	import AgentStatusGrid from '$lib/components/dashboard/AgentStatusGrid.svelte';
 	import UsageStatsCard from '$lib/components/dashboard/UsageStatsCard.svelte';
 	import UsageTrendChart from '$lib/components/dashboard/UsageTrendChart.svelte';
-	import AgentLauncher from '$lib/components/dashboard/AgentLauncher.svelte';
 	import SkillOverviewCard from '$lib/components/dashboard/SkillOverviewCard.svelte';
 	import McpOverviewCard from '$lib/components/dashboard/McpOverviewCard.svelte';
-	import OrchestratorPanel from '$lib/components/dashboard/OrchestratorPanel.svelte';
 	import RecentSessionsCard from '$lib/components/dashboard/RecentSessionsCard.svelte';
 
 	let providers = $state<any[]>([]);
@@ -21,20 +21,22 @@
 		models = await invoke<any[]>('model_list');
 	}
 
-	async function createAgent() {
-		goto('/agent');
-	}
-
 	async function handleStartChat(agentId: string) {
 		const agent = agentStore.agents.find((a) => a.id === agentId);
 		if (!agent) return;
-		try {
-			agentStore.selectAgent(agent);
-			await agentStore.createSession(agent.id, '新会话');
-			goto('/agent');
-		} catch (e) {
-			console.error('Failed to start chat:', e);
-		}
+		agentStore.selectAgent(agent);
+		await agentStore.createSession(agent.id, '新会话');
+		goto('/agent');
+	}
+
+	function handleCreateAgent() {
+		goto('/agent');
+	}
+
+	async function handleDeleteAgent(agentId: string) {
+		await agentApi.delete(agentId);
+		await agentStore.loadAgents();
+		await dashboardStore.loadOverview();
 	}
 
 	function handleOpenSession(sessionId: string) {
@@ -55,41 +57,37 @@
 	<DashboardHeader agentCount={dashboardStore.overview?.agents.length ?? agentStore.agents.length} />
 
 	<div class="dashboard-body">
-		<!-- Row 1: Orchestrator Panel（自主编排主入口） -->
-		<div class="section-row orchestrator-card">
-			<OrchestratorPanel />
-		</div>
+		<!-- Row 1: Agent 状态网格 -->
+		<AgentStatusGrid
+			agents={dashboardStore.overview?.agents ?? agentStore.agents.map(a => ({
+				id: a.id, name: a.name, description: a.description ?? '',
+				avatar: null, model_name: null, skill_count: 0, mcp_count: 0,
+				last_used: null, order_key: a.order_key ?? 0
+			}))}
+			onStartChat={handleStartChat}
+			onCreateAgent={handleCreateAgent}
+			onDeleteAgent={handleDeleteAgent}
+		/>
 
-		<!-- Row 2: Agent Launcher + Usage Trend -->
+		<!-- Row 2: Usage Stats + Trend -->
 		<div class="section-row two-col">
 			<div class="col-main">
-				<AgentLauncher
-					agents={dashboardStore.overview?.agents ?? agentStore.agents.map(a => ({
-						id: a.id, name: a.name, description: a.description ?? '',
-						avatar: null, model_name: null, skill_count: 0, mcp_count: 0,
-						last_used: null, order_key: a.order_key ?? 0
-					}))}
-					onStartChat={handleStartChat}
-					onCreateAgent={createAgent}
-				/>
+				<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
 			</div>
 			<div class="col-side">
 				<UsageTrendChart data={dashboardStore.overview?.usage_trend ?? []} />
 			</div>
 		</div>
 
-		<!-- Row 3: Stats + Skill + MCP（三列紧凑布局） -->
+		<!-- Row 3: Skills + MCP + Recent Sessions -->
 		<div class="section-row three-col">
-			<UsageStatsCard usage={dashboardStore.overview?.usage ?? null} />
 			<SkillOverviewCard skills={dashboardStore.overview?.skills ?? null} />
 			<McpOverviewCard servers={dashboardStore.overview?.mcp_servers ?? []} />
+			<RecentSessionsCard
+				sessions={dashboardStore.overview?.recent_sessions ?? []}
+				onOpenSession={handleOpenSession}
+			/>
 		</div>
-
-		<!-- Row 4: Recent Sessions -->
-		<RecentSessionsCard
-			sessions={dashboardStore.overview?.recent_sessions ?? []}
-			onOpenSession={handleOpenSession}
-		/>
 
 		<!-- Quick Setup Banner -->
 		{#if providers.length === 0 || models.length === 0}
@@ -149,17 +147,6 @@
 	.section-row.three-col > :global(*) {
 		flex: 1;
 		min-width: 0;
-	}
-
-	.orchestrator-card {
-		height: 560px;
-		overflow: hidden;
-		background: var(--glass-solid-bg);
-		backdrop-filter: var(--glass-solid-blur);
-		-webkit-backdrop-filter: var(--glass-solid-blur);
-		border: 1px solid var(--color-separator);
-		border-radius: var(--radius-md);
-		box-shadow: var(--glass-edge-highlight), var(--shadow-sm);
 	}
 
 	.setup-banner {

@@ -20,8 +20,6 @@ impl DashboardService {
         let mcp_servers = self.load_mcp_status().await?;
         let recent_sessions = self.load_recent_sessions().await?;
         let models = self.load_models().await?;
-        let workflows = self.load_workflows().await?;
-        let task_runs = self.load_task_runs().await?;
 
         Ok(DashboardOverview {
             agents,
@@ -31,8 +29,6 @@ impl DashboardService {
             mcp_servers,
             recent_sessions,
             models,
-            workflows,
-            task_runs,
         })
     }
 
@@ -282,65 +278,6 @@ impl DashboardService {
                 model_id: row.get("model_id"),
                 display_name: row.get("display_name"),
                 status: row.get("status"),
-            });
-        }
-        Ok(result)
-    }
-
-    async fn load_workflows(&self) -> Result<Vec<WorkflowSummary>, AppError> {
-        let rows = sqlx::query_as::<_, WorkflowRow>(
-            "SELECT id, name, description, definition, created_at, updated_at FROM workflows ORDER BY created_at",
-        )
-        .fetch_all(&self.db.pool)
-        .await?;
-
-        let mut result = Vec::new();
-        for row in rows {
-            let stage_count = serde_json::from_str::<serde_json::Value>(&row.definition)
-                .ok()
-                .and_then(|v| v.get("stages").and_then(|s| s.as_array()).map(|a| a.len()))
-                .unwrap_or(0);
-            result.push(WorkflowSummary {
-                id: row.id,
-                name: row.name,
-                description: row.description.unwrap_or_default(),
-                stage_count,
-                source: "user".into(),
-            });
-        }
-        Ok(result)
-    }
-
-    async fn load_task_runs(&self) -> Result<Vec<TaskRunSummary>, AppError> {
-        let rows = sqlx::query(
-            r#"
-            SELECT
-                wr.id AS run_id,
-                w.name AS workflow_name,
-                wr.status,
-                wr.created_at AS started_at,
-                wr.finished_at,
-                'user' AS source
-            FROM workflow_runs wr
-            JOIN workflows w ON w.id = wr.workflow_id
-            ORDER BY wr.created_at DESC
-            LIMIT 10
-            "#,
-        )
-        .fetch_all(&self.db.pool)
-        .await?;
-
-        let mut result = Vec::new();
-        for row in rows {
-            let started: i64 = row.get("started_at");
-            let finished: Option<i64> = row.get("finished_at");
-            result.push(TaskRunSummary {
-                run_id: row.get("run_id"),
-                workflow_name: row.get("workflow_name"),
-                status: row.get("status"),
-                started_at: started.to_string(),
-                finished_at: finished.map(|v| v.to_string()),
-                source: row.get("source"),
             });
         }
         Ok(result)

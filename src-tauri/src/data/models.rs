@@ -199,26 +199,6 @@ pub struct SkillDto {
     pub is_enabled: bool,
 }
 
-// ── Workflow ──────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct WorkflowRow {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub definition: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowDto {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub definition: serde_json::Value,
-}
-
 // ── Sidebar types ──
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -354,25 +334,6 @@ pub struct ModelStatus {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct WorkflowSummary {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub stage_count: usize,
-    pub source: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct TaskRunSummary {
-    pub run_id: String,
-    pub workflow_name: String,
-    pub status: String,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub source: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct AgentSummary {
     pub id: String,
     pub name: String,
@@ -394,8 +355,6 @@ pub struct DashboardOverview {
     pub mcp_servers: Vec<McpServerStatus>,
     pub recent_sessions: Vec<SessionSummary>,
     pub models: Vec<ModelStatus>,
-    pub workflows: Vec<WorkflowSummary>,
-    pub task_runs: Vec<TaskRunSummary>,
 }
 
 // ── RAG ───────────────────────────────────────────────────

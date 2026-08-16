@@ -210,26 +210,6 @@ export const skillApi = {
 	listLocal: (workdir: string) => invoke<LocalSkill[]>('skill_list_local', { workdir }),
 };
 
-// ── Workflow API ────────────────────────────────────────
-
-export interface WorkflowDto {
-	id: string;
-	name: string;
-	description: string | null;
-	definition: unknown;
-}
-
-export const workflowApi = {
-	list: () => invoke<WorkflowDto[]>('workflow_list'),
-	run: (workflowId: string, inputs: Record<string, unknown>) =>
-		invoke<{ run_id: string }>('workflow_run', { workflowId, inputs }),
-	rerun: (runId: string, inputs?: Record<string, unknown>) =>
-		invoke<{ run_id: string; status: string }>('task_rerun', { runId, inputs: inputs || null }),
-	stop: (runId: string) => invoke<void>('workflow_stop', { runId }),
-	result: (runId: string) =>
-		invoke<{ run_id: string; status: string; outputs: Record<string, string>; error: string | null }>('workflow_result', { runId }),
-};
-
 // ── Memory API ──────────────────────────────────────────
 
 export interface MemorySearchHit {
@@ -811,40 +791,6 @@ export const sessionLifecycleApi = {
 		invoke<SessionDto>('session_fork', { sessionId, turnId }),
 	approve: (callId: string, decision: string, alwaysAllow?: boolean) =>
 		invoke<boolean>('session_approve', { callId, decision, alwaysAllow }),
-};
-
-// ── Loop API (§17.2) ────────────────────────────────────
-
-export type LoopKind = 'Goal' | 'Timer' | 'MakerChecker';
-export type LoopStatus = 'Idle' | 'Running' | 'Paused' | 'Completed' | 'Failed';
-
-export interface AgentLoop {
-	id: string;
-	kind: LoopKind;
-	interval_secs: number | null;
-	max_rounds: number;
-	goal: unknown | null;
-	maker_workflow_id: string | null;
-	checker_workflow_id: string | null;
-	status: LoopStatus;
-	current_round: number;
-}
-
-export interface LoopCreateRequest {
-	kind: LoopKind;
-	interval_secs?: number;
-	max_rounds?: number;
-	goal?: unknown;
-	maker_workflow_id?: string;
-	checker_workflow_id?: string;
-}
-
-export const loopApi = {
-	start: (request: LoopCreateRequest) =>
-		invoke<AgentLoop>('loop_start', { request }),
-	stop: (loopId: string) =>
-		invoke<boolean>('loop_stop', { loopId }),
-	list: () => invoke<AgentLoop[]>('loop_list'),
 };
 
 // ── Trace API (§17.3) ───────────────────────────────────

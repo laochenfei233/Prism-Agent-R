@@ -50,23 +50,6 @@ export interface SessionSummary {
 	message_count: number;
 }
 
-export interface WorkflowSummary {
-	id: string;
-	name: string;
-	description: string;
-	stage_count: number;
-	source: string;
-}
-
-export interface TaskRunSummary {
-	run_id: string;
-	workflow_name: string;
-	status: string;
-	started_at: string;
-	finished_at: string | null;
-	source: string;
-}
-
 export interface ModelStatus {
 	provider_name: string;
 	model_id: string;
@@ -82,8 +65,6 @@ export interface DashboardOverview {
 	mcp_servers: McpServerStatus[];
 	recent_sessions: SessionSummary[];
 	models: ModelStatus[];
-	workflows: WorkflowSummary[];
-	task_runs: TaskRunSummary[];
 }
 
 // ── Store ──────────────────────────────────────────────────
