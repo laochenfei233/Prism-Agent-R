@@ -68,10 +68,32 @@ impl AgentService {
     pub async fn ensure_builtin_agents(&self) -> Result<(), AppError> {
         Self::ensure_source_column(&self.pool).await?;
 
+        // 查询默认模型 ID（is_default = 1）
+        let default_model_id: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM models WHERE is_default = 1 LIMIT 1"
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        // 给没有 model_id 的 Agent 绑定默认模型（包括已有内置 Agent）
+        if let Some(ref mid) = default_model_id {
+            sqlx::query("UPDATE agents SET model_id = ? WHERE model_id IS NULL OR model_id = ''")
+                .bind(mid)
+                .execute(&self.pool)
+                .await?;
+        }
+
         let existing: Vec<String> = sqlx::query_scalar("SELECT name FROM agents")
             .fetch_all(&self.pool)
             .await?;
         let existing_names: std::collections::HashSet<&str> = existing.iter().map(|s| s.as_str()).collect();
+
+        // 查询默认模型 ID（is_default = 1）
+        let default_model_id: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM models WHERE is_default = 1 LIMIT 1"
+        )
+        .fetch_optional(&self.pool)
+        .await?;
 
         let mut order_key: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(order_key), 0) + 1 FROM agents")
             .fetch_one(&self.pool)
@@ -84,12 +106,13 @@ impl AgentService {
             }
             let id = Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO agents (id, name, description, system_prompt, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at, source) VALUES (?, ?, ?, ?, 0.7, 8192, '[]', '{}', ?, ?, ?, 'builtin')"
+                "INSERT INTO agents (id, name, description, system_prompt, model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at, source) VALUES (?, ?, ?, ?, ?, 0.7, 8192, '[]', '{}', ?, ?, ?, 'builtin')"
             )
             .bind(&id)
             .bind(def.name)
             .bind(def.description)
             .bind(def.system_prompt)
+            .bind(&default_model_id)
             .bind(order_key)
             .bind(now)
             .bind(now)
@@ -151,6 +174,18 @@ impl AgentService {
             .await
             .clamp(256, 128_000);
 
+        // 如果未指定 model_id，自动绑定默认模型（支持思考的模型）
+        let effective_model_id = match model_id {
+            Some(m) if !m.is_empty() => Some(m.to_string()),
+            _ => {
+                sqlx::query_scalar::<_, String>(
+                    "SELECT id FROM models WHERE is_default = 1 LIMIT 1"
+                )
+                .fetch_optional(&self.pool)
+                .await?
+            }
+        };
+
         sqlx::query(
             "INSERT INTO agents (id, name, description, system_prompt, model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', '{}', 0, ?, ?)"
         )
@@ -158,7 +193,7 @@ impl AgentService {
         .bind(name)
         .bind(description)
         .bind(system_prompt)
-        .bind(model_id)
+        .bind(&effective_model_id)
         .bind(temperature)
         .bind(max_tokens)
         .bind(now)
