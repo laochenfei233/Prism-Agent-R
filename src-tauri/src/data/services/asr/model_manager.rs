@@ -359,12 +359,15 @@ impl AsrModelManager {
                         id: id.clone(),
                         name: id,
                         backend: backend.clone(),
+                        category: AsrModelCategory::Local,
                         size_mb: dir_size_mb(&path),
                         lang: default_langs(&backend),
                         url: String::new(),
                         sha256: String::new(),
                         requires_vad: false,
                         user_placed: true,
+                        default_model_id: None,
+                        requires_api_key: false,
                     });
                 }
             }

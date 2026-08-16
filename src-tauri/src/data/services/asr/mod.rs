@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use backends::{builtin_register, create_asr_backend};
-pub use model_manager::{AsrModelInfo, AsrModelManager, InstalledAsrModel};
+pub use model_manager::{AsrModelCategory, AsrModelInfo, AsrModelManager, InstalledAsrModel};
 
 // ── ASR 错误 ──────────────────────────────────────────────
 
