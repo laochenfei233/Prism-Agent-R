@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -139,18 +138,13 @@ impl ModelProvider for OpenAiProvider {
             return Err(AgentError::Provider(format!("HTTP {status}: {text}")));
         }
 
-        let stream = resp.bytes_stream();
-        let mapped = stream.filter_map(move |chunk| {
-            async move {
-                match chunk {
-                    Ok(bytes) => {
-                        let text = String::from_utf8_lossy(&bytes).to_string();
-                        parse_sse_chunk(&text)
-                    }
-                    Err(_) => None,
-                }
-            }
-        });
+        // Collect the full response text, then parse all SSE events at once.
+        // This handles multi-event chunks, partial-event splits, and reasoning_content correctly.
+        let resp_text = resp.text().await
+            .map_err(|e| AgentError::Provider(e.to_string()))?;
+
+        let events: Vec<StreamEvent> = parse_sse_buffer(&resp_text);
+        let mapped = futures::stream::iter(events);
 
         Ok(Box::pin(mapped))
     }
@@ -317,34 +311,76 @@ pub fn parse_sse_chunk(text: &str) -> Option<StreamEvent> {
         if data == "[DONE]" {
             return Some(StreamEvent::Finish { usage: None });
         }
-        if let Ok(chunk) = serde_json::from_str::<OpenAiStreamChunk>(data) {
-            if let Some(choice) = chunk.choices.first() {
-                if let Some(delta) = &choice.delta {
-                    if let Some(content) = &delta.content {
-                        if !content.is_empty() {
-                            return Some(StreamEvent::Text(content.clone()));
-                        }
-                    }
-                    if let Some(tc) = &delta.tool_calls {
-                        for t in tc {
-                            if let Some(name) = &t.function {
-                                let args: serde_json::Value =
-                                    serde_json::from_str(&name.arguments).unwrap_or_default();
-                                return Some(StreamEvent::ToolCall(ToolCall {
-                                    id: t.id.clone().unwrap_or_default(),
-                                    name: name.name.clone().unwrap_or_default(),
-                                    arguments: args,
-                                }));
-                            }
-                        }
-                    }
-                }
-                if choice.finish_reason.as_deref() == Some("stop") {
-                    return Some(StreamEvent::Finish { usage: None });
-                }
+        if let Some(evt) = parse_sse_data(data) {
+            return Some(evt);
+        }
+    }
+    None
+}
+
+/// Parse all SSE events from a buffered text block (handles multi-event chunks).
+fn parse_sse_buffer(text: &str) -> Vec<StreamEvent> {
+    let mut events = Vec::new();
+    for block in text.split("\n\n") {
+        for line in block.lines() {
+            let line = line.trim();
+            if !line.starts_with("data: ") {
+                continue;
+            }
+            let data = &line[6..];
+            if data == "[DONE]" {
+                events.push(StreamEvent::Finish { usage: None });
+                continue;
+            }
+            if let Some(evt) = parse_sse_data(data) {
+                events.push(evt);
             }
         }
     }
+    events
+}
+
+/// Parse a single SSE data payload into a StreamEvent.
+fn parse_sse_data(data: &str) -> Option<StreamEvent> {
+    let chunk = serde_json::from_str::<OpenAiStreamChunk>(data).ok()?;
+    let choice = chunk.choices.first()?;
+
+    // Tool calls
+    if let Some(delta) = &choice.delta {
+        if let Some(tc) = &delta.tool_calls {
+            for t in tc {
+                if let Some(name) = &t.function {
+                    let args: serde_json::Value =
+                        serde_json::from_str(&name.arguments).unwrap_or_default();
+                    return Some(StreamEvent::ToolCall(ToolCall {
+                        id: t.id.clone().unwrap_or_default(),
+                        name: name.name.clone().unwrap_or_default(),
+                        arguments: args,
+                    }));
+                }
+            }
+        }
+
+        // Content (actual response text)
+        if let Some(content) = &delta.content {
+            if !content.is_empty() {
+                return Some(StreamEvent::Text(content.clone()));
+            }
+        }
+
+        // Reasoning content (thinking process — MiMo API specific)
+        if let Some(reasoning) = &delta.reasoning_content {
+            if !reasoning.is_empty() {
+                return Some(StreamEvent::Text(reasoning.clone()));
+            }
+        }
+    }
+
+    // Finish
+    if choice.finish_reason.as_deref() == Some("stop") {
+        return Some(StreamEvent::Finish { usage: None });
+    }
+
     None
 }
 
@@ -362,6 +398,7 @@ struct OpenAiStreamChoice {
 #[derive(Deserialize)]
 struct OpenAiStreamDelta {
     content: Option<String>,
+    reasoning_content: Option<String>,
     tool_calls: Option<Vec<OpenAiStreamToolCall>>,
 }
 
