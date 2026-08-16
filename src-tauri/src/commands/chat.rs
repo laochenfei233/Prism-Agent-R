@@ -57,13 +57,27 @@ pub async fn chat_send(
     .ok_or_else(|| AppError::AgentNotFound(session_row.agent_id.clone()))?;
 
     // 3. Find model
+    //    Try by agent.model_id (UUID → models.id), then fallback to model_id string (→ models.model_id),
+    //    then fallback to default model.
     let model_row = if let Some(ref mid) = agent_row.model_id {
-        sqlx::query_as::<_, crate::data::models::ModelRow>(
+        // First: try exact match on models.id (UUID)
+        let found = sqlx::query_as::<_, crate::data::models::ModelRow>(
             "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE id = ?"
         )
         .bind(mid)
         .fetch_optional(&state.db.pool)
-        .await?
+        .await?;
+        if found.is_some() {
+            found
+        } else {
+            // Fallback: agent.model_id might be the model_id string (e.g. "gpt-4o") rather than UUID
+            sqlx::query_as::<_, crate::data::models::ModelRow>(
+                "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE model_id = ? LIMIT 1"
+            )
+            .bind(mid)
+            .fetch_optional(&state.db.pool)
+            .await?
+        }
     } else {
         sqlx::query_as::<_, crate::data::models::ModelRow>(
             "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE is_default = 1 LIMIT 1"
