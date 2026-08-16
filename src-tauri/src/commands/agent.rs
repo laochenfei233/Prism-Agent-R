@@ -45,6 +45,7 @@ pub async fn agent_update(
     system_prompt: Option<String>,
     model_id: Option<String>,
 ) -> Result<AgentDto, AppError> {
+    tracing::info!("[agent_update CMD] id={}, model_id={:?}, name={:?}, desc={:?}, prompt={:?}", id, model_id, name, description, system_prompt);
     let svc = AgentService::new(state.db.pool.clone());
     svc.update(
         &id,
