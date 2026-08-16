@@ -122,6 +122,13 @@ pub async fn chat_send(
         .map(crate::commands::settings::decrypt_provider_key)
         .unwrap_or_default();
 
+    tracing::info!(
+        "[chat_send] provider={} base_url={} model={} api_key_len={} api_key_prefix={}",
+        provider_row.name, base_url, model_row.model_id,
+        api_key.len(),
+        if api_key.len() > 8 { &api_key[..8] } else { &api_key }
+    );
+
     // 5. Build history
     let history = svc.history(&session_id, Some(50)).await?;
     let mut messages = Vec::new();
