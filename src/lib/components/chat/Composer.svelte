@@ -142,9 +142,9 @@
 		</div>
 	{/if}
 
-	<div class="composer-row">
+	<div class="tools-row">
 		<button class="attach-btn" onclick={() => { attaching = !attaching; }} title="添加附件">
-			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
 			</svg>
 		</button>
@@ -156,11 +156,11 @@
 			title={mode === 'build' ? '当前: Build 模式，点击切换到 Compose' : '当前: Compose 模式，点击切换到 Build'}
 		>
 			{#if mode === 'build'}
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
 				</svg>
 			{:else}
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M12 2L2 7l10 5 10-5-10-5z"/>
 					<path d="M2 17l10 5 10-5"/>
 					<path d="M2 12l10 5 10-5"/>
@@ -168,7 +168,9 @@
 			{/if}
 			<span class="mode-label">{mode === 'build' ? 'Build' : 'Compose'}</span>
 		</button>
+	</div>
 
+	<div class="input-row">
 		<textarea
 			bind:this={textareaEl}
 			bind:value={input}
@@ -210,13 +212,7 @@
 		backdrop-filter: saturate(180%) blur(20px);
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
-	}
-
-	.composer-row {
-		display: flex;
-		gap: 10px;
-		align-items: flex-end;
+		gap: 8px;
 	}
 
 	.attach-chips {
@@ -304,10 +300,16 @@
 		color: var(--color-red);
 	}
 
+	.tools-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
 	.attach-btn {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
 		border: 1px solid var(--color-separator);
 		background: var(--color-bg);
 		color: var(--color-fg-secondary);
@@ -331,8 +333,8 @@
 		display: flex;
 		align-items: center;
 		gap: 5px;
-		padding: 6px 12px;
-		border-radius: 10px;
+		padding: 5px 10px;
+		border-radius: 8px;
 		border: 1px solid var(--color-separator);
 		background: var(--color-bg);
 		color: var(--color-fg-secondary);
@@ -343,20 +345,23 @@
 		font-weight: 500;
 		font-family: inherit;
 	}
-
 	.mode-toggle:hover {
 		border-color: var(--color-accent);
 		color: var(--color-accent);
 	}
-
 	.mode-toggle.compose {
 		border-color: var(--color-accent);
 		background: var(--color-accent);
 		color: #fff;
 	}
-
 	.mode-label {
 		white-space: nowrap;
+	}
+
+	.input-row {
+		display: flex;
+		gap: 8px;
+		align-items: flex-end;
 	}
 
 	textarea {
