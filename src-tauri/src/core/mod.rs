@@ -1,5 +1,6 @@
 pub mod adk;
 pub mod budget;
+pub mod compose;
 pub mod guardrails;
 pub mod observability;
 pub mod rig;

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { fileApi } from '$lib/api';
+	import { composeStore } from '$lib/stores/compose.svelte';
 
 	let {
 		disabled = false,
@@ -15,6 +16,7 @@
 
 	let input = $state('');
 	let textareaEl = $state<HTMLTextAreaElement | null>(null);
+	let composeMode = $state(false);
 
 	let attachments = $state<{ path: string; content: string }[]>([]);
 	let attaching = $state(false);
@@ -36,6 +38,10 @@
 
 	function handleInput() {
 		resize();
+		// Auto-detect /compose prefix
+		if (input.startsWith('/compose')) {
+			composeMode = true;
+		}
 	}
 
 	function resize() {
@@ -74,7 +80,20 @@
 
 	function send() {
 		if (!input.trim() || disabled) return;
-		onSend(input.trim(), attachments.map((a) => a.path));
+		const content = input.trim();
+		const paths = attachments.map((a) => a.path);
+
+		if (composeMode) {
+			// Strip /compose prefix if present
+			const request = content.replace(/^\/compose\s*/, '');
+			if (request) {
+				composeStore.startCompose(request, '');
+			}
+			composeMode = false;
+		} else {
+			onSend(content, paths);
+		}
+
 		input = '';
 		attachments = [];
 		requestAnimationFrame(resize);
@@ -121,6 +140,19 @@
 		<button class="attach-btn" onclick={() => { attaching = !attaching; }} title="添加附件">
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+			</svg>
+		</button>
+
+		<button
+			class="compose-toggle"
+			class:active={composeMode}
+			onclick={() => { composeMode = !composeMode; }}
+			title={composeMode ? '退出 Compose 模式' : '进入 Compose 模式'}
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M12 2L2 7l10 5 10-5-10-5z"/>
+				<path d="M2 17l10 5 10-5"/>
+				<path d="M2 12l10 5 10-5"/>
 			</svg>
 		</button>
 
@@ -280,6 +312,30 @@
 	.attach-btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+
+	.compose-toggle {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		border: 1px solid var(--color-separator);
+		background: var(--color-bg);
+		color: var(--color-fg-secondary);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		transition: all 0.15s ease;
+	}
+	.compose-toggle:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+	.compose-toggle.active {
+		border-color: var(--color-accent);
+		background: var(--color-accent);
+		color: #fff;
 	}
 
 	textarea {

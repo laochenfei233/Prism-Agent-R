@@ -698,6 +698,21 @@ export const routerApi = {
 		invoke<{ skills: number; mcp_tools: number; updated_at: number }>('router_index_status'),
 };
 
+// ── Compose API ─────────────────────────────────────────
+
+export const composeApi = {
+	start: (userRequest: string, agentId: string) =>
+		invoke<unknown>('compose_start', { userRequest, agentId }),
+	pause: (sessionId: string) =>
+		invoke<void>('compose_pause', { sessionId }),
+	resume: (sessionId: string) =>
+		invoke<void>('compose_resume', { sessionId }),
+	stop: (sessionId: string) =>
+		invoke<void>('compose_stop', { sessionId }),
+	get: (sessionId: string) =>
+		invoke<unknown>('compose_get', { sessionId }),
+};
+
 // ── 项目级自动索引 API（§10.2.1） ─────────────────────────
 
 export interface ProjectIndexStatusDto {

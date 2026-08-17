@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { contextStore } from '$lib/stores/context.svelte';
+	import { composeStore } from '$lib/stores/compose.svelte';
 	import SidebarUsage from './SidebarUsage.svelte';
 	import SidebarMcp from './SidebarMcp.svelte';
 	import SidebarFiles from './SidebarFiles.svelte';
 	import SidebarWorkdir from './SidebarWorkdir.svelte';
 	import SidebarLsp from './SidebarLsp.svelte';
 	import SidebarInstructions from './SidebarInstructions.svelte';
+	import ComposePanel from '$lib/components/chat/ComposePanel.svelte';
 
 	const tabs = [
 		{ id: 'usage', label: '用量', icon: 'chart' },
@@ -13,7 +15,8 @@
 		{ id: 'files', label: '文件', icon: 'files' },
 		{ id: 'mcp', label: 'MCP', icon: 'puzzle' },
 		{ id: 'lsp', label: 'LSP', icon: 'server' },
-		{ id: 'instructions', label: '指令', icon: 'instructions' }
+		{ id: 'instructions', label: '指令', icon: 'instructions' },
+		{ id: 'compose', label: 'Compose', icon: 'compose' }
 	] as const;
 
 	const tabComponents: Record<string, any> = {
@@ -22,7 +25,8 @@
 		files: SidebarFiles,
 		mcp: SidebarMcp,
 		lsp: SidebarLsp,
-		instructions: SidebarInstructions
+		instructions: SidebarInstructions,
+		compose: ComposePanel
 	};
 
 	function formatNumber(n: number): string {
@@ -90,6 +94,12 @@
 							<line x1="9" y1="13" x2="15" y2="13"/>
 							<line x1="9" y1="17" x2="15" y2="17"/>
 						</svg>
+					{:else if tab.icon === 'compose'}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path d="M12 2L2 7l10 5 10-5-10-5z"/>
+							<path d="M2 17l10 5 10-5"/>
+							<path d="M2 12l10 5 10-5"/>
+						</svg>
 					{/if}
 					<span class="tab-label">{tab.label}</span>
 				</button>
@@ -101,6 +111,13 @@
 				<div class="loading">
 					<div class="spinner"></div>
 				</div>
+			{:else if contextStore.activeTab === 'compose'}
+				{#key contextStore.activeTab}
+					{#if tabComponents[contextStore.activeTab]}
+						{@const SvelteComponent = tabComponents[contextStore.activeTab]}
+						<SvelteComponent />
+					{/if}
+				{/key}
 			{:else if contextStore.context}
 				{#key contextStore.activeTab}
 					{#if tabComponents[contextStore.activeTab]}

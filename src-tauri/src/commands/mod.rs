@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod chat;
+pub mod compose;
 pub mod dashboard;
 pub mod file;
 pub mod fs;

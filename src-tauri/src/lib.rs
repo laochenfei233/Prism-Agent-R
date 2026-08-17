@@ -24,6 +24,10 @@ pub struct AppState {
     pub session_state: std::sync::Arc<SessionStateManager>,
     /// 翻译短文本缓存（跨 IPC 调用共享，<500 字符，TTL 24h）
     pub translate_cache: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>>,
+    /// Compose sessions storage
+    pub compose_sessions: std::sync::Arc<tokio::sync::Mutex<HashMap<String, core::compose::ComposeSession>>>,
+    /// Compose session cancellation tokens
+    pub compose_cancels: std::sync::Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -71,6 +75,8 @@ pub fn run() {
                 audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
                 session_state: std::sync::Arc::new(SessionStateManager::new()),
                 translate_cache: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+                compose_sessions: std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+                compose_cancels: std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             });
             Ok(())
         })
@@ -241,6 +247,11 @@ pub fn run() {
             commands::monitor::exception_clear,
             commands::monitor::log_export,
             commands::monitor::model_switch_list,
+            commands::compose::compose_start,
+            commands::compose::compose_pause,
+            commands::compose::compose_resume,
+            commands::compose::compose_stop,
+            commands::compose::compose_get,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
