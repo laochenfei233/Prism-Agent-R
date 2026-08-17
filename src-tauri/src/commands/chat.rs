@@ -231,6 +231,11 @@ pub async fn chat_send(
         crate::core::adk::wiki_tool::WikiWriteTool::new(state.db.clone())
     ));
 
+    // 文件读写工具（Agent 可在对话中读写本地文件）
+    registry.register(Box::new(crate::core::adk::file_tools::FileReadTool));
+    registry.register(Box::new(crate::core::adk::file_tools::FileWriteTool));
+    registry.register(Box::new(crate::core::adk::file_tools::FileListTool));
+
     // ── 构建 Agent 运行时（护栏 + 路由 + 反思 + 轨迹） ──
     let mut agent = RigAgent::new(provider, system_prompt, registry)
         .with_approval_store(state.approval_store.clone())
