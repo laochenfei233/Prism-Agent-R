@@ -16,7 +16,8 @@
 
 	let input = $state('');
 	let textareaEl = $state<HTMLTextAreaElement | null>(null);
-	let composeMode = $state(false);
+	type AgentMode = 'build' | 'compose';
+	let mode = $state<AgentMode>('build');
 
 	let attachments = $state<{ path: string; content: string }[]>([]);
 	let attaching = $state(false);
@@ -38,9 +39,11 @@
 
 	function handleInput() {
 		resize();
-		// Auto-detect /compose prefix
+		// Auto-detect mode from slash commands
 		if (input.startsWith('/compose')) {
-			composeMode = true;
+			mode = 'compose';
+		} else if (input.startsWith('/build')) {
+			mode = 'build';
 		}
 	}
 
@@ -83,15 +86,18 @@
 		const content = input.trim();
 		const paths = attachments.map((a) => a.path);
 
-		if (composeMode) {
+		if (mode === 'compose') {
 			// Strip /compose prefix if present
 			const request = content.replace(/^\/compose\s*/, '');
 			if (request) {
 				composeStore.startCompose(request, '');
 			}
-			composeMode = false;
 		} else {
-			onSend(content, paths);
+			// Build mode: strip /build prefix if present, then normal send
+			const cleaned = content.replace(/^\/build\s*/, '');
+			if (cleaned) {
+				onSend(cleaned, paths);
+			}
 		}
 
 		input = '';
@@ -143,25 +149,39 @@
 			</svg>
 		</button>
 
-		<button
-			class="compose-toggle"
-			class:active={composeMode}
-			onclick={() => { composeMode = !composeMode; }}
-			title={composeMode ? '退出 Compose 模式' : '进入 Compose 模式'}
-		>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M12 2L2 7l10 5 10-5-10-5z"/>
-				<path d="M2 17l10 5 10-5"/>
-				<path d="M2 12l10 5 10-5"/>
-			</svg>
-		</button>
+		<div class="mode-selector">
+			<button
+				class="mode-btn"
+				class:active={mode === 'build'}
+				onclick={() => { mode = 'build'; }}
+				title="Build 模式：直接执行命令，简单验证"
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+				</svg>
+				Build
+			</button>
+			<button
+				class="mode-btn"
+				class:active={mode === 'compose'}
+				onclick={() => { mode = 'compose'; }}
+				title="Compose 模式：需求分析 + 任务编排"
+			>
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M12 2L2 7l10 5 10-5-10-5z"/>
+					<path d="M2 17l10 5 10-5"/>
+					<path d="M2 12l10 5 10-5"/>
+				</svg>
+				Compose
+			</button>
+		</div>
 
 		<textarea
 			bind:this={textareaEl}
 			bind:value={input}
 			onkeydown={handleKeydown}
 			oninput={handleInput}
-			placeholder="输入消息..."
+			placeholder={mode === 'compose' ? '描述需求，Agent 将自动分析和执行...' : '输入消息...'}
 			rows="1"
 			disabled={disabled}
 		></textarea>
@@ -314,26 +334,37 @@
 		cursor: not-allowed;
 	}
 
-	.compose-toggle {
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
+	.mode-selector {
+		display: flex;
+		border-radius: 10px;
 		border: 1px solid var(--color-separator);
 		background: var(--color-bg);
-		color: var(--color-fg-secondary);
-		cursor: pointer;
+		overflow: hidden;
+		flex-shrink: 0;
+	}
+
+	.mode-btn {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
+		gap: 4px;
+		padding: 6px 10px;
+		border: none;
+		background: transparent;
+		color: var(--color-fg-secondary);
+		font-size: 12px;
+		font-weight: 500;
+		font-family: inherit;
+		cursor: pointer;
 		transition: all 0.15s ease;
+		white-space: nowrap;
 	}
-	.compose-toggle:hover {
-		border-color: var(--color-accent);
-		color: var(--color-accent);
+
+	.mode-btn:hover {
+		color: var(--color-fg);
+		background: var(--color-bg-hover);
 	}
-	.compose-toggle.active {
-		border-color: var(--color-accent);
+
+	.mode-btn.active {
 		background: var(--color-accent);
 		color: #fff;
 	}
