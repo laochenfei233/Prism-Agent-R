@@ -149,32 +149,25 @@
 			</svg>
 		</button>
 
-		<div class="mode-selector">
-			<button
-				class="mode-btn"
-				class:active={mode === 'build'}
-				onclick={() => { mode = 'build'; }}
-				title="Build 模式：直接执行命令，简单验证"
-			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+		<button
+			class="mode-toggle"
+			class:compose={mode === 'compose'}
+			onclick={() => { mode = mode === 'build' ? 'compose' : 'build'; }}
+			title={mode === 'build' ? '当前: Build 模式，点击切换到 Compose' : '当前: Compose 模式，点击切换到 Build'}
+		>
+			{#if mode === 'build'}
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
 				</svg>
-				Build
-			</button>
-			<button
-				class="mode-btn"
-				class:active={mode === 'compose'}
-				onclick={() => { mode = 'compose'; }}
-				title="Compose 模式：需求分析 + 任务编排"
-			>
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			{:else}
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 					<path d="M12 2L2 7l10 5 10-5-10-5z"/>
 					<path d="M2 17l10 5 10-5"/>
 					<path d="M2 12l10 5 10-5"/>
 				</svg>
-				Compose
-			</button>
-		</div>
+			{/if}
+			<span class="mode-label">{mode === 'build' ? 'Build' : 'Compose'}</span>
+		</button>
 
 		<textarea
 			bind:this={textareaEl}
@@ -334,39 +327,36 @@
 		cursor: not-allowed;
 	}
 
-	.mode-selector {
+	.mode-toggle {
 		display: flex;
+		align-items: center;
+		gap: 5px;
+		padding: 6px 12px;
 		border-radius: 10px;
 		border: 1px solid var(--color-separator);
 		background: var(--color-bg);
-		overflow: hidden;
-		flex-shrink: 0;
-	}
-
-	.mode-btn {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		padding: 6px 10px;
-		border: none;
-		background: transparent;
 		color: var(--color-fg-secondary);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: all 0.15s ease;
 		font-size: 12px;
 		font-weight: 500;
 		font-family: inherit;
-		cursor: pointer;
-		transition: all 0.15s ease;
-		white-space: nowrap;
 	}
 
-	.mode-btn:hover {
-		color: var(--color-fg);
-		background: var(--color-bg-hover);
+	.mode-toggle:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
 	}
 
-	.mode-btn.active {
+	.mode-toggle.compose {
+		border-color: var(--color-accent);
 		background: var(--color-accent);
 		color: #fff;
+	}
+
+	.mode-label {
+		white-space: nowrap;
 	}
 
 	textarea {
