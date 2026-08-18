@@ -1,4 +1,5 @@
 import { invoke, listen } from '$lib/api/client';
+import type { TaskItem } from '$lib/api';
 
 // ── Types (mirror backend DashboardOverview) ───────────────
 
@@ -91,6 +92,7 @@ export interface KanbanData {
 function createDashboardStore() {
 	let overview = $state<DashboardOverview | null>(null);
 	let kanban = $state<KanbanData | null>(null);
+	let tasks = $state<TaskItem[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let listenerAttached = false;
@@ -117,6 +119,14 @@ function createDashboardStore() {
 		} catch (e) {
 			// 静默降级 — kanban 是增强功能，不应阻断主流程
 			console.warn('loadKanban failed:', e);
+		}
+	}
+
+	async function loadTasks() {
+		try {
+			tasks = await invoke<TaskItem[]>('dashboard_tasks', {});
+		} catch (e) {
+			console.warn('loadTasks failed:', e);
 		}
 	}
 
@@ -159,10 +169,12 @@ function createDashboardStore() {
 	return {
 		get overview() { return overview; },
 		get kanban() { return kanban; },
+		get tasks() { return tasks; },
 		get loading() { return loading; },
 		get error() { return error; },
 		loadOverview,
 		loadKanban,
+		loadTasks,
 	};
 }
 

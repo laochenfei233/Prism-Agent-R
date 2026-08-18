@@ -713,6 +713,22 @@ export const composeApi = {
 		invoke<unknown>('compose_get', { sessionId }),
 };
 
+// ── Task API (Agent-managed tasks) ──────────────────────
+
+export interface TaskItem {
+	id: string;
+	subject: string;
+	status: string;
+	owner: string | null;
+	created_at: number;
+	updated_at: number;
+}
+
+export const taskApi = {
+	list: (agentId?: string, status?: string) =>
+		invoke<TaskItem[]>('dashboard_tasks', { agentId, status }),
+};
+
 // ── 项目级自动索引 API（§10.2.1） ─────────────────────────
 
 export interface ProjectIndexStatusDto {

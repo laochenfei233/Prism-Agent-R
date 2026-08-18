@@ -38,6 +38,7 @@
 		await agentStore.loadAgents();
 		await dashboardStore.loadOverview();
 		await dashboardStore.loadKanban();
+		await dashboardStore.loadTasks();
 	}
 
 	function handleOpenSession(sessionId: string) {
@@ -52,6 +53,7 @@
 		load();
 		dashboardStore.loadOverview();
 		dashboardStore.loadKanban();
+		dashboardStore.loadTasks();
 	});
 </script>
 
@@ -62,6 +64,7 @@
 		<!-- Row 1: Session Kanban Board -->
 		<SessionKanban
 			data={dashboardStore.kanban}
+			tasks={dashboardStore.tasks}
 			onStartChat={handleStartChat}
 			onCreateAgent={handleCreateAgent}
 			onDeleteAgent={handleDeleteAgent}

@@ -21,3 +21,20 @@ pub async fn dashboard_kanban(
     let svc = DashboardService::new(&state.db);
     svc.kanban(&state.session_state).await
 }
+
+#[tauri::command]
+pub async fn dashboard_tasks(
+    agent_id: Option<String>,
+    status: Option<String>,
+) -> Result<Vec<crate::core::adk::task_tools::Task>, AppError> {
+    let store = crate::core::adk::task_tools::task_store().read().await;
+    let mut tasks: Vec<crate::core::adk::task_tools::Task> = store.iter().cloned().collect();
+    if let Some(aid) = &agent_id {
+        tasks.retain(|t| t.owner.as_deref() == Some(aid.as_str()));
+    }
+    if let Some(s) = &status {
+        tasks.retain(|t| t.status == *s);
+    }
+    tasks.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(tasks)
+}

@@ -234,6 +234,7 @@ pub fn run() {
             commands::tts::tts_voices,
             commands::dashboard::dashboard_overview,
             commands::dashboard::dashboard_kanban,
+            commands::dashboard::dashboard_tasks,
             commands::search::search_config,
             commands::search::search_config_save,
             commands::search::search_test,

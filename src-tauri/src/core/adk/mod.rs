@@ -5,6 +5,7 @@ pub mod memory;
 pub mod model;
 pub mod prompt;
 pub mod router;
+pub mod task_tools;
 pub mod tool;
 pub mod wiki_tool;
 

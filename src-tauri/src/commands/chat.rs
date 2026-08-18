@@ -236,6 +236,12 @@ pub async fn chat_send(
     registry.register(Box::new(crate::core::adk::file_tools::FileWriteTool));
     registry.register(Box::new(crate::core::adk::file_tools::FileListTool));
 
+    // 任务管理工具（Agent 可自主管理看板任务）
+    registry.register(Box::new(crate::core::adk::task_tools::TaskCreateTool));
+    registry.register(Box::new(crate::core::adk::task_tools::TaskUpdateTool));
+    registry.register(Box::new(crate::core::adk::task_tools::TaskListTool));
+    registry.register(Box::new(crate::core::adk::task_tools::TaskDeleteTool));
+
     // ── 构建 Agent 运行时（护栏 + 路由 + 反思 + 轨迹） ──
     let mut agent = RigAgent::new(provider, system_prompt, registry)
         .with_approval_store(state.approval_store.clone())
