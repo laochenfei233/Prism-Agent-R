@@ -12,25 +12,29 @@
 
 	let { data, tasks = [], onStartChat, onCreateAgent, onDeleteAgent }: Props = $props();
 
-	const agentColumns = [
+	const columns = [
 		{ key: 'idle' as const, title: '空闲', dotVar: 'var(--color-muted)', bgColor: 'rgba(128, 128, 128, 0.06)', borderColor: 'rgba(128, 128, 128, 0.15)' },
 		{ key: 'running' as const, title: '运行中', dotVar: 'var(--color-green)', bgColor: 'rgba(52, 199, 89, 0.06)', borderColor: 'rgba(52, 199, 89, 0.18)' },
 		{ key: 'done' as const, title: '已完成', dotVar: 'var(--color-accent)', bgColor: 'rgba(0, 122, 255, 0.06)', borderColor: 'rgba(0, 122, 255, 0.18)' },
 		{ key: 'failed' as const, title: '失败', dotVar: 'var(--color-red)', bgColor: 'rgba(255, 59, 48, 0.06)', borderColor: 'rgba(255, 59, 48, 0.18)' },
 	];
 
-	const taskColumns = [
-		{ key: 'todo' as const, title: '待处理', dotVar: 'var(--color-muted)', bgColor: 'rgba(128, 128, 128, 0.06)', borderColor: 'rgba(128, 128, 128, 0.15)' },
-		{ key: 'doing' as const, title: '进行中', dotVar: 'var(--color-accent)', bgColor: 'rgba(0, 122, 255, 0.06)', borderColor: 'rgba(0, 122, 255, 0.18)' },
-		{ key: 'done' as const, title: '已完成', dotVar: 'var(--color-green)', bgColor: 'rgba(52, 199, 89, 0.06)', borderColor: 'rgba(52, 199, 89, 0.18)' },
-	];
-
 	function cards(colKey: 'idle' | 'running' | 'done' | 'failed'): KanbanCard[] {
 		return data?.[colKey] ?? [];
 	}
 
-	function tasksByStatus(status: string): TaskItem[] {
-		return tasks.filter(t => t.status === status);
+	function tasksForAgent(agentName: string): TaskItem[] {
+		return tasks.filter(t => t.owner === agentName);
+	}
+
+	function taskCounts(agentName: string) {
+		const agentTasks = tasksForAgent(agentName);
+		return {
+			todo: agentTasks.filter(t => t.status === 'todo').length,
+			doing: agentTasks.filter(t => t.status === 'doing').length,
+			done: agentTasks.filter(t => t.status === 'done').length,
+			total: agentTasks.length,
+		};
 	}
 
 	function formatRelative(ts: number | null): string {
@@ -59,7 +63,7 @@
 	</div>
 
 	<div class="board">
-		{#each agentColumns as col (col.key)}
+		{#each columns as col (col.key)}
 			<div class="column" style="background: {col.bgColor}; border: 1px solid {col.borderColor}; border-radius: var(--radius-md); padding: 12px;">
 				<div class="column-header">
 					<span class="col-dot" style="background: {col.dotVar}"></span>
@@ -69,6 +73,7 @@
 
 				<div class="column-body">
 					{#each cards(col.key) as card (card.agent_id)}
+						{@const tc = taskCounts(card.agent_name)}
 						<div class="card">
 							<div class="card-top">
 								<div class="avatar">
@@ -114,6 +119,15 @@
 								{/if}
 							</div>
 
+							<!-- Agent 的任务摘要 -->
+							{#if tc.total > 0}
+								<div class="task-summary">
+									<span class="task-badge todo-badge" class:visible={tc.todo > 0}>{tc.todo} 待处理</span>
+									<span class="task-badge doing-badge" class:visible={tc.doing > 0}>{tc.doing} 进行中</span>
+									<span class="task-badge done-badge" class:visible={tc.done > 0}>{tc.done} 已完成</span>
+								</div>
+							{/if}
+
 							<button class="start-btn" onclick={(e) => { e.stopPropagation(); onStartChat(card.agent_id); }}>
 								对话
 							</button>
@@ -125,40 +139,6 @@
 			</div>
 		{/each}
 	</div>
-
-	<!-- Agent-managed Tasks Board -->
-	{#if tasks.length > 0}
-		<div class="tasks-section">
-			<div class="tasks-header">
-				<h3 class="tasks-title">Tasks</h3>
-				<span class="tasks-count">{tasks.length} 个任务</span>
-			</div>
-			<div class="tasks-board">
-				{#each taskColumns as col (col.key)}
-					<div class="task-column" style="background: {col.bgColor}; border: 1px solid {col.borderColor}; border-radius: var(--radius-md); padding: 12px;">
-						<div class="column-header">
-							<span class="col-dot" style="background: {col.dotVar}"></span>
-							<span class="col-title">{col.title}</span>
-							<span class="col-count" style="color: {col.dotVar}; background: {col.bgColor};">{tasksByStatus(col.key).length}</span>
-						</div>
-						<div class="task-col-body">
-							{#each tasksByStatus(col.key) as task (task.id)}
-								<div class="task-card">
-									<div class="task-subject">{task.subject}</div>
-									{#if task.owner}
-										<div class="task-owner">@{task.owner}</div>
-									{/if}
-									<div class="task-time">{formatRelative(task.updated_at)}</div>
-								</div>
-							{:else}
-								<div class="empty-col">暂无</div>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</div>
-		</div>
-	{/if}
 </div>
 
 <style>
@@ -373,6 +353,40 @@
 		border-radius: 9999px;
 	}
 
+	/* ── Task summary in card ──────────────────────── */
+	.task-summary {
+		display: flex;
+		gap: 4px;
+		flex-wrap: wrap;
+	}
+	.task-badge {
+		font-size: 11px;
+		font-weight: 500;
+		padding: 1px 6px;
+		border-radius: 9999px;
+		opacity: 0;
+		width: 0;
+		overflow: hidden;
+		transition: opacity 0.15s ease, width 0.15s ease, padding 0.15s ease;
+	}
+	.task-badge.visible {
+		opacity: 1;
+		width: auto;
+		padding: 1px 6px;
+	}
+	.todo-badge {
+		background: color-mix(in srgb, var(--color-muted) 12%, transparent);
+		color: var(--color-muted);
+	}
+	.doing-badge {
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+		color: var(--color-accent);
+	}
+	.done-badge {
+		background: color-mix(in srgb, var(--color-green) 12%, transparent);
+		color: var(--color-green);
+	}
+
 	/* ── Start button ──────────────────────────────── */
 	.start-btn {
 		background: var(--color-accent);
@@ -398,85 +412,12 @@
 		padding: 16px 8px;
 	}
 
-	/* ── Tasks Section ─────────────────────────────── */
-	.tasks-section {
-		margin-top: 16px;
-		border-top: 1px solid var(--color-separator);
-		padding-top: 16px;
-	}
-
-	.tasks-header {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin-bottom: 12px;
-	}
-	.tasks-title {
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--color-fg);
-		margin: 0;
-	}
-	.tasks-count {
-		font-size: var(--text-caption2);
-		color: var(--color-muted);
-		background: color-mix(in srgb, var(--color-muted) 12%, transparent);
-		padding: 1px 7px;
-		border-radius: 9999px;
-	}
-
-	.tasks-board {
-		display: flex;
-		gap: 12px;
-		overflow-x: auto;
-	}
-
-	.task-column {
-		flex: 1;
-		min-width: 180px;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.task-col-body {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.task-card {
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-sm);
-		padding: 10px 12px;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.task-subject {
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--color-fg);
-		line-height: 1.4;
-	}
-
-	.task-owner {
-		font-size: 12px;
-		color: var(--color-fg-secondary);
-	}
-
-	.task-time {
-		font-size: 12px;
-		color: var(--color-muted);
-	}
-
 	/* ── Responsive ────────────────────────────────── */
 	@media (max-width: 600px) {
-		.board, .tasks-board {
+		.board {
 			overflow-x: auto;
 		}
-		.column, .task-column {
+		.column {
 			min-width: 200px;
 		}
 	}
