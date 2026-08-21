@@ -7,7 +7,17 @@ import globals from 'globals';
 
 export default tseslint.config(
   {
-    ignores: ['build/', '.svelte-kit/', 'node_modules/', 'static/', 'src-tauri/', 'docs/'],
+    ignores: [
+      'build/',
+      '.svelte-kit/',
+      'node_modules/',
+      'static/',
+      'src-tauri/',
+      'docs/',
+      // sibling git worktrees live under .worktrees/ — their build outputs
+      // (and code) must never be linted from the main checkout
+      '.worktrees/',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
