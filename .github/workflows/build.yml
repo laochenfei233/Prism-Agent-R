@@ -51,6 +51,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: SvelteKit sync (生成 .svelte-kit 类型文件；vitest 与 svelte-check 都依赖 tsconfig extends .svelte-kit/tsconfig.json)
+        run: npx svelte-kit sync
+
       - name: Run Rust tests (含 RAG 五维评测回归门槛)
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
@@ -68,9 +71,6 @@ jobs:
 
       - name: Frontend unit tests (vitest)
         run: npm test
-
-      - name: SvelteKit sync (生成 .svelte-kit 类型文件，svelte-check 依赖)
-        run: npx svelte-kit sync
 
       - name: Svelte type check
         run: npx svelte-check --output machine
