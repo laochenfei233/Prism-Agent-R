@@ -1,20 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SandboxPolicy {
     pub filesystem: FilesystemPolicy,
     pub network: NetworkPolicy,
     pub process: ProcessPolicy,
-}
-
-impl Default for SandboxPolicy {
-    fn default() -> Self {
-        Self {
-            filesystem: FilesystemPolicy::default(),
-            network: NetworkPolicy::default(),
-            process: ProcessPolicy::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,7 +72,11 @@ impl SandboxPolicy {
             }
         }
         if !self.filesystem.allowed_paths.is_empty() {
-            let allowed = self.filesystem.allowed_paths.iter().any(|p| path.starts_with(p));
+            let allowed = self
+                .filesystem
+                .allowed_paths
+                .iter()
+                .any(|p| path.starts_with(p));
             if !allowed {
                 return Err(format!("路径 '{path}' 不在白名单中"));
             }
@@ -96,10 +90,10 @@ impl SandboxPolicy {
                 return Err(format!("域名 '{domain}' 在黑名单中"));
             }
         }
-        if !self.network.allowed_domains.contains(&"*".to_string()) {
-            if !self.network.allowed_domains.contains(&domain.to_string()) {
-                return Err(format!("域名 '{domain}' 不在白名单中"));
-            }
+        if !self.network.allowed_domains.contains(&"*".to_string())
+            && !self.network.allowed_domains.contains(&domain.to_string())
+        {
+            return Err(format!("域名 '{domain}' 不在白名单中"));
         }
         Ok(())
     }
@@ -111,10 +105,10 @@ impl SandboxPolicy {
                 return Err(format!("命令 '{cmd}' 被禁止"));
             }
         }
-        if !self.process.allowed_commands.is_empty() {
-            if !self.process.allowed_commands.contains(&cmd.to_string()) {
-                return Err(format!("命令 '{cmd}' 不在白名单中"));
-            }
+        if !self.process.allowed_commands.is_empty()
+            && !self.process.allowed_commands.contains(&cmd.to_string())
+        {
+            return Err(format!("命令 '{cmd}' 不在白名单中"));
         }
         Ok(())
     }

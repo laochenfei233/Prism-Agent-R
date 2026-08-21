@@ -1,11 +1,15 @@
-use tauri::State;
 use crate::data::models::*;
 use crate::data::services::meeting_service::MeetingService;
 use crate::utils::error::AppError;
 use crate::utils::paths;
+use tauri::State;
 
 #[tauri::command]
-pub async fn meeting_create(state: State<'_, crate::AppState>, title: String, participants: Option<Vec<String>>) -> Result<MeetingDto, AppError> {
+pub async fn meeting_create(
+    state: State<'_, crate::AppState>,
+    title: String,
+    participants: Option<Vec<String>>,
+) -> Result<MeetingDto, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     let m = svc.create(&title, participants.as_deref()).await?;
     Ok(meeting_to_dto(m))
@@ -18,7 +22,10 @@ pub async fn meeting_list(state: State<'_, crate::AppState>) -> Result<Vec<Meeti
 }
 
 #[tauri::command]
-pub async fn meeting_get(state: State<'_, crate::AppState>, id: String) -> Result<MeetingDto, AppError> {
+pub async fn meeting_get(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<MeetingDto, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     Ok(meeting_to_dto(svc.get(&id).await?))
 }
@@ -30,20 +37,50 @@ pub async fn meeting_delete(state: State<'_, crate::AppState>, id: String) -> Re
 }
 
 #[tauri::command]
-pub async fn meeting_update_transcript(state: State<'_, crate::AppState>, id: String, segments: Vec<TranscriptSegmentDto>) -> Result<(), AppError> {
+pub async fn meeting_update_transcript(
+    state: State<'_, crate::AppState>,
+    id: String,
+    segments: Vec<TranscriptSegmentDto>,
+) -> Result<(), AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
-    let segs: Vec<TranscriptSegment> = segments.into_iter().map(|s| TranscriptSegment { index: s.index, text: s.text, is_final: s.is_final, translated: s.translated, speaker_id: s.speaker_id }).collect();
+    let segs: Vec<TranscriptSegment> = segments
+        .into_iter()
+        .map(|s| TranscriptSegment {
+            index: s.index,
+            text: s.text,
+            is_final: s.is_final,
+            translated: s.translated,
+            speaker_id: s.speaker_id,
+        })
+        .collect();
     svc.update_transcript(&id, &segs).await
 }
 
 #[tauri::command]
-pub async fn meeting_get_transcript(state: State<'_, crate::AppState>, id: String) -> Result<Vec<TranscriptSegmentDto>, AppError> {
+pub async fn meeting_get_transcript(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<Vec<TranscriptSegmentDto>, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
-    Ok(svc.get_transcript(&id).await?.into_iter().map(|s| TranscriptSegmentDto { index: s.index, text: s.text, is_final: s.is_final, translated: s.translated, speaker_id: s.speaker_id }).collect())
+    Ok(svc
+        .get_transcript(&id)
+        .await?
+        .into_iter()
+        .map(|s| TranscriptSegmentDto {
+            index: s.index,
+            text: s.text,
+            is_final: s.is_final,
+            translated: s.translated,
+            speaker_id: s.speaker_id,
+        })
+        .collect())
 }
 
 #[tauri::command]
-pub async fn meeting_summary(state: State<'_, crate::AppState>, id: String) -> Result<String, AppError> {
+pub async fn meeting_summary(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<String, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     svc.summary(&id).await
 }
@@ -57,7 +94,8 @@ pub async fn meeting_export(
     include_translation: Option<bool>,
 ) -> Result<String, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
-    svc.export(&id, &format, include_summary, include_translation).await
+    svc.export(&id, &format, include_summary, include_translation)
+        .await
 }
 
 /// §10.3.4 摘要后生成翻译稿并保存 transcript_translated.md
@@ -73,14 +111,21 @@ pub async fn meeting_export_translation(
 
 /// §10.3.6 转写清洗
 #[tauri::command]
-pub async fn meeting_clean(state: State<'_, crate::AppState>, id: String) -> Result<String, AppError> {
+pub async fn meeting_clean(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<String, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     svc.clean_transcript(&id).await
 }
 
 /// §10.3.6 会议问答
 #[tauri::command]
-pub async fn meeting_qa(state: State<'_, crate::AppState>, id: String, question: String) -> Result<String, AppError> {
+pub async fn meeting_qa(
+    state: State<'_, crate::AppState>,
+    id: String,
+    question: String,
+) -> Result<String, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     svc.qa(&id, &question).await
 }
@@ -94,7 +139,8 @@ pub async fn meeting_push_to_agent(
     session_id: Option<String>,
 ) -> Result<String, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
-    svc.push_to_agent(&meeting_id, &agent_id, session_id.as_deref()).await
+    svc.push_to_agent(&meeting_id, &agent_id, session_id.as_deref())
+        .await
 }
 
 /// §10.3.5 离线二次转写（换 ASR 模型重新识别录音）
@@ -116,11 +162,29 @@ pub async fn meeting_retranscribe(
     );
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     let segs = svc.retranscribe(&id, &backend_cfg).await?;
-    Ok(segs.into_iter().map(|s| TranscriptSegmentDto {
-        index: s.index, text: s.text, is_final: s.is_final, translated: s.translated, speaker_id: s.speaker_id,
-    }).collect())
+    Ok(segs
+        .into_iter()
+        .map(|s| TranscriptSegmentDto {
+            index: s.index,
+            text: s.text,
+            is_final: s.is_final,
+            translated: s.translated,
+            speaker_id: s.speaker_id,
+        })
+        .collect())
 }
 
 fn meeting_to_dto(m: Meeting) -> MeetingDto {
-    MeetingDto { id: m.id, title: m.title, date: m.date, transcript: m.transcript, summary: m.summary, participants: m.participants, recording_duration: m.recording_duration, status: m.status, created_at: m.created_at, updated_at: m.updated_at }
+    MeetingDto {
+        id: m.id,
+        title: m.title,
+        date: m.date,
+        transcript: m.transcript,
+        summary: m.summary,
+        participants: m.participants,
+        recording_duration: m.recording_duration,
+        status: m.status,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
+    }
 }

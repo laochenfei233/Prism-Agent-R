@@ -32,7 +32,11 @@ impl SessionService {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    pub async fn create(&self, agent_id: &str, title: Option<&str>) -> Result<SessionDto, AppError> {
+    pub async fn create(
+        &self,
+        agent_id: &str,
+        title: Option<&str>,
+    ) -> Result<SessionDto, AppError> {
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp_millis();
 
@@ -52,7 +56,7 @@ impl SessionService {
 
     pub async fn get(&self, id: &str) -> Result<SessionDto, AppError> {
         let row = sqlx::query_as::<_, SessionRow>(
-            "SELECT id, agent_id, title, pinned, created_at, updated_at FROM sessions WHERE id = ?"
+            "SELECT id, agent_id, title, pinned, created_at, updated_at FROM sessions WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -65,13 +69,19 @@ impl SessionService {
     pub async fn rename(&self, id: &str, title: &str) -> Result<SessionDto, AppError> {
         let now = chrono::Utc::now().timestamp_millis();
         sqlx::query("UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?")
-            .bind(title).bind(now).bind(id).execute(&self.pool).await?;
+            .bind(title)
+            .bind(now)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         self.get(id).await
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), AppError> {
         sqlx::query("DELETE FROM sessions WHERE id = ?")
-            .bind(id).execute(&self.pool).await?;
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -84,7 +94,7 @@ impl SessionService {
             WHERE sessions_fts MATCH ?
             ORDER BY f.rank, s.updated_at DESC
             LIMIT ?
-            "#
+            "#,
         )
         .bind(query)
         .bind(limit)

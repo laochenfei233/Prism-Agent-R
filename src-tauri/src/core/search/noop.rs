@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use super::{SearchHit, SearchProvider};
+use async_trait::async_trait;
 
 /// 无配置时的默认 Provider，返回空结果 + 提示文案
 pub struct NoopSearchProvider;

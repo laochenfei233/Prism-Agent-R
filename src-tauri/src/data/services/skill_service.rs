@@ -49,14 +49,17 @@ impl SkillService {
         .fetch_all(&self.db.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|r| SkillDto {
-            id: r.id,
-            name: r.name,
-            description: r.description,
-            folder_name: r.folder_name,
-            source: r.source,
-            is_enabled: r.is_enabled != 0,
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| SkillDto {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                folder_name: r.folder_name,
+                source: r.source,
+                is_enabled: r.is_enabled != 0,
+            })
+            .collect())
     }
 
     /// 安装技能（从本地目录加载 SKILL.md）
@@ -76,38 +79,46 @@ impl SkillService {
         let content = tokio::fs::read_to_string(&skill_md).await?;
         let (metadata, _) = parse_frontmatter(&content);
 
-        let folder_name = path.file_name()
+        let folder_name = path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string();
 
-        let name = metadata.get("name")
+        let name = metadata
+            .get("name")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| folder_name.clone());
 
-        let description = metadata.get("description")
+        let description = metadata
+            .get("description")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let author = metadata.get("author")
+        let author = metadata
+            .get("author")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let tags = metadata.get("tags")
+        let tags = metadata
+            .get("tags")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         let content_hash = compute_hash(&content);
 
         // 检查是否已安装
-        let existing = sqlx::query_scalar::<_, String>(
-            "SELECT id FROM skills WHERE folder_name = ?"
-        )
-        .bind(&folder_name)
-        .fetch_optional(&self.db.pool)
-        .await?;
+        let existing =
+            sqlx::query_scalar::<_, String>("SELECT id FROM skills WHERE folder_name = ?")
+                .bind(&folder_name)
+                .fetch_optional(&self.db.pool)
+                .await?;
 
         let now = chrono::Utc::now().timestamp_millis();
         let skill_dir = crate::utils::paths::skill_dir();
@@ -171,13 +182,12 @@ impl SkillService {
 
     /// 卸载技能
     pub async fn uninstall(&self, id: &str) -> Result<(), AppError> {
-        let folder_name = sqlx::query_scalar::<_, String>(
-            "SELECT folder_name FROM skills WHERE id = ?"
-        )
-        .bind(id)
-        .fetch_optional(&self.db.pool)
-        .await?
-        .ok_or_else(|| AppError::Validation(format!("技能不存在: {id}")))?;
+        let folder_name =
+            sqlx::query_scalar::<_, String>("SELECT folder_name FROM skills WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&self.db.pool)
+                .await?
+                .ok_or_else(|| AppError::Validation(format!("技能不存在: {id}")))?;
 
         sqlx::query("DELETE FROM skills WHERE id = ?")
             .bind(id)
@@ -225,7 +235,7 @@ impl SkillService {
     /// 获取 Agent 启用的技能 ID 列表
     pub async fn enabled_skills(&self, agent_id: &str) -> Result<Vec<String>, AppError> {
         let ids = sqlx::query_scalar::<_, String>(
-            "SELECT skill_id FROM agent_skills WHERE agent_id = ? AND is_enabled = 1"
+            "SELECT skill_id FROM agent_skills WHERE agent_id = ? AND is_enabled = 1",
         )
         .bind(agent_id)
         .fetch_all(&self.db.pool)
@@ -339,11 +349,7 @@ impl SkillService {
                         install_source: item["github"]
                             .as_str()
                             .map(|g| format!("github:{}", g))
-                            .or_else(|| {
-                                item["download_url"]
-                                    .as_str()
-                                    .map(|u| format!("zip:{}", u))
-                            })
+                            .or_else(|| item["download_url"].as_str().map(|u| format!("zip:{}", u)))
                             .or_else(|| item["install_url"].as_str().map(|u| format!("zip:{}", u)))
                             .unwrap_or_else(|| "zip".into()),
                         tags: item["tags"]
@@ -356,10 +362,11 @@ impl SkillService {
                             .unwrap_or_default(),
                         author: item["author"].as_str().map(|s| s.to_string()),
                         stars: parse_clawhub_stars(item),
-                        url: item["url"]
-                            .as_str()
-                            .map(|s| s.to_string())
-                            .or_else(|| item["github"].as_str().map(|s| format!("https://github.com/{s}"))),
+                        url: item["url"].as_str().map(|s| s.to_string()).or_else(|| {
+                            item["github"]
+                                .as_str()
+                                .map(|s| format!("https://github.com/{s}"))
+                        }),
                         installed: false,
                     });
                 }
@@ -367,12 +374,13 @@ impl SkillService {
         }
 
         // 查数据库标记已安装
-        let installed_names: Vec<String> = sqlx::query_scalar::<_, String>("SELECT name FROM skills")
-            .fetch_all(&self.db.pool)
-            .await?
-            .into_iter()
-            .map(|n| n.to_lowercase().replace(' ', ""))
-            .collect();
+        let installed_names: Vec<String> =
+            sqlx::query_scalar::<_, String>("SELECT name FROM skills")
+                .fetch_all(&self.db.pool)
+                .await?
+                .into_iter()
+                .map(|n| n.to_lowercase().replace(' ', ""))
+                .collect();
 
         for hit in &mut all_hits {
             let normalized = hit.name.to_lowercase().replace(' ', "");
@@ -508,7 +516,9 @@ impl SkillService {
             None => tmp_root.clone(),
         };
 
-        let result = self.install(skill_dir.to_str().unwrap_or(""), Some("github")).await;
+        let result = self
+            .install(skill_dir.to_str().unwrap_or(""), Some("github"))
+            .await;
         cleanup().await;
         result
     }
@@ -530,15 +540,18 @@ impl SkillService {
                         if skill_md.exists() {
                             let content = tokio::fs::read_to_string(&skill_md).await?;
                             let (metadata, _) = parse_frontmatter(&content);
-                            let folder_name = path.file_name()
+                            let folder_name = path
+                                .file_name()
                                 .and_then(|n| n.to_str())
                                 .unwrap_or("unknown")
                                 .to_string();
-                            let name = metadata.get("name")
+                            let name = metadata
+                                .get("name")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string())
                                 .unwrap_or_else(|| folder_name.clone());
-                            let description = metadata.get("description")
+                            let description = metadata
+                                .get("description")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
                             skills.push(LocalSkill {
@@ -585,9 +598,11 @@ fn parse_frontmatter(content: &str) -> (serde_json::Value, &str) {
                     let value = value.trim();
                     if value.starts_with('[') && value.ends_with(']') {
                         // 数组
-                        let items: Vec<serde_json::Value> = value[1..value.len()-1]
+                        let items: Vec<serde_json::Value> = value[1..value.len() - 1]
                             .split(',')
-                            .map(|s| serde_json::Value::String(s.trim().trim_matches('"').to_string()))
+                            .map(|s| {
+                                serde_json::Value::String(s.trim().trim_matches('"').to_string())
+                            })
                             .collect();
                         map.insert(key, serde_json::Value::Array(items));
                     } else if value == "true" {
@@ -595,9 +610,15 @@ fn parse_frontmatter(content: &str) -> (serde_json::Value, &str) {
                     } else if value == "false" {
                         map.insert(key, serde_json::Value::Bool(false));
                     } else if let Ok(n) = value.parse::<f64>() {
-                        map.insert(key, serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap()));
+                        map.insert(
+                            key,
+                            serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap()),
+                        );
                     } else {
-                        map.insert(key, serde_json::Value::String(value.trim_matches('"').to_string()));
+                        map.insert(
+                            key,
+                            serde_json::Value::String(value.trim_matches('"').to_string()),
+                        );
                     }
                 }
             }

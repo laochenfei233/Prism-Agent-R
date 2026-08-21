@@ -1,15 +1,15 @@
 use tauri::State;
 
 use crate::data::models::SkillDto;
-use crate::data::services::skill_service::{InstalledSkill, LocalSkill, SkillSearchHit, SkillService};
+use crate::data::services::skill_service::{
+    InstalledSkill, LocalSkill, SkillSearchHit, SkillService,
+};
 use crate::utils::error::AppError;
 
 // ── 技能命令 ──────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn skill_list(
-    state: State<'_, crate::AppState>,
-) -> Result<Vec<SkillDto>, AppError> {
+pub async fn skill_list(state: State<'_, crate::AppState>) -> Result<Vec<SkillDto>, AppError> {
     let svc = SkillService::new(state.db.clone());
     svc.list().await
 }
@@ -23,12 +23,14 @@ pub async fn skill_install(
     let svc = SkillService::new(state.db.clone());
 
     // 根据 source 类型解析路径
-    let folder_path = if source.starts_with("local:") {
-        source[6..].to_string()
+    let folder_path = if let Some(path) = source.strip_prefix("local:") {
+        path.to_string()
     } else if source.starts_with("github:") {
         // GitHub 仓库：需要 clone 后定位技能目录
         // MVP 阶段简化处理，假设 source 本身就是本地路径
-        return Err(AppError::Validation("GitHub 安装暂未实现，请使用本地路径".into()));
+        return Err(AppError::Validation(
+            "GitHub 安装暂未实现，请使用本地路径".into(),
+        ));
     } else {
         source
     };

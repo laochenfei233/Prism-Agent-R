@@ -3,7 +3,9 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::core::adk::error::AgentError;
-use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
+use crate::core::adk::model::{
+    ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider,
+};
 
 // ── LLM-as-Judge（§10.13.2） ───────────────────────────────
 
@@ -118,7 +120,11 @@ fn parse_judge_json(text: &str) -> JudgeResult {
     };
     if let Some(v) = extract_json(text) {
         result.score = v.get("score").and_then(|s| s.as_f64()).unwrap_or(0.0) as f32;
-        result.rationale = v.get("rationale").and_then(|s| s.as_str()).unwrap_or("").to_string();
+        result.rationale = v
+            .get("rationale")
+            .and_then(|s| s.as_str())
+            .unwrap_or("")
+            .to_string();
         if let Some(cs) = v.get("criteria_scores").and_then(|c| c.as_object()) {
             for (k, val) in cs {
                 if let Some(n) = val.as_f64() {
@@ -131,14 +137,21 @@ fn parse_judge_json(text: &str) -> JudgeResult {
 }
 
 fn parse_compare_json(text: &str) -> ComparisonResult {
-    let mut result = ComparisonResult { winner: Winner::Tie, rationale: String::new() };
+    let mut result = ComparisonResult {
+        winner: Winner::Tie,
+        rationale: String::new(),
+    };
     if let Some(v) = extract_json(text) {
         result.winner = match v.get("winner").and_then(|w| w.as_str()) {
             Some("A") | Some("a") => Winner::A,
             Some("B") | Some("b") => Winner::B,
             _ => Winner::Tie,
         };
-        result.rationale = v.get("rationale").and_then(|s| s.as_str()).unwrap_or("").to_string();
+        result.rationale = v
+            .get("rationale")
+            .and_then(|s| s.as_str())
+            .unwrap_or("")
+            .to_string();
     }
     result
 }
@@ -159,9 +172,7 @@ pub struct AgentStats {
 }
 
 /// 由轨迹列表聚合统计指标
-pub fn aggregate_stats(
-    traces: &[crate::data::services::trace_service::AgentTrace],
-) -> AgentStats {
+pub fn aggregate_stats(traces: &[crate::data::services::trace_service::AgentTrace]) -> AgentStats {
     let mut stats = AgentStats::default();
     let total = traces.len();
     if total == 0 {
@@ -213,7 +224,9 @@ mod tests {
 
     #[test]
     fn parse_judge_json_valid() {
-        let r = parse_judge_json(r#"{"score": 4, "rationale": "不错", "criteria_scores": {"准确性": 4, "完整性": 3}}"#);
+        let r = parse_judge_json(
+            r#"{"score": 4, "rationale": "不错", "criteria_scores": {"准确性": 4, "完整性": 3}}"#,
+        );
         assert_eq!(r.score, 4.0);
         assert_eq!(r.rationale, "不错");
         assert_eq!(r.criteria_scores["准确性"], 4.0);

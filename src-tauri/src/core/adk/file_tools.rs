@@ -59,7 +59,8 @@ impl ToolExecutor for FileReadTool {
                 let size_str = format_size(file_size);
                 return Ok(ToolOutput::text(format!(
                     "二进制文件: {} ({})，无法以文本方式读取",
-                    path.display(), size_str
+                    path.display(),
+                    size_str
                 )));
             }
         }
@@ -89,7 +90,13 @@ impl ToolExecutor for FileReadTool {
                 }
 
                 let header = if start > 0 || limit > 0 {
-                    format!("// 文件: {} (共 {} 行，显示 {}-{})\n", path.display(), total_lines, start + 1, end)
+                    format!(
+                        "// 文件: {} (共 {} 行，显示 {}-{})\n",
+                        path.display(),
+                        total_lines,
+                        start + 1,
+                        end
+                    )
                 } else {
                     format!("// 文件: {} (共 {} 行)\n", path.display(), total_lines)
                 };
@@ -97,7 +104,12 @@ impl ToolExecutor for FileReadTool {
                 let footer = if truncated {
                     "\n\n... [内容超过 1MB，已截断]"
                 } else if end < total_lines {
-                    &format!("\n\n... [仅显示第 {}-{} 行，共 {} 行]", start + 1, end, total_lines)
+                    &format!(
+                        "\n\n... [仅显示第 {}-{} 行，共 {} 行]",
+                        start + 1,
+                        end,
+                        total_lines
+                    )
                 } else {
                     ""
                 };
@@ -153,9 +165,13 @@ impl ToolExecutor for FileWriteTool {
             }
         }
 
-        let bytes = content.as_bytes().len();
+        let bytes = content.len();
         match tokio::fs::write(path, content).await {
-            Ok(()) => Ok(ToolOutput::text(format!("已写入: {} ({})", path.display(), format_size(bytes as u64)))),
+            Ok(()) => Ok(ToolOutput::text(format!(
+                "已写入: {} ({})",
+                path.display(),
+                format_size(bytes as u64)
+            ))),
             Err(e) => Ok(ToolOutput::error(format!("写入失败: {e}"))),
         }
     }
@@ -223,10 +239,23 @@ fn list_dir(dir: &Path, max_depth: u8, current_depth: u8) -> Result<Vec<String>,
         return Ok(entries);
     }
 
-    let read_dir = std::fs::read_dir(dir)
-        .map_err(|e| AgentError::Internal(format!("读取目录失败: {e}")))?;
+    let read_dir =
+        std::fs::read_dir(dir).map_err(|e| AgentError::Internal(format!("读取目录失败: {e}")))?;
 
-    let ignore_names = [".git", "node_modules", "target", ".next", "dist", "build", "__pycache__", ".venv", ".mimocode", ".claude", ".opencode", ".codex"];
+    let ignore_names = [
+        ".git",
+        "node_modules",
+        "target",
+        ".next",
+        "dist",
+        "build",
+        "__pycache__",
+        ".venv",
+        ".mimocode",
+        ".claude",
+        ".opencode",
+        ".codex",
+    ];
 
     let mut items: Vec<_> = read_dir
         .filter_map(|e| e.ok())
@@ -239,13 +268,19 @@ fn list_dir(dir: &Path, max_depth: u8, current_depth: u8) -> Result<Vec<String>,
     items.sort_by(|a, b| {
         let a_is_dir = a.file_type().map(|t| t.is_dir()).unwrap_or(false);
         let b_is_dir = b.file_type().map(|t| t.is_dir()).unwrap_or(false);
-        b_is_dir.cmp(&a_is_dir).then_with(|| a.file_name().cmp(&b.file_name()))
+        b_is_dir
+            .cmp(&a_is_dir)
+            .then_with(|| a.file_name().cmp(&b.file_name()))
     });
 
     for item in items {
         let name = item.file_name().to_string_lossy().to_string();
         let is_dir = item.file_type().map(|t| t.is_dir()).unwrap_or(false);
-        let prefix = if current_depth > 0 { "  ".repeat(current_depth as usize) } else { String::new() };
+        let prefix = if current_depth > 0 {
+            "  ".repeat(current_depth as usize)
+        } else {
+            String::new()
+        };
 
         if is_dir {
             entries.push(format!("{prefix}{}/", name));

@@ -11,7 +11,9 @@ pub async fn model_list(state: State<'_, crate::AppState>) -> Result<Vec<ModelDt
 }
 
 #[tauri::command]
-pub async fn model_providers(state: State<'_, crate::AppState>) -> Result<Vec<ProviderDto>, AppError> {
+pub async fn model_providers(
+    state: State<'_, crate::AppState>,
+) -> Result<Vec<ProviderDto>, AppError> {
     let svc = ModelService::new(state.db.pool.clone());
     svc.list_providers().await
 }

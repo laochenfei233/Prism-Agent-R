@@ -1,8 +1,8 @@
-use crate::AppState;
 use crate::data::models::{DashboardOverview, KanbanData};
 use crate::data::services::dashboard_service::DashboardService;
 use crate::data::services::AgentService;
 use crate::utils::error::AppError;
+use crate::AppState;
 
 #[tauri::command]
 pub async fn dashboard_overview(
@@ -15,9 +15,7 @@ pub async fn dashboard_overview(
 }
 
 #[tauri::command]
-pub async fn dashboard_kanban(
-    state: tauri::State<'_, AppState>,
-) -> Result<KanbanData, AppError> {
+pub async fn dashboard_kanban(state: tauri::State<'_, AppState>) -> Result<KanbanData, AppError> {
     let svc = DashboardService::new(&state.db);
     svc.kanban(&state.session_state).await
 }

@@ -14,7 +14,15 @@ const KEY_RECENT_DIRS: &str = "workspace.recent_dirs";
 const KEY_BOUND_AGENT: &str = "workspace.bound_agent_id";
 
 const TREE_IGNORED: &[&str] = &[
-    ".git", "node_modules", "target", "dist", "build", "__pycache__", ".venv", "vendor", ".svn",
+    ".git",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    "__pycache__",
+    ".venv",
+    "vendor",
+    ".svn",
 ];
 
 // ── 命令 ──────────────────────────────────────────────────
@@ -51,7 +59,13 @@ pub async fn workspace_set(
     recent.retain(|d| d != &dir);
     recent.insert(0, dir.clone());
     recent.truncate(5);
-    set_pref(&state.db.pool, KEY_RECENT_DIRS, &serde_json::to_string(&recent)?, now).await?;
+    set_pref(
+        &state.db.pool,
+        KEY_RECENT_DIRS,
+        &serde_json::to_string(&recent)?,
+        now,
+    )
+    .await?;
 
     if let Some(agent) = agent_id {
         set_pref(&state.db.pool, KEY_BOUND_AGENT, &agent, now).await?;
@@ -223,7 +237,10 @@ async fn set_pref(pool: &SqlitePool, key: &str, value: &str, now: i64) -> Result
 
 fn build_tree(dir: &Path, depth: u8) -> Result<DirTree, AppError> {
     if !dir.is_dir() {
-        return Err(AppError::Validation(format!("'{}' 不是目录", dir.display())));
+        return Err(AppError::Validation(format!(
+            "'{}' 不是目录",
+            dir.display()
+        )));
     }
 
     let name = dir
@@ -242,8 +259,8 @@ fn build_tree(dir: &Path, depth: u8) -> Result<DirTree, AppError> {
         });
     }
 
-    let entries = std::fs::read_dir(dir)
-        .map_err(|e| AppError::Internal(format!("读取目录失败: {e}")))?;
+    let entries =
+        std::fs::read_dir(dir).map_err(|e| AppError::Internal(format!("读取目录失败: {e}")))?;
 
     let mut children: Vec<DirTree> = entries
         .filter_map(|entry| entry.ok())

@@ -184,7 +184,9 @@ impl DashboardService {
                 model_name: row.get("model_name"),
                 skill_count: row.get::<i64, _>("skill_count") as usize,
                 mcp_count: row.get::<i64, _>("mcp_count") as usize,
-                last_used: row.get::<Option<i64>, _>("last_used").map(|ts| ts.to_string()),
+                last_used: row
+                    .get::<Option<i64>, _>("last_used")
+                    .map(|ts| ts.to_string()),
                 order_key: row.get("order_key"),
             });
         }
@@ -197,10 +199,11 @@ impl DashboardService {
         let week_start = today_start - 6 * 24 * 60 * 60 * 1000;
         let month_start = today_start - 29 * 24 * 60 * 60 * 1000;
 
-        let rows = sqlx::query("SELECT usage FROM messages WHERE usage IS NOT NULL AND created_at >= ?")
-            .bind(month_start)
-            .fetch_all(&self.db.pool)
-            .await?;
+        let rows =
+            sqlx::query("SELECT usage FROM messages WHERE usage IS NOT NULL AND created_at >= ?")
+                .bind(month_start)
+                .fetch_all(&self.db.pool)
+                .await?;
 
         let mut today_tokens: u64 = 0;
         let mut week_tokens: u64 = 0;
@@ -211,8 +214,14 @@ impl DashboardService {
         for row in &rows {
             let usage_str: String = row.get("usage");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&usage_str) {
-                let prompt = val.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                let completion = val.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let prompt = val
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let completion = val
+                    .get("completion_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
                 let tokens = prompt + completion;
                 let cost = val.get("cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 month_tokens += tokens;
@@ -238,8 +247,14 @@ impl DashboardService {
             let ts: i64 = row.get("created_at");
             let usage_str: String = row.get("usage");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&usage_str) {
-                let tokens = val.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
-                    + val.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let tokens = val
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+                    + val
+                        .get("completion_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                 if ts >= today_start {
                     today_tokens += tokens;
                     today_calls += 1;
@@ -275,7 +290,8 @@ impl DashboardService {
         .await?;
 
         // Aggregate by date
-        let mut daily: std::collections::HashMap<String, (u64, f64)> = std::collections::HashMap::new();
+        let mut daily: std::collections::HashMap<String, (u64, f64)> =
+            std::collections::HashMap::new();
 
         for row in &rows {
             let ts: i64 = row.get("created_at");
@@ -286,8 +302,14 @@ impl DashboardService {
 
             let usage_str: String = row.get("usage");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&usage_str) {
-                let tokens = val.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
-                    + val.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let tokens = val
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+                    + val
+                        .get("completion_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                 let cost = val.get("cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let entry = daily.entry(date_key).or_insert((0, 0.0));
                 entry.0 += tokens;
@@ -304,7 +326,11 @@ impl DashboardService {
                 .with_timezone(&chrono::Utc);
             let date_key = dt.format("%Y-%m-%d").to_string();
             let (tokens, cost) = daily.get(&date_key).copied().unwrap_or((0, 0.0));
-            trend.push(UsagePoint { date: date_key, tokens, cost });
+            trend.push(UsagePoint {
+                date: date_key,
+                tokens,
+                cost,
+            });
         }
 
         Ok(trend)
@@ -337,7 +363,11 @@ impl DashboardService {
             .map(|r| McpServerStatus {
                 id: r.id,
                 name: r.name,
-                status: if r.is_active != 0 { "active".into() } else { "inactive".into() },
+                status: if r.is_active != 0 {
+                    "active".into()
+                } else {
+                    "inactive".into()
+                },
                 tools_count: 0,
                 last_error: None,
             })

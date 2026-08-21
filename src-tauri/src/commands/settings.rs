@@ -37,7 +37,9 @@ fn spec_to_dto(spec: SettingSpec, current: serde_json::Value) -> SettingSpecDto 
         default: spec.default.clone(),
         value: current,
         description: spec.description.to_string(),
-        options: spec.options.map(|o| o.iter().map(|s| s.to_string()).collect()),
+        options: spec
+            .options
+            .map(|o| o.iter().map(|s| s.to_string()).collect()),
         min: spec.min,
         max: spec.max,
         step: spec.step,
@@ -48,16 +50,24 @@ async fn read_current(db: &crate::data::db::Database, spec: &SettingSpec) -> ser
     use crate::data::settings::prefs;
     match spec.kind {
         SettingKind::Bool => {
-            serde_json::json!(prefs::get_bool(&db.pool, spec.key, spec.default.as_bool().unwrap_or(false)).await)
+            serde_json::json!(
+                prefs::get_bool(&db.pool, spec.key, spec.default.as_bool().unwrap_or(false)).await
+            )
         }
         SettingKind::Int => {
-            serde_json::json!(prefs::get_i64(&db.pool, spec.key, spec.default.as_i64().unwrap_or(0)).await)
+            serde_json::json!(
+                prefs::get_i64(&db.pool, spec.key, spec.default.as_i64().unwrap_or(0)).await
+            )
         }
         SettingKind::Float => {
-            serde_json::json!(prefs::get_f64(&db.pool, spec.key, spec.default.as_f64().unwrap_or(0.0)).await)
+            serde_json::json!(
+                prefs::get_f64(&db.pool, spec.key, spec.default.as_f64().unwrap_or(0.0)).await
+            )
         }
         SettingKind::String | SettingKind::Select => {
-            serde_json::json!(prefs::get_str(&db.pool, spec.key, spec.default.as_str().unwrap_or("")).await)
+            serde_json::json!(
+                prefs::get_str(&db.pool, spec.key, spec.default.as_str().unwrap_or("")).await
+            )
         }
     }
 }
@@ -141,7 +151,11 @@ pub async fn settings_update_provider(
     }
     if let Some(base_url) = base_url {
         let trimmed = base_url.trim();
-        let stored = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
+        let stored = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        };
         sqlx::query("UPDATE providers SET base_url = ?, updated_at = ? WHERE id = ?")
             .bind(stored)
             .bind(now)
@@ -164,7 +178,11 @@ pub async fn settings_update_provider(
     }
     if let Some(avatar) = avatar {
         let trimmed = avatar.trim();
-        let stored = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
+        let stored = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        };
         sqlx::query("UPDATE providers SET avatar = ?, updated_at = ? WHERE id = ?")
             .bind(stored)
             .bind(now)
@@ -205,25 +223,28 @@ pub async fn settings_add_provider(
     if let Some(url) = url_trimmed {
         if !url.is_empty() {
             let dup = sqlx::query_scalar::<_, String>(
-                "SELECT id FROM providers WHERE base_url = ? LIMIT 1"
+                "SELECT id FROM providers WHERE base_url = ? LIMIT 1",
             )
             .bind(url)
             .fetch_optional(&state.db.pool)
             .await?;
             if dup.is_some() {
-                return Err(AppError::Validation(format!("已存在相同 URL 的 Provider: {url}")));
+                return Err(AppError::Validation(format!(
+                    "已存在相同 URL 的 Provider: {url}"
+                )));
             }
         }
     }
 
-    let dup_name = sqlx::query_scalar::<_, String>(
-        "SELECT id FROM providers WHERE name = ? LIMIT 1"
-    )
-    .bind(name_trimmed)
-    .fetch_optional(&state.db.pool)
-    .await?;
+    let dup_name =
+        sqlx::query_scalar::<_, String>("SELECT id FROM providers WHERE name = ? LIMIT 1")
+            .bind(name_trimmed)
+            .fetch_optional(&state.db.pool)
+            .await?;
     if dup_name.is_some() {
-        return Err(AppError::Validation(format!("已存在同名 Provider: {name_trimmed}")));
+        return Err(AppError::Validation(format!(
+            "已存在同名 Provider: {name_trimmed}"
+        )));
     }
 
     let id = uuid::Uuid::new_v4().to_string();
@@ -252,10 +273,7 @@ pub async fn settings_add_provider(
 }
 
 #[tauri::command]
-pub async fn model_delete(
-    state: State<'_, crate::AppState>,
-    id: String,
-) -> Result<(), AppError> {
+pub async fn model_delete(state: State<'_, crate::AppState>, id: String) -> Result<(), AppError> {
     let svc = crate::data::services::ModelService::new(state.db.pool.clone());
     svc.delete(&id).await
 }
@@ -314,12 +332,12 @@ pub async fn model_fetch_available(
     .await?
     .ok_or_else(|| AppError::Internal("Provider not found".to_string()))?;
 
-    let base_url = provider.base_url.unwrap_or_else(|| {
-        match provider.kind.as_str() {
+    let base_url = provider
+        .base_url
+        .unwrap_or_else(|| match provider.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
-        }
-    });
+        });
 
     let api_key = provider
         .api_key_enc

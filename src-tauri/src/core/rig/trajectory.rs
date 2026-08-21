@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::core::adk::model::ToolCall;
+use serde::{Deserialize, Serialize};
 
 /// §19.3.5 轨迹级监控
 ///
@@ -94,10 +94,9 @@ impl TrajectoryMonitor {
     /// 检测凭据拼接
     fn check_credential_concat(&self, calls: &[ToolCall]) -> Option<TrajectoryAlert> {
         // 检查是否有连续的短 write_file 调用（可能在拼接 token）
-        let short_writes: Vec<_> = calls.iter()
-            .filter(|c| {
-                c.name == "write_file" || c.name == "edit_file"
-            })
+        let short_writes: Vec<_> = calls
+            .iter()
+            .filter(|c| c.name == "write_file" || c.name == "edit_file")
             .filter(|c| {
                 let args_str = c.arguments.to_string();
                 args_str.len() < 100
@@ -229,7 +228,10 @@ mod tests {
     #[test]
     fn test_sandbox_escape_detection() {
         let monitor = TrajectoryMonitor::with_enabled(true);
-        let calls = vec![make_tool_call("read_file", json!({"path": "~/.ssh/id_rsa"}))];
+        let calls = vec![make_tool_call(
+            "read_file",
+            json!({"path": "~/.ssh/id_rsa"}),
+        )];
         let alert = monitor.check_trajectory(&calls);
         assert!(alert.is_some());
         assert_eq!(alert.unwrap().check_name, "sandbox_escape");
@@ -238,7 +240,10 @@ mod tests {
     #[test]
     fn test_unauthorized_access_detection() {
         let monitor = TrajectoryMonitor::with_enabled(true);
-        let calls = vec![make_tool_call("run_command", json!({"command": "sudo rm -rf /"}))];
+        let calls = vec![make_tool_call(
+            "run_command",
+            json!({"command": "sudo rm -rf /"}),
+        )];
         let alert = monitor.check_trajectory(&calls);
         assert!(alert.is_some());
         assert_eq!(alert.unwrap().check_name, "unauthorized_access");

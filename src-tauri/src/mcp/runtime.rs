@@ -39,12 +39,15 @@ impl McpRuntime {
     /// 注册服务器配置（不立即连接）
     pub async fn register_server(&self, config: McpServerRow) {
         let mut servers = self.servers.write().await;
-        servers.insert(config.id.clone(), McpServerState {
-            config,
-            transport: None,
-            status: McpStatus::Disconnected,
-            tools: Vec::new(),
-        });
+        servers.insert(
+            config.id.clone(),
+            McpServerState {
+                config,
+                transport: None,
+                status: McpStatus::Disconnected,
+                tools: Vec::new(),
+            },
+        );
     }
 
     /// 移除服务器
@@ -60,9 +63,9 @@ impl McpRuntime {
     /// 连接到服务器
     pub async fn connect(&self, server_id: &str) -> Result<(), McpError> {
         let mut servers = self.servers.write().await;
-        let state = servers.get_mut(server_id).ok_or_else(|| {
-            McpError::Connection(format!("服务器不存在: {server_id}"))
-        })?;
+        let state = servers
+            .get_mut(server_id)
+            .ok_or_else(|| McpError::Connection(format!("服务器不存在: {server_id}")))?;
 
         // 如果已连接则跳过
         if let Some(ref transport) = state.transport {
@@ -77,17 +80,25 @@ impl McpRuntime {
         let mut transport: Box<dyn McpTransport> = match state.config.r#type.as_str() {
             "stdio" => {
                 let cmd = state.config.command.clone().unwrap_or_default();
-                let args: Vec<String> = serde_json::from_str(&state.config.args).unwrap_or_default();
-                let env: HashMap<String, String> = serde_json::from_str(&state.config.env).unwrap_or_default();
+                let args: Vec<String> =
+                    serde_json::from_str(&state.config.args).unwrap_or_default();
+                let env: HashMap<String, String> =
+                    serde_json::from_str(&state.config.env).unwrap_or_default();
                 Box::new(StdioTransport::new(cmd, args, env))
             }
             "http" | "sse" => {
                 let base_url = state.config.base_url.clone().unwrap_or_default();
-                let headers: HashMap<String, String> = serde_json::from_str(&state.config.headers).unwrap_or_default();
+                let headers: HashMap<String, String> =
+                    serde_json::from_str(&state.config.headers).unwrap_or_default();
                 let timeout = state.config.timeout_ms.unwrap_or(30000) as u64;
                 Box::new(HttpTransport::new(base_url, headers, timeout))
             }
-            _ => return Err(McpError::Connection(format!("不支持的传输类型: {}", state.config.r#type))),
+            _ => {
+                return Err(McpError::Connection(format!(
+                    "不支持的传输类型: {}",
+                    state.config.r#type
+                )))
+            }
         };
 
         // 初始化
@@ -133,9 +144,9 @@ impl McpRuntime {
         args: serde_json::Value,
     ) -> Result<serde_json::Value, McpError> {
         let servers = self.servers.read().await;
-        let state = servers.get(server_id).ok_or_else(|| {
-            McpError::Connection(format!("服务器不存在: {server_id}"))
-        })?;
+        let state = servers
+            .get(server_id)
+            .ok_or_else(|| McpError::Connection(format!("服务器不存在: {server_id}")))?;
 
         let transport = state.transport.as_ref().ok_or(McpError::NotConnected)?;
 
@@ -144,12 +155,11 @@ impl McpRuntime {
         // 提取文本内容
         let mut text = String::new();
         for content in &result.content {
-            match content {
-                super::transport::McpContent::Text { text: t } => {
-                    if !text.is_empty() { text.push('\n'); }
-                    text.push_str(t);
+            if let super::transport::McpContent::Text { text: t } = content {
+                if !text.is_empty() {
+                    text.push('\n');
                 }
-                _ => {}
+                text.push_str(t);
             }
         }
 
@@ -169,27 +179,35 @@ impl McpRuntime {
     /// 获取所有服务器状态
     pub async fn all_status(&self) -> Vec<ServerStatusInfo> {
         let servers = self.servers.read().await;
-        servers.iter().map(|(id, state)| ServerStatusInfo {
-            id: id.clone(),
-            name: state.config.name.clone(),
-            r#type: state.config.r#type.clone(),
-            status: state.status.clone(),
-            tools_count: state.tools.len() as i32,
-            tools: state.tools.iter().map(|t| t.name.clone()).collect(),
-        }).collect()
+        servers
+            .iter()
+            .map(|(id, state)| ServerStatusInfo {
+                id: id.clone(),
+                name: state.config.name.clone(),
+                r#type: state.config.r#type.clone(),
+                status: state.status.clone(),
+                tools_count: state.tools.len() as i32,
+                tools: state.tools.iter().map(|t| t.name.clone()).collect(),
+            })
+            .collect()
     }
 
     /// 获取服务器工具列表
     pub async fn get_tools(&self, server_id: &str) -> Vec<McpTool> {
         let servers = self.servers.read().await;
-        servers.get(server_id).map(|s| s.tools.clone()).unwrap_or_default()
+        servers
+            .get(server_id)
+            .map(|s| s.tools.clone())
+            .unwrap_or_default()
     }
 
     /// 判断工具是否可用（任意已连接服务器）
     pub async fn find_tool_server(&self, tool_name: &str) -> Option<String> {
         let servers = self.servers.read().await;
         for (id, state) in servers.iter() {
-            if state.status == McpStatus::Connected && state.tools.iter().any(|t| t.name == tool_name) {
+            if state.status == McpStatus::Connected
+                && state.tools.iter().any(|t| t.name == tool_name)
+            {
                 return Some(id.clone());
             }
         }

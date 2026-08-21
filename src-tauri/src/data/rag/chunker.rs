@@ -58,7 +58,11 @@ pub fn chunk_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> 
                 let byte_offset = sent.as_ptr() as usize - text.as_ptr() as usize;
                 let end_pos = byte_offset + sent.len();
                 if end_pos < text.len() {
-                    text[end_pos..].chars().next().unwrap_or_default().to_string()
+                    text[end_pos..]
+                        .chars()
+                        .next()
+                        .unwrap_or_default()
+                        .to_string()
                 } else {
                     String::new()
                 }
@@ -150,7 +154,7 @@ mod tests {
         // 无 \n\n 的中文长文本：句子分割路径恢复分隔符时不得对多字节标点做 1 字节切片
         let text = "今天天气很好。我们一起去公园散步。然后回家吃饭休息。最后按时睡觉。";
         let chunks = chunk_text(text, 50, 0);
-        assert!(chunks.len() >= 1);
+        assert!(!chunks.is_empty());
         assert!(chunks.iter().all(|c| !c.is_empty()));
         // 分隔符必须保留在 chunk 中（不得丢句号）
         assert!(chunks.iter().any(|c| c.contains('。')));
@@ -161,7 +165,7 @@ mod tests {
         // overlap 截取点落在多字节字符中间时不得 panic（段落路径）
         let text = "第一段内容描述。\n\n第二段内容描述。\n\n第三段内容描述。\n\n第四段内容描述。";
         let chunks = chunk_text(text, 30, 5);
-        assert!(chunks.len() >= 1);
+        assert!(!chunks.is_empty());
         assert!(chunks.iter().all(|c| !c.is_empty()));
     }
 
@@ -170,7 +174,7 @@ mod tests {
         // overlap 截取点落在多字节字符中间时不得 panic（句子路径）
         let text = "今天天气很好。我们一起去公园散步。然后回家吃饭休息。最后按时睡觉。";
         let chunks = chunk_text(text, 40, 7);
-        assert!(chunks.len() >= 1);
+        assert!(!chunks.is_empty());
         assert!(chunks.iter().all(|c| !c.is_empty()));
     }
 }

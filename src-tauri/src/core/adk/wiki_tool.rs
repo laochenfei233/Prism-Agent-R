@@ -53,7 +53,10 @@ impl ToolExecutor for WikiWriteTool {
         let svc = crate::data::services::wiki_service::WikiService::new(self.db.clone());
         match svc.write_ai(wiki_id, info, false).await {
             Ok(result) => {
-                let summary = result.get("result").and_then(|s| s.as_str()).unwrap_or("applied");
+                let summary = result
+                    .get("result")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("applied");
                 Ok(ToolOutput::text(format!("Wiki 更新完成：{summary}")))
             }
             Err(e) => Ok(ToolOutput::text(format!("Wiki 写入失败：{e}"))),

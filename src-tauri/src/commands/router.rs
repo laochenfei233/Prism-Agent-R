@@ -16,8 +16,9 @@ async fn build_index(state: &State<'_, crate::AppState>) -> Vec<RouteItem> {
     .unwrap_or_default();
 
     for s in skills {
-        let keywords: Vec<String> = s.tags
-            .split(|c: char| c == ',' || c == ' ')
+        let keywords: Vec<String> = s
+            .tags
+            .split([',', ' '])
             .filter(|t| !t.is_empty())
             .map(String::from)
             .collect();
@@ -68,7 +69,10 @@ pub async fn router_index_status(
 ) -> Result<serde_json::Value, AppError> {
     let items = build_index(&state).await;
     let skills = items.iter().filter(|i| i.kind == RouteKind::Skill).count();
-    let mcp_tools = items.iter().filter(|i| i.kind == RouteKind::McpTool).count();
+    let mcp_tools = items
+        .iter()
+        .filter(|i| i.kind == RouteKind::McpTool)
+        .count();
     Ok(serde_json::json!({
         "skills": skills,
         "mcp_tools": mcp_tools,

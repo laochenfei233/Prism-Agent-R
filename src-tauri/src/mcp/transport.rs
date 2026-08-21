@@ -1,8 +1,8 @@
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot, Mutex};
@@ -99,17 +99,24 @@ pub enum McpContent {
 pub trait McpTransport: Send + Sync {
     async fn initialize(&mut self, client_info: &ClientInfo) -> Result<(), McpError>;
     async fn list_tools(&self) -> Result<Vec<McpTool>, McpError>;
-    async fn call_tool(&self, name: &str, args: serde_json::Value) -> Result<McpCallResult, McpError>;
+    async fn call_tool(
+        &self,
+        name: &str,
+        args: serde_json::Value,
+    ) -> Result<McpCallResult, McpError>;
     async fn close(&mut self) -> Result<(), McpError>;
     fn is_connected(&self) -> bool;
 }
 
 // ── Stdio Transport ───────────────────────────────────────
 
+type PendingRequests =
+    Arc<Mutex<HashMap<u64, oneshot::Sender<Result<serde_json::Value, McpError>>>>>;
+
 pub struct StdioTransport {
     child: Option<Child>,
     stdin_tx: Option<mpsc::Sender<String>>,
-    pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Result<serde_json::Value, McpError>>>>>,
+    pending: PendingRequests,
     next_id: Arc<Mutex<u64>>,
     connected: bool,
     command: String,
@@ -131,7 +138,11 @@ impl StdioTransport {
         }
     }
 
-    async fn send_request(&self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, McpError> {
+    async fn send_request(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, McpError> {
         let id = {
             let mut next = self.next_id.lock().await;
             let id = *next;
@@ -150,11 +161,13 @@ impl StdioTransport {
         let (resp_tx, resp_rx) = oneshot::channel();
 
         // 类型明确化
-        let pending: &Arc<Mutex<HashMap<u64, oneshot::Sender<Result<serde_json::Value, McpError>>>>> = &self.pending;
+        let pending: &PendingRequests = &self.pending;
         pending.lock().await.insert(id, resp_tx);
 
         let msg = serde_json::to_string(&request).map_err(|e| McpError::Protocol(e.to_string()))?;
-        tx.send(format!("{msg}\n")).await.map_err(|e| McpError::Io(e.to_string()))?;
+        tx.send(format!("{msg}\n"))
+            .await
+            .map_err(|e| McpError::Io(e.to_string()))?;
 
         tokio::time::timeout(std::time::Duration::from_secs(30), resp_rx)
             .await
@@ -176,10 +189,18 @@ impl McpTransport for StdioTransport {
             cmd.env(k, v);
         }
 
-        let mut child = cmd.spawn().map_err(|e| McpError::Connection(format!("Failed to spawn {}: {e}", self.command)))?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| McpError::Connection(format!("Failed to spawn {}: {e}", self.command)))?;
 
-        let stdin = child.stdin.take().ok_or(McpError::Connection("No stdin".into()))?;
-        let stdout = child.stdout.take().ok_or(McpError::Connection("No stdout".into()))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or(McpError::Connection("No stdin".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or(McpError::Connection("No stdout".into()))?;
 
         let (stdin_tx, mut stdin_rx) = mpsc::channel::<String>(32);
         tokio::spawn(async move {
@@ -193,7 +214,9 @@ impl McpTransport for StdioTransport {
         });
 
         // Read stdout in background
-        let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Result<serde_json::Value, McpError>>>>> = self.pending.clone();
+        let pending: Arc<
+            Mutex<HashMap<u64, oneshot::Sender<Result<serde_json::Value, McpError>>>>,
+        > = self.pending.clone();
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
@@ -218,14 +241,19 @@ impl McpTransport for StdioTransport {
         self.connected = true;
 
         // Send initialize
-        let _init_result = self.send_request("initialize", Some(serde_json::json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {
-                "name": client_info.name,
-                "version": client_info.version,
-            }
-        }))).await?;
+        let _init_result = self
+            .send_request(
+                "initialize",
+                Some(serde_json::json!({
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": client_info.name,
+                        "version": client_info.version,
+                    }
+                })),
+            )
+            .await?;
 
         // Send initialized notification
         if let Some(tx) = &self.stdin_tx {
@@ -243,18 +271,31 @@ impl McpTransport for StdioTransport {
     async fn list_tools(&self) -> Result<Vec<McpTool>, McpError> {
         let result = self.send_request("tools/list", None).await?;
         let tools: Vec<McpTool> = serde_json::from_value(
-            result.get("tools").cloned().unwrap_or(serde_json::json!([]))
-        ).map_err(|e| McpError::Protocol(e.to_string()))?;
+            result
+                .get("tools")
+                .cloned()
+                .unwrap_or(serde_json::json!([])),
+        )
+        .map_err(|e| McpError::Protocol(e.to_string()))?;
         Ok(tools)
     }
 
-    async fn call_tool(&self, name: &str, args: serde_json::Value) -> Result<McpCallResult, McpError> {
-        let result = self.send_request("tools/call", Some(serde_json::json!({
-            "name": name,
-            "arguments": args,
-        }))).await?;
-        let call_result: McpCallResult = serde_json::from_value(result)
-            .map_err(|e| McpError::Protocol(e.to_string()))?;
+    async fn call_tool(
+        &self,
+        name: &str,
+        args: serde_json::Value,
+    ) -> Result<McpCallResult, McpError> {
+        let result = self
+            .send_request(
+                "tools/call",
+                Some(serde_json::json!({
+                    "name": name,
+                    "arguments": args,
+                })),
+            )
+            .await?;
+        let call_result: McpCallResult =
+            serde_json::from_value(result).map_err(|e| McpError::Protocol(e.to_string()))?;
         Ok(call_result)
     }
 
@@ -298,7 +339,11 @@ impl HttpTransport {
         }
     }
 
-    async fn send_request(&self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, McpError> {
+    async fn send_request(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, McpError> {
         let id = {
             let mut next = self.next_id.lock().await;
             let id = *next;
@@ -313,7 +358,9 @@ impl HttpTransport {
             params,
         };
 
-        let mut req = self.client.post(&self.base_url)
+        let mut req = self
+            .client
+            .post(&self.base_url)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json, text/event-stream");
 
@@ -321,10 +368,16 @@ impl HttpTransport {
             req = req.header(k, v);
         }
 
-        let resp = req.json(&request).send().await
+        let resp = req
+            .json(&request)
+            .send()
+            .await
             .map_err(|e| McpError::Connection(e.to_string()))?;
 
-        let body = resp.text().await.map_err(|e| McpError::Connection(e.to_string()))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| McpError::Connection(e.to_string()))?;
 
         // Try parsing as JSON-RPC response
         if let Ok(json_resp) = serde_json::from_str::<JsonRpcResponse>(&body) {
@@ -342,8 +395,8 @@ impl HttpTransport {
                     if let Some(err) = json_resp.error {
                         return Err(McpError::Protocol(format!("{}: {}", err.code, err.message)));
                     }
-                    if json_resp.result.is_some() {
-                        result = json_resp.result.unwrap();
+                    if let Some(res) = json_resp.result {
+                        result = res;
                     }
                 }
             }
@@ -355,21 +408,28 @@ impl HttpTransport {
 #[async_trait]
 impl McpTransport for HttpTransport {
     async fn initialize(&mut self, client_info: &ClientInfo) -> Result<(), McpError> {
-        let _ = self.send_request("initialize", Some(serde_json::json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {
-                "name": client_info.name,
-                "version": client_info.version,
-            }
-        }))).await?;
+        let _ = self
+            .send_request(
+                "initialize",
+                Some(serde_json::json!({
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": client_info.name,
+                        "version": client_info.version,
+                    }
+                })),
+            )
+            .await?;
 
         // Send initialized notification
         let notification = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "notifications/initialized",
         });
-        let mut req = self.client.post(&self.base_url)
+        let mut req = self
+            .client
+            .post(&self.base_url)
             .header("Content-Type", "application/json");
         for (k, v) in &self.headers {
             req = req.header(k, v);
@@ -383,18 +443,31 @@ impl McpTransport for HttpTransport {
     async fn list_tools(&self) -> Result<Vec<McpTool>, McpError> {
         let result = self.send_request("tools/list", None).await?;
         let tools: Vec<McpTool> = serde_json::from_value(
-            result.get("tools").cloned().unwrap_or(serde_json::json!([]))
-        ).map_err(|e| McpError::Protocol(e.to_string()))?;
+            result
+                .get("tools")
+                .cloned()
+                .unwrap_or(serde_json::json!([])),
+        )
+        .map_err(|e| McpError::Protocol(e.to_string()))?;
         Ok(tools)
     }
 
-    async fn call_tool(&self, name: &str, args: serde_json::Value) -> Result<McpCallResult, McpError> {
-        let result = self.send_request("tools/call", Some(serde_json::json!({
-            "name": name,
-            "arguments": args,
-        }))).await?;
-        let call_result: McpCallResult = serde_json::from_value(result)
-            .map_err(|e| McpError::Protocol(e.to_string()))?;
+    async fn call_tool(
+        &self,
+        name: &str,
+        args: serde_json::Value,
+    ) -> Result<McpCallResult, McpError> {
+        let result = self
+            .send_request(
+                "tools/call",
+                Some(serde_json::json!({
+                    "name": name,
+                    "arguments": args,
+                })),
+            )
+            .await?;
+        let call_result: McpCallResult =
+            serde_json::from_value(result).map_err(|e| McpError::Protocol(e.to_string()))?;
         Ok(call_result)
     }
 

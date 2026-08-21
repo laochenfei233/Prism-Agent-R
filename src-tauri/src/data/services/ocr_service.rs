@@ -9,6 +9,7 @@ use crate::utils::error::AppError;
 /// OCR 服务（§10.5.3）：
 /// - 多模态 LLM（OpenAI 兼容 /chat/completions 传 base64 图片）——默认在线
 /// - tesseract 本地检测（离线降级）
+///
 /// provider 优先级：显式指定 > 在线（默认模型）> 本地 tesseract
 pub struct OcrService {
     pool: SqlitePool,
@@ -59,12 +60,17 @@ impl OcrService {
         // LLM 走 data URL；tesseract 走临时文件
         if matches!(provider, Some("tesseract") | Some("local")) {
             let tmp = write_temp_image(&bytes, &mime)?;
-            let r = self.recognize(tmp.to_string_lossy().as_ref(), lang, provider).await;
+            let r = self
+                .recognize(tmp.to_string_lossy().as_ref(), lang, provider)
+                .await;
             let _ = std::fs::remove_file(&tmp);
             r
         } else {
             let lang = lang.unwrap_or("auto").to_string();
-            let data_url = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+            let data_url = format!(
+                "data:{mime};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(&bytes)
+            );
             // 降级链：llm → tesseract（临时文件）
             match self.recognize_llm_from_data_url(&data_url, &lang).await {
                 Ok(r) => Ok(r),
@@ -74,7 +80,9 @@ impl OcrService {
                     let r = self.recognize_tesseract(tmp.to_string_lossy().as_ref(), &lang);
                     let _ = std::fs::remove_file(&tmp);
                     r.map_err(|t_err| {
-                        AppError::Internal(format!("LLM OCR 失败: {e}；tesseract 也不可用: {t_err}"))
+                        AppError::Internal(format!(
+                            "LLM OCR 失败: {e}；tesseract 也不可用: {t_err}"
+                        ))
                     })
                 }
             }
@@ -84,12 +92,21 @@ impl OcrService {
     /// 多模态 LLM OCR：base64 图片 → /chat/completions
     async fn recognize_llm(&self, image_path: &str, lang: &str) -> Result<OcrResult, AppError> {
         let bytes = tokio::fs::read(image_path).await?;
-        let mime = mime_guess::from_path(image_path).first_or_octet_stream().to_string();
-        let data_url = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+        let mime = mime_guess::from_path(image_path)
+            .first_or_octet_stream()
+            .to_string();
+        let data_url = format!(
+            "data:{mime};base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&bytes)
+        );
         self.recognize_llm_from_data_url(&data_url, lang).await
     }
 
-    async fn recognize_llm_from_data_url(&self, data_url: &str, lang: &str) -> Result<OcrResult, AppError> {
+    async fn recognize_llm_from_data_url(
+        &self,
+        data_url: &str,
+        lang: &str,
+    ) -> Result<OcrResult, AppError> {
         use crate::data::models::{ModelRow, ProviderRow};
 
         let model_row = sqlx::query_as::<_, ModelRow>(
@@ -107,12 +124,12 @@ impl OcrService {
         .await?
         .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-        let base_url = provider_row.base_url.unwrap_or_else(|| {
-            match provider_row.kind.as_str() {
+        let base_url = provider_row
+            .base_url
+            .unwrap_or_else(|| match provider_row.kind.as_str() {
                 "ollama" => "http://localhost:11434/v1".to_string(),
                 _ => "https://api.openai.com/v1".to_string(),
-            }
-        });
+            });
         let api_key = provider_row
             .api_key_enc
             .as_deref()
@@ -133,7 +150,9 @@ impl OcrService {
         });
 
         let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
-        let mut req = reqwest::Client::new().post(&url).header("Content-Type", "application/json");
+        let mut req = reqwest::Client::new()
+            .post(&url)
+            .header("Content-Type", "application/json");
         if !api_key.is_empty() {
             req = req.header("Authorization", format!("Bearer {api_key}"));
         }
@@ -205,15 +224,24 @@ impl OcrService {
 
     pub async fn providers(&self) -> Vec<OcrProviderInfo> {
         let llm_ok = {
-            let has_model: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM models WHERE is_default = 1")
-                .fetch_one(&self.pool)
-                .await
-                .unwrap_or(Some(0));
+            let has_model: Option<i64> =
+                sqlx::query_scalar("SELECT COUNT(*) FROM models WHERE is_default = 1")
+                    .fetch_one(&self.pool)
+                    .await
+                    .unwrap_or(Some(0));
             has_model.unwrap_or(0) > 0
         };
         vec![
-            OcrProviderInfo { name: "llm".into(), kind: "api".into(), available: llm_ok },
-            OcrProviderInfo { name: "tesseract".into(), kind: "local".into(), available: find_executable("tesseract").is_some() },
+            OcrProviderInfo {
+                name: "llm".into(),
+                kind: "api".into(),
+                available: llm_ok,
+            },
+            OcrProviderInfo {
+                name: "tesseract".into(),
+                kind: "local".into(),
+                available: find_executable("tesseract").is_some(),
+            },
         ]
     }
 }
@@ -225,16 +253,50 @@ fn decode_image_input(input: &str) -> Result<(Vec<u8>, String), AppError> {
         let (mime, b64) = rest
             .split_once(';')
             .ok_or_else(|| AppError::Validation("data URL 缺少 mime 分隔".into()))?;
-        let b64 = b64.strip_prefix("base64,").ok_or_else(|| AppError::Validation("data URL 非 base64".into()))?;
+        let b64 = b64
+            .strip_prefix("base64,")
+            .ok_or_else(|| AppError::Validation("data URL 非 base64".into()))?;
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(b64)
             .map_err(|e| AppError::Validation(format!("data URL base64 解码失败: {e}")))?;
         Ok((bytes, mime.to_string()))
     } else {
-        let bytes = std::fs::read(input).map_err(|e| AppError::Internal(format!("图片路径不可读: {input}: {e}")))?;
-        let mime = mime_guess::from_path(input).first_or_octet_stream().to_string();
+        let bytes = std::fs::read(input)
+            .map_err(|e| AppError::Internal(format!("图片路径不可读: {input}: {e}")))?;
+        let mime = mime_guess::from_path(input)
+            .first_or_octet_stream()
+            .to_string();
         Ok((bytes, mime))
     }
+}
+
+/// 在 PATH 中查找可执行文件
+fn find_executable(name: &str) -> Option<std::path::PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(if cfg!(windows) {
+            format!("{name}.exe")
+        } else {
+            name.into()
+        });
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// 将图片字节写为临时文件（tesseract 需要磁盘路径），返回路径
+fn write_temp_image(bytes: &[u8], mime: &str) -> Result<std::path::PathBuf, AppError> {
+    let ext = match mime {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpg",
+        _ => "png",
+    };
+    let path = std::env::temp_dir().join(format!("prism_ocr_{}.{ext}", uuid::Uuid::new_v4()));
+    std::fs::write(&path, bytes)
+        .map_err(|e| AppError::Internal(format!("临时图片写入失败: {e}")))?;
+    Ok(path)
 }
 
 #[cfg(test)]
@@ -245,7 +307,7 @@ mod tests {
     fn decode_data_url_png() {
         // 1x1 透明 PNG
         let png = [0x89u8, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+        let b64 = base64::engine::general_purpose::STANDARD.encode(png);
         let url = format!("data:image/png;base64,{b64}");
         let (bytes, mime) = decode_image_input(&url).unwrap();
         assert_eq!(bytes, png);
@@ -268,31 +330,4 @@ mod tests {
     fn decode_invalid_path_errors() {
         assert!(decode_image_input("C:\\nonexistent\\x.png").is_err());
     }
-}
-
-/// 在 PATH 中查找可执行文件
-fn find_executable(name: &str) -> Option<std::path::PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path_var) {
-        let candidate = dir.join(if cfg!(windows) { format!("{name}.exe") } else { name.into() });
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    None
-}
-
-/// 将图片字节写为临时文件（tesseract 需要磁盘路径），返回路径
-fn write_temp_image(bytes: &[u8], mime: &str) -> Result<std::path::PathBuf, AppError> {
-    let ext = match mime {
-        "image/png" => "png",
-        "image/jpeg" | "image/jpg" => "jpg",
-        _ => "png",
-    };
-    let path = std::env::temp_dir().join(format!(
-        "prism_ocr_{}.{ext}",
-        uuid::Uuid::new_v4()
-    ));
-    std::fs::write(&path, bytes).map_err(|e| AppError::Internal(format!("临时图片写入失败: {e}")))?;
-    Ok(path)
 }

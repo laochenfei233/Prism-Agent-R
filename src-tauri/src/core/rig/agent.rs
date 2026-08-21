@@ -12,7 +12,7 @@ use crate::core::adk::model::{
     ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider, StreamEvent, ToolCall,
     ToolOutput, Usage,
 };
-use crate::core::adk::router::{RouteKind, RouteResult, RouteItem, ToolRouter};
+use crate::core::adk::router::{RouteItem, RouteKind, RouteResult, ToolRouter};
 use crate::core::adk::tool::{
     assess_risk, RiskLevel, ToolApprovalRequest, ToolApprovalResponse, ToolApprovalStore,
     ToolExecutor, ToolRegistry,
@@ -24,6 +24,11 @@ use crate::data::services::trace_service::{AgentTrace, TraceStep};
 use crate::mcp::McpRuntime;
 
 // ── Rig Agent ─────────────────────────────────────────────
+
+/// Streamed-delta callback shared by text/reasoning streams.
+pub type DeltaCallback = Arc<dyn Fn(&str) + Send + Sync>;
+/// Streamed tool-call callback.
+pub type ToolCallCallback = Arc<dyn Fn(&ToolCall) + Send + Sync>;
 
 pub struct RigAgent {
     pub model_provider: Arc<dyn ModelProvider>,
@@ -41,11 +46,11 @@ pub struct RigAgent {
     /// When cancelled, the agent loop aborts promptly.
     pub cancel_token: Option<CancellationToken>,
     /// Invoked for every streamed text delta.
-    pub on_delta: Option<Arc<dyn Fn(&str) + Send + Sync>>,
+    pub on_delta: Option<DeltaCallback>,
     /// Invoked for every streamed reasoning/thinking delta.
-    pub on_reasoning: Option<Arc<dyn Fn(&str) + Send + Sync>>,
+    pub on_reasoning: Option<DeltaCallback>,
     /// Invoked for every streamed tool call.
-    pub on_tool_call: Option<Arc<dyn Fn(&ToolCall) + Send + Sync>>,
+    pub on_tool_call: Option<ToolCallCallback>,
     /// Optional MCP runtime; enables MCP tool fallback when a tool is not in the registry.
     pub mcp_runtime: Option<Arc<McpRuntime>>,
     /// L1 input guardrails (prompt injection / length limits).
@@ -409,7 +414,10 @@ impl RigAgent {
 
     /// Router-filtered tool specs: top-N by BM25 over the latest user message.
     /// Falls back to all specs when no router is configured or nothing matched.
-    fn routed_tool_specs(&self, request: &GenerationRequest) -> Vec<crate::core::adk::model::ToolSpec> {
+    fn routed_tool_specs(
+        &self,
+        request: &GenerationRequest,
+    ) -> Vec<crate::core::adk::model::ToolSpec> {
         let Some(router) = &self.router else {
             return self.tools.specs();
         };
@@ -456,7 +464,10 @@ impl RigAgent {
     }
 
     fn is_cancelled(&self) -> bool {
-        self.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false)
+        self.cancel_token
+            .as_ref()
+            .map(|t| t.is_cancelled())
+            .unwrap_or(false)
     }
 
     /// Run one tool call, gated by HITL approval for High/Critical risk.
@@ -503,14 +514,12 @@ impl RigAgent {
                     }
                     self.run_tool(call).await
                 }
-                ToolApprovalResponse::Rejected(reason) => ToolOutput::error(format!(
-                    "工具「{}」被用户拒绝: {}",
-                    call.name, reason
-                )),
-                ToolApprovalResponse::Defer => ToolOutput::error(format!(
-                    "工具「{}」审批超时或已搁置，未执行",
-                    call.name
-                )),
+                ToolApprovalResponse::Rejected(reason) => {
+                    ToolOutput::error(format!("工具「{}」被用户拒绝: {}", call.name, reason))
+                }
+                ToolApprovalResponse::Defer => {
+                    ToolOutput::error(format!("工具「{}」审批超时或已搁置，未执行", call.name))
+                }
             }
         } else {
             self.run_tool(call).await
@@ -525,8 +534,13 @@ impl RigAgent {
             },
             None => match &self.mcp_runtime {
                 Some(rt) => match rt.find_tool_server(&call.name).await {
-                    Some(server_id) => match rt.call_tool(&server_id, &call.name, call.arguments.clone()).await {
-                        Ok(result) => ToolOutput::text(serde_json::to_string(&result).unwrap_or_default()),
+                    Some(server_id) => match rt
+                        .call_tool(&server_id, &call.name, call.arguments.clone())
+                        .await
+                    {
+                        Ok(result) => {
+                            ToolOutput::text(serde_json::to_string(&result).unwrap_or_default())
+                        }
                         Err(e) => ToolOutput::error(format!("MCP tool error: {e}")),
                     },
                     None => ToolOutput::error(format!("Unknown tool: {}", call.name)),
@@ -554,7 +568,13 @@ impl McpToolExecutor {
         input_schema: serde_json::Value,
         runtime: Arc<McpRuntime>,
     ) -> Self {
-        Self { server_id, tool_name, description, input_schema, runtime }
+        Self {
+            server_id,
+            tool_name,
+            description,
+            input_schema,
+            runtime,
+        }
     }
 }
 
@@ -578,7 +598,9 @@ impl ToolExecutor for McpToolExecutor {
             .call_tool(&self.server_id, &self.tool_name, args)
             .await
             .map_err(|e| AgentError::Tool(format!("MCP tool error: {e}")))?;
-        Ok(ToolOutput::text(serde_json::to_string(&result).unwrap_or_default()))
+        Ok(ToolOutput::text(
+            serde_json::to_string(&result).unwrap_or_default(),
+        ))
     }
 }
 
@@ -650,7 +672,9 @@ fn merge_usage(acc: Option<Usage>, add: Option<Usage>) -> Option<Usage> {
 }
 
 fn estimate_prompt_len(request: &GenerationRequest) -> usize {
-    let messages_len = serde_json::to_string(&request.messages).unwrap_or_default().len();
+    let messages_len = serde_json::to_string(&request.messages)
+        .unwrap_or_default()
+        .len();
     let system_len = request.system.as_ref().map(|s| s.len()).unwrap_or(0);
     messages_len + system_len
 }
@@ -658,8 +682,8 @@ fn estimate_prompt_len(request: &GenerationRequest) -> usize {
 /// Rough char-based token estimate (~4 chars/token) when the provider
 /// reports no usage in the stream.
 fn estimate_usage(prompt_chars: usize, completion_chars: usize) -> Usage {
-    let prompt_tokens = (prompt_chars as u64 + 3) / 4;
-    let completion_tokens = (completion_chars as u64 + 3) / 4;
+    let prompt_tokens = (prompt_chars as u64).div_ceil(4);
+    let completion_tokens = (completion_chars as u64).div_ceil(4);
     Usage {
         prompt_tokens,
         completion_tokens,

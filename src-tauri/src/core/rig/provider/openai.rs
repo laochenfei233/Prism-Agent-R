@@ -58,10 +58,7 @@ impl ModelProvider for OpenAiProvider {
         }
     }
 
-    async fn generate(
-        &self,
-        request: GenerationRequest,
-    ) -> Result<GenerationResponse, AgentError> {
+    async fn generate(&self, request: GenerationRequest) -> Result<GenerationResponse, AgentError> {
         let body = build_request_body(&self.model, &request, false);
         let url = format!("{}/chat/completions", self.base_url);
 
@@ -86,9 +83,10 @@ impl ModelProvider for OpenAiProvider {
             .await
             .map_err(|e| AgentError::Provider(e.to_string()))?;
 
-        let choice = data.choices.first().ok_or_else(|| {
-            AgentError::Provider("No choices in response".to_string())
-        })?;
+        let choice = data
+            .choices
+            .first()
+            .ok_or_else(|| AgentError::Provider("No choices in response".to_string()))?;
 
         let mut tool_calls = Vec::new();
         let mut text = choice.message.content.clone().unwrap_or_default();
@@ -255,11 +253,7 @@ struct OpenAiUsage {
     total_tokens: u64,
 }
 
-fn build_request_body(
-    model: &str,
-    request: &GenerationRequest,
-    stream: bool,
-) -> OpenAiRequest {
+fn build_request_body(model: &str, request: &GenerationRequest, stream: bool) -> OpenAiRequest {
     let mut messages = Vec::new();
 
     if let Some(sys) = &request.system {

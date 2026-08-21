@@ -30,7 +30,12 @@ pub struct EmbeddingConfig {
 
 impl Default for EmbeddingConfig {
     fn default() -> Self {
-        Self { mode: "local".into(), provider_id: None, model: None, dim: None }
+        Self {
+            mode: "local".into(),
+            provider_id: None,
+            model: None,
+            dim: None,
+        }
     }
 }
 
@@ -38,7 +43,11 @@ impl RagService {
     pub fn new(db: Database) -> Self {
         let embedder: Arc<dyn Embedder> = Arc::new(LocalEmbedder::default());
         let searcher = RagSearcher::new(db.clone(), embedder.clone());
-        Self { db, embedder, searcher }
+        Self {
+            db,
+            embedder,
+            searcher,
+        }
     }
 
     /// 从 preferences 表读取嵌入器配置并构建对应嵌入器。
@@ -59,11 +68,7 @@ impl RagService {
     }
 
     /// Ingest a file: read → chunk → insert document → insert chunks → mark ready.
-    pub async fn ingest(
-        &self,
-        wiki_id: &str,
-        file_path: &str,
-    ) -> Result<IngestResult, AppError> {
+    pub async fn ingest(&self, wiki_id: &str, file_path: &str) -> Result<IngestResult, AppError> {
         self.ingest_impl(wiki_id, file_path, None).await
     }
 
@@ -75,7 +80,8 @@ impl RagService {
         rel_path: &str,
         fingerprint: &str,
     ) -> Result<IngestResult, AppError> {
-        self.ingest_impl(wiki_id, file_path, Some((rel_path, fingerprint))).await
+        self.ingest_impl(wiki_id, file_path, Some((rel_path, fingerprint)))
+            .await
     }
 
     async fn ingest_impl(
@@ -88,7 +94,12 @@ impl RagService {
         let path = std::path::Path::new(file_path);
         let parser = crate::data::rag::parser::parser_for(path);
         let parsed = parser.parse(path).await?;
-        let content: String = parsed.pages.iter().map(|p| p.text.as_str()).collect::<Vec<_>>().join("\n\n");
+        let content: String = parsed
+            .pages
+            .iter()
+            .map(|p| p.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
 
         let file_name = path
             .file_name()
@@ -101,8 +112,19 @@ impl RagService {
         let size = content.len() as i64;
 
         // Insert document record
-        let (rel, fingerprint) = meta.map(|(r, f)| (Some(r), Some(f))).unwrap_or((None, None));
-        let doc_id = store::insert_document_with_meta(&self.db, wiki_id, &file_name, &mime, size, rel, fingerprint).await?;
+        let (rel, fingerprint) = meta
+            .map(|(r, f)| (Some(r), Some(f)))
+            .unwrap_or((None, None));
+        let doc_id = store::insert_document_with_meta(
+            &self.db,
+            wiki_id,
+            &file_name,
+            &mime,
+            size,
+            rel,
+            fingerprint,
+        )
+        .await?;
 
         // Update status to chunking
         store::update_document_status(&self.db, &doc_id, "chunking", None).await?;
@@ -111,8 +133,12 @@ impl RagService {
         let (chunk_size, overlap) = {
             use crate::data::settings::prefs;
             (
-                prefs::get_i64(&self.db.pool, "rag.chunk_size", 1000).await.clamp(200, 2000) as usize,
-                prefs::get_i64(&self.db.pool, "rag.chunk_overlap", 200).await.clamp(0, 500) as usize,
+                prefs::get_i64(&self.db.pool, "rag.chunk_size", 1000)
+                    .await
+                    .clamp(200, 2000) as usize,
+                prefs::get_i64(&self.db.pool, "rag.chunk_overlap", 200)
+                    .await
+                    .clamp(0, 500) as usize,
             )
         };
         let chunks = chunk_text(&content, chunk_size, overlap);
@@ -160,7 +186,11 @@ impl RagService {
             .collect();
 
         // Insert chunks（携带 context 列 + 页码 meta）
-        let contexts_ref = if contextual { Some(&contexts[..]) } else { None };
+        let contexts_ref = if contextual {
+            Some(&contexts[..])
+        } else {
+            None
+        };
 
         let chunk_count = store::insert_chunks(
             &self.db,
@@ -191,7 +221,10 @@ impl RagService {
     ) -> Result<Vec<RagHit>, AppError> {
         // 初检取更大池（rerank 上游）
         const CANDIDATE_POOL: usize = 150;
-        let mut hits = self.searcher.hybrid_search(wiki_id, query, CANDIDATE_POOL).await?;
+        let mut hits = self
+            .searcher
+            .hybrid_search(wiki_id, query, CANDIDATE_POOL)
+            .await?;
 
         // reranker 开关（rag.rerank 默认关——LLM 打分有成本）
         let rerank_enabled = match get_pref(&self.db, KEY_RERANK).await {
@@ -205,9 +238,15 @@ impl RagService {
             match resolve_rerank_model(&self.db).await {
                 Ok(model) => {
                     let reranker = crate::data::rag::rerank::LlmReranker::new(model);
-                    let order = reranker.rerank(query, &docs, top_k).await.unwrap_or_default();
+                    let order = reranker
+                        .rerank(query, &docs, top_k)
+                        .await
+                        .unwrap_or_default();
                     if !order.is_empty() {
-                        hits = order.into_iter().filter_map(|i| hits.get(i).cloned()).collect();
+                        hits = order
+                            .into_iter()
+                            .filter_map(|i| hits.get(i).cloned())
+                            .collect();
                     }
                 }
                 Err(_) => { /* 无模型 → 保留初检顺序 */ }
@@ -219,10 +258,7 @@ impl RagService {
     }
 
     /// List all documents in a wiki.
-    pub async fn list_documents(
-        &self,
-        wiki_id: &str,
-    ) -> Result<Vec<RagDocumentDto>, AppError> {
+    pub async fn list_documents(&self, wiki_id: &str) -> Result<Vec<RagDocumentDto>, AppError> {
         let rows = store::list_documents(&self.db, wiki_id).await?;
         Ok(rows
             .into_iter()
@@ -280,7 +316,6 @@ fn build_page_meta(
         .collect()
 }
 
-
 // ── 配置读写 ──────────────────────────────────────────────
 
 const KEY_MODE: &str = "rag.embedding.mode";
@@ -301,7 +336,12 @@ impl RagService {
 
     /// 设置 contextual 开关
     pub async fn set_contextual(&self, enabled: bool) -> Result<(), AppError> {
-        set_pref(&self.db, KEY_CONTEXTUAL, Some(if enabled { "1" } else { "0" })).await
+        set_pref(
+            &self.db,
+            KEY_CONTEXTUAL,
+            Some(if enabled { "1" } else { "0" }),
+        )
+        .await
     }
 
     /// 当前 contextual 配置状态
@@ -340,12 +380,20 @@ async fn set_pref(db: &Database, key: &str, value: Option<&str>) -> Result<(), A
     let now = chrono::Utc::now().timestamp();
     match value {
         Some(v) => {
-            sqlx::query("INSERT OR REPLACE INTO preferences (key, value, updated_at) VALUES (?, ?, ?)")
-                .bind(key).bind(v).bind(now)
-                .execute(&db.pool).await?;
+            sqlx::query(
+                "INSERT OR REPLACE INTO preferences (key, value, updated_at) VALUES (?, ?, ?)",
+            )
+            .bind(key)
+            .bind(v)
+            .bind(now)
+            .execute(&db.pool)
+            .await?;
         }
         None => {
-            sqlx::query("DELETE FROM preferences WHERE key = ?").bind(key).execute(&db.pool).await?;
+            sqlx::query("DELETE FROM preferences WHERE key = ?")
+                .bind(key)
+                .execute(&db.pool)
+                .await?;
         }
     }
     Ok(())
@@ -353,7 +401,9 @@ async fn set_pref(db: &Database, key: &str, value: Option<&str>) -> Result<(), A
 
 async fn read_embedding_config(db: &Database) -> Result<EmbeddingConfig, AppError> {
     Ok(EmbeddingConfig {
-        mode: get_pref(db, KEY_MODE).await.unwrap_or_else(|| "local".into()),
+        mode: get_pref(db, KEY_MODE)
+            .await
+            .unwrap_or_else(|| "local".into()),
         provider_id: get_pref(db, KEY_PROVIDER).await,
         model: get_pref(db, KEY_MODEL).await,
         dim: get_pref(db, KEY_DIM).await.and_then(|d| d.parse().ok()),
@@ -382,18 +432,19 @@ async fn build_embedder(db: &Database, cfg: &EmbeddingConfig) -> Arc<dyn Embedde
             .flatten();
 
             if let Some(p) = row {
-                let base_url = p.base_url.unwrap_or_else(|| {
-                    match p.kind.as_str() {
-                        "ollama" => "http://localhost:11434/v1".to_string(),
-                        _ => "https://api.openai.com/v1".to_string(),
-                    }
+                let base_url = p.base_url.unwrap_or_else(|| match p.kind.as_str() {
+                    "ollama" => "http://localhost:11434/v1".to_string(),
+                    _ => "https://api.openai.com/v1".to_string(),
                 });
                 let api_key = p
                     .api_key_enc
                     .as_deref()
                     .map(crate::commands::settings::decrypt_provider_key)
                     .unwrap_or_default();
-                let model = cfg.model.clone().unwrap_or_else(|| "text-embedding-3-small".to_string());
+                let model = cfg
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| "text-embedding-3-small".to_string());
                 tracing::info!("RAG embedding: API mode ({model} @ {base_url})");
                 return Arc::new(OpenAiEmbedder::new(base_url, api_key, model));
             }
@@ -424,26 +475,28 @@ pub(crate) async fn resolve_rerank_model(
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row.base_url.unwrap_or_else(|| {
-        match provider_row.kind.as_str() {
+    let base_url = provider_row
+        .base_url
+        .unwrap_or_else(|| match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
-        }
-    });
+        });
     let api_key = provider_row
         .api_key_enc
         .as_deref()
         .map(crate::commands::settings::decrypt_provider_key)
         .unwrap_or_default();
-    let provider: Arc<dyn crate::core::adk::model::ModelProvider> = Arc::new(
-        crate::core::rig::provider::OpenAiProvider::new(
+    let provider: Arc<dyn crate::core::adk::model::ModelProvider> =
+        Arc::new(crate::core::rig::provider::OpenAiProvider::new(
             model_row.provider_id.clone(),
-            model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone()),
+            model_row
+                .display_name
+                .clone()
+                .unwrap_or_else(|| model_row.model_id.clone()),
             api_key,
             base_url,
             model_row.model_id.clone(),
-        ),
-    );
+        ));
     Ok(provider)
 }
 

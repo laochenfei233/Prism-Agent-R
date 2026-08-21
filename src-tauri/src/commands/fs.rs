@@ -58,7 +58,10 @@ pub async fn fs_watch(
             let current = snapshot_dir(&root);
             let changed = diff_snapshots(&last, &current);
             if !changed.is_empty() {
-                let _ = app.emit("fs:watcher", serde_json::json!({ "changed_paths": changed }));
+                let _ = app.emit(
+                    "fs:watcher",
+                    serde_json::json!({ "changed_paths": changed }),
+                );
                 last = current;
             }
         }
@@ -72,7 +75,15 @@ pub async fn fs_watch(
 // pub(crate)：§10.2.1 项目级自动索引复用（project_index.rs）
 
 pub(crate) const IGNORED: &[&str] = &[
-    ".git", "node_modules", "target", "dist", "build", "__pycache__", ".venv", "vendor", ".svn",
+    ".git",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    "__pycache__",
+    ".venv",
+    "vendor",
+    ".svn",
 ];
 
 pub(crate) fn snapshot_dir(root: &Path) -> Snapshot {
@@ -94,7 +105,9 @@ fn walk_snapshot(root: &Path, dir: &Path, map: &mut Snapshot) {
             continue;
         }
         // 跳过符号链接（防目录环无限递归；链接指向区外的文件也不纳入快照）
-        let Ok(ftype) = entry.file_type() else { continue };
+        let Ok(ftype) = entry.file_type() else {
+            continue;
+        };
         if ftype.is_symlink() {
             continue;
         }

@@ -146,8 +146,8 @@ pub(crate) async fn read_attachment_text(path: &str) -> String {
 
 fn list_entries(dir: &Path, depth: u8) -> Result<Vec<FileEntry>, AppError> {
     let mut out = Vec::new();
-    let entries = std::fs::read_dir(dir)
-        .map_err(|e| AppError::Internal(format!("读取目录失败: {e}")))?;
+    let entries =
+        std::fs::read_dir(dir).map_err(|e| AppError::Internal(format!("读取目录失败: {e}")))?;
     for entry in entries.flatten() {
         let path = entry.path();
         let meta = entry.metadata().ok();
@@ -168,7 +168,10 @@ fn list_entries(dir: &Path, depth: u8) -> Result<Vec<FileEntry>, AppError> {
 }
 
 fn is_image(ext: &str) -> bool {
-    matches!(ext, "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" | "ico")
+    matches!(
+        ext,
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" | "ico"
+    )
 }
 
 fn mime_for_ext(p: &Path) -> Option<String> {

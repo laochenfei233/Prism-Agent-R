@@ -101,7 +101,13 @@ pub async fn load_cases(db: &Database, suite: Option<&str>) -> Result<Vec<EvalCa
         let expect_json: String = row.try_get("expect")?;
         let suite: String = row.try_get("suite")?;
         let expect: EvalExpect = serde_json::from_str(&expect_json).unwrap_or_default();
-        out.push(EvalCase { id, wiki_id, question, expect, suite });
+        out.push(EvalCase {
+            id,
+            wiki_id,
+            question,
+            expect,
+            suite,
+        });
     }
     Ok(out)
 }
@@ -168,7 +174,10 @@ pub async fn list_reports(db: &Database) -> Result<Vec<EvalReport>, AppError> {
 }
 
 /// 拉取命中 chunk 的元数据（block_type/table_json/caption/content），三维度评测数据源
-pub async fn fetch_chunk_meta(db: &Database, chunk_ids: &[String]) -> Result<Vec<ChunkMeta>, AppError> {
+pub async fn fetch_chunk_meta(
+    db: &Database,
+    chunk_ids: &[String],
+) -> Result<Vec<ChunkMeta>, AppError> {
     if chunk_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -231,7 +240,10 @@ pub async fn run_eval(
     let mut chart_model: Option<std::sync::Arc<dyn crate::core::adk::model::ModelProvider>> = None;
 
     for case in &cases {
-        let hits = svc.search(&case.wiki_id, &case.question, top_k).await.unwrap_or_default();
+        let hits = svc
+            .search(&case.wiki_id, &case.question, top_k)
+            .await
+            .unwrap_or_default();
         let hit_ids: Vec<String> = hits.iter().map(|h| h.chunk_id.clone()).collect();
         let metas = fetch_chunk_meta(db, &hit_ids).await.unwrap_or_default();
 
@@ -244,7 +256,11 @@ pub async fn run_eval(
         // page_acc
         if !case.expect.pages.is_empty() {
             page_denom += 1;
-            if hits.iter().any(|h| h.page_start.map(|p| case.expect.pages.contains(&(p as u32))).unwrap_or(false)) {
+            if hits.iter().any(|h| {
+                h.page_start
+                    .map(|p| case.expect.pages.contains(&(p as u32)))
+                    .unwrap_or(false)
+            }) {
                 page_ok += 1;
             }
         }
@@ -256,7 +272,9 @@ pub async fn run_eval(
                 .iter()
                 .find(|m| m.block_type == "table")
                 .and_then(|m| m.table_json.as_deref());
-            if let Some(rate) = table_cell_match_rate(table_json, case.expect.table_expected.as_deref()) {
+            if let Some(rate) =
+                table_cell_match_rate(table_json, case.expect.table_expected.as_deref())
+            {
                 table_sum += rate;
             }
         }
@@ -280,7 +298,9 @@ pub async fn run_eval(
                 .and_then(|m| m.caption.as_deref());
             if let Some(cap) = caption {
                 if chart_model.is_none() {
-                    chart_model = crate::data::services::rag_service::resolve_rerank_model(db).await.ok();
+                    chart_model = crate::data::services::rag_service::resolve_rerank_model(db)
+                        .await
+                        .ok();
                 }
                 if let Some(model) = &chart_model {
                     let judge = crate::core::rig::judge::AgentJudge::new(model.clone());
@@ -317,17 +337,40 @@ pub async fn run_eval(
         });
     }
 
-    report.metrics.recall_at_k = if hit_denom > 0 { hit_total as f32 / hit_denom as f32 } else { 0.0 };
-    report.metrics.page_acc = if page_denom > 0 { page_ok as f32 / page_denom as f32 } else { 0.0 };
-    report.metrics.table_acc = if table_denom > 0 { table_sum / table_denom as f32 } else { 0.0 };
-    report.metrics.ocr_completeness = if ocr_denom > 0 { ocr_sum / ocr_denom as f32 } else { 0.0 };
-    report.metrics.chart_acc = if chart_denom > 0 { chart_sum / chart_denom as f32 } else { 0.0 };
+    report.metrics.recall_at_k = if hit_denom > 0 {
+        hit_total as f32 / hit_denom as f32
+    } else {
+        0.0
+    };
+    report.metrics.page_acc = if page_denom > 0 {
+        page_ok as f32 / page_denom as f32
+    } else {
+        0.0
+    };
+    report.metrics.table_acc = if table_denom > 0 {
+        table_sum / table_denom as f32
+    } else {
+        0.0
+    };
+    report.metrics.ocr_completeness = if ocr_denom > 0 {
+        ocr_sum / ocr_denom as f32
+    } else {
+        0.0
+    };
+    report.metrics.chart_acc = if chart_denom > 0 {
+        chart_sum / chart_denom as f32
+    } else {
+        0.0
+    };
     Ok(report)
 }
 
 /// 表格解析准确：期望单元格在 table_json 中的逐格匹配率（结构化比对，无 LLM 成本）。
 /// 无期望单元格时退化为「命中 table 块」的布尔得分。
-pub fn table_cell_match_rate(table_json: Option<&str>, expected: Option<&[Vec<String>]>) -> Option<f32> {
+pub fn table_cell_match_rate(
+    table_json: Option<&str>,
+    expected: Option<&[Vec<String>]>,
+) -> Option<f32> {
     let json = table_json?;
     let value: serde_json::Value = serde_json::from_str(json).ok()?;
     let cells: Vec<String> = match &value {
@@ -341,7 +384,10 @@ pub fn table_cell_match_rate(table_json: Option<&str>, expected: Option<&[Vec<St
                 _ => Vec::new(),
             })
             .collect(),
-        serde_json::Value::Object(map) => map.values().filter_map(|v| v.as_str().map(String::from)).collect(),
+        serde_json::Value::Object(map) => map
+            .values()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
         _ => Vec::new(),
     };
 
@@ -352,7 +398,10 @@ pub fn table_cell_match_rate(table_json: Option<&str>, expected: Option<&[Vec<St
             if expected_flat.is_empty() {
                 return Some(if cells.is_empty() { 0.0 } else { 1.0 });
             }
-            let matched = expected_flat.iter().filter(|e| cells.iter().any(|c| c.contains(e.as_str()))).count();
+            let matched = expected_flat
+                .iter()
+                .filter(|e| cells.iter().any(|c| c.contains(e.as_str())))
+                .count();
             Some(matched as f32 / expected_flat.len() as f32)
         }
     }
@@ -388,8 +437,10 @@ pub fn levenshtein_chars(a: &str, b: &str) -> usize {
 
 /// 校验 wiki 存在
 pub async fn ensure_wiki(db: &Database, wiki_id: &str) -> Result<(), AppError> {
-    let exists: Option<i64> =
-        sqlx::query_scalar("SELECT COUNT(*) FROM wikis WHERE id = ?").bind(wiki_id).fetch_one(&db.pool).await?;
+    let exists: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM wikis WHERE id = ?")
+        .bind(wiki_id)
+        .fetch_one(&db.pool)
+        .await?;
     if exists.unwrap_or(0) == 0 {
         return Err(AppError::Validation(format!("知识库不存在: {wiki_id}")));
     }
@@ -397,7 +448,7 @@ pub async fn ensure_wiki(db: &Database, wiki_id: &str) -> Result<(), AppError> {
 }
 
 pub async fn list_docs(db: &Database, wiki_id: &str) -> Result<Vec<RagDocumentRow>, AppError> {
-    Ok(crate::data::rag::store::list_documents(db, wiki_id).await?)
+    crate::data::rag::store::list_documents(db, wiki_id).await
 }
 
 #[cfg(test)]
@@ -461,7 +512,11 @@ mod tests {
         let report = EvalReport {
             suite: "default".into(),
             case_count: 2,
-            metrics: Metrics { recall_at_k: 0.75, page_acc: 0.5, ..Default::default() },
+            metrics: Metrics {
+                recall_at_k: 0.75,
+                page_acc: 0.5,
+                ..Default::default()
+            },
             cases: Vec::new(),
             created_at: 1_720_000_000,
         };
@@ -485,8 +540,12 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
 
         // 满足 rag_chunks 外键（wiki → document → chunk）
-        sqlx::query("INSERT INTO wikis (id, name, created_at, updated_at) VALUES ('wk-1', 't', 0, 0)")
-            .execute(&db.pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO wikis (id, name, created_at, updated_at) VALUES ('wk-1', 't', 0, 0)",
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO rag_documents (id, wiki_id, name, mime_type, size, chunk_count, status, created_at, updated_at) \
              VALUES ('doc-1', 'wk-1', 't.md', 'text/markdown', 10, 1, 'ready', 0, 0)"
@@ -505,10 +564,14 @@ mod tests {
         .await
         .unwrap();
 
-        let metas = fetch_chunk_meta(&db, &[chunk_id.to_string()]).await.unwrap();
+        let metas = fetch_chunk_meta(&db, &[chunk_id.to_string()])
+            .await
+            .unwrap();
         assert_eq!(metas.len(), 1);
         assert_eq!(metas[0].block_type, "table");
-        let rate = table_cell_match_rate(metas[0].table_json.as_deref(), Some(&[vec!["张三".into()]])).unwrap();
+        let rate =
+            table_cell_match_rate(metas[0].table_json.as_deref(), Some(&[vec!["张三".into()]]))
+                .unwrap();
         assert_eq!(rate, 1.0);
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -524,8 +587,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("prism_eval_gate_{}", uuid::Uuid::new_v4()));
         let db = crate::data::db::Database::new(&dir).await.unwrap();
 
-        sqlx::query("INSERT INTO wikis (id, name, created_at, updated_at) VALUES ('wk-eval', 't', 0, 0)")
-            .execute(&db.pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO wikis (id, name, created_at, updated_at) VALUES ('wk-eval', 't', 0, 0)",
+        )
+        .execute(&db.pool)
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO rag_documents (id, wiki_id, name, mime_type, size, chunk_count, status, created_at, updated_at) \
              VALUES ('doc-gate', 'wk-eval', '财务报告.md', 'text/markdown', 100, 2, 'ready', 0, 0)"
@@ -537,7 +604,10 @@ mod tests {
         let table_chunk = "季度营收明细：Q2 2023 营收 1.2 亿，Q1 2023 营收 1.1 亿。";
 
         let embedder = LocalEmbedder::default();
-        let emb = embedder.embed_batch(&[text_chunk.to_string(), table_chunk.to_string()]).await.unwrap();
+        let emb = embedder
+            .embed_batch(&[text_chunk.to_string(), table_chunk.to_string()])
+            .await
+            .unwrap();
 
         store::insert_chunks(
             &db,
@@ -592,9 +662,21 @@ mod tests {
         let report = run_eval(&db, cases, 5, "ci".into()).await.unwrap();
 
         // 基线：检索/页码/表格三维度必须 ≥ 0.8（自包含数据下应稳定命中）
-        assert!(report.metrics.recall_at_k >= 0.8, "recall_at_k={} 低于基线 0.8", report.metrics.recall_at_k);
-        assert!(report.metrics.page_acc >= 0.8, "page_acc={} 低于基线 0.8", report.metrics.page_acc);
-        assert!(report.metrics.table_acc >= 0.8, "table_acc={} 低于基线 0.8", report.metrics.table_acc);
+        assert!(
+            report.metrics.recall_at_k >= 0.8,
+            "recall_at_k={} 低于基线 0.8",
+            report.metrics.recall_at_k
+        );
+        assert!(
+            report.metrics.page_acc >= 0.8,
+            "page_acc={} 低于基线 0.8",
+            report.metrics.page_acc
+        );
+        assert!(
+            report.metrics.table_acc >= 0.8,
+            "table_acc={} 低于基线 0.8",
+            report.metrics.table_acc
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -602,7 +684,7 @@ mod tests {
     /// insert_chunks 返回插入数量而非 id，测试按 index 回查 chunk id
     async fn chunk_ids_first(db: &Database, index: i32) -> String {
         sqlx::query_scalar::<_, String>(
-            "SELECT id FROM rag_chunks WHERE wiki_id = 'wk-eval' AND \"index\" = ? ORDER BY rowid"
+            "SELECT id FROM rag_chunks WHERE wiki_id = 'wk-eval' AND \"index\" = ? ORDER BY rowid",
         )
         .bind(index)
         .fetch_one(&db.pool)

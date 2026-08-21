@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use crate::data::db::Database;
 use crate::utils::error::AppError;
+use serde::{Deserialize, Serialize};
+use sqlx::Row;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentTrace {
@@ -76,10 +76,19 @@ impl TraceService {
         Ok(())
     }
 
-    pub async fn list_traces(&self, session_id: &str, limit: Option<i64>) -> Result<Vec<AgentTrace>, AppError> {
+    pub async fn list_traces(
+        &self,
+        session_id: &str,
+        limit: Option<i64>,
+    ) -> Result<Vec<AgentTrace>, AppError> {
         let limit = limit.unwrap_or(50);
-        let rows = sqlx::query("SELECT * FROM agent_traces WHERE session_id = ?1 ORDER BY started_at DESC LIMIT ?2")
-            .bind(session_id).bind(limit).fetch_all(&self.db.pool).await?;
+        let rows = sqlx::query(
+            "SELECT * FROM agent_traces WHERE session_id = ?1 ORDER BY started_at DESC LIMIT ?2",
+        )
+        .bind(session_id)
+        .bind(limit)
+        .fetch_all(&self.db.pool)
+        .await?;
 
         let mut traces = Vec::new();
         for row in rows {
@@ -94,9 +103,20 @@ impl TraceService {
             let outcome: String = row.try_get("outcome")?;
             let steps: Vec<TraceStep> = serde_json::from_str(&steps_json).unwrap_or_default();
             traces.push(AgentTrace {
-                id, session_id, agent_id, trace_id, started_at, finished_at,
-                steps, total_prompt_tokens: 0, total_completion_tokens: 0,
-                total_cost, outcome, grade_score: None, grade_reason: None, graded_at: None,
+                id,
+                session_id,
+                agent_id,
+                trace_id,
+                started_at,
+                finished_at,
+                steps,
+                total_prompt_tokens: 0,
+                total_completion_tokens: 0,
+                total_cost,
+                outcome,
+                grade_score: None,
+                grade_reason: None,
+                graded_at: None,
             });
         }
         Ok(traces)
@@ -134,9 +154,7 @@ impl TraceService {
     ) -> Result<Vec<AgentTrace>, AppError> {
         let limit = limit.unwrap_or(50);
 
-        let mut query = String::from(
-            "SELECT * FROM agent_traces WHERE session_id = ?1"
-        );
+        let mut query = String::from("SELECT * FROM agent_traces WHERE session_id = ?1");
 
         if let Some(min_g) = min_grade {
             query.push_str(&format!(" AND grade_score >= {min_g}"));
@@ -172,9 +190,20 @@ impl TraceService {
             }
 
             traces.push(AgentTrace {
-                id, session_id, agent_id, trace_id, started_at, finished_at,
-                steps, total_prompt_tokens: 0, total_completion_tokens: 0,
-                total_cost, outcome, grade_score: None, grade_reason: None, graded_at: None,
+                id,
+                session_id,
+                agent_id,
+                trace_id,
+                started_at,
+                finished_at,
+                steps,
+                total_prompt_tokens: 0,
+                total_completion_tokens: 0,
+                total_cost,
+                outcome,
+                grade_score: None,
+                grade_reason: None,
+                graded_at: None,
             });
         }
         Ok(traces)

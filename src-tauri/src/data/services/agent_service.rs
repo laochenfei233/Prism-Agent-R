@@ -69,11 +69,10 @@ impl AgentService {
         Self::ensure_source_column(&self.pool).await?;
 
         // 查询默认模型 ID（is_default = 1）
-        let default_model_id: Option<String> = sqlx::query_scalar(
-            "SELECT id FROM models WHERE is_default = 1 LIMIT 1"
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let default_model_id: Option<String> =
+            sqlx::query_scalar("SELECT id FROM models WHERE is_default = 1 LIMIT 1")
+                .fetch_optional(&self.pool)
+                .await?;
 
         // 给没有 model_id 的 Agent 绑定默认模型（包括已有内置 Agent）
         if let Some(ref mid) = default_model_id {
@@ -86,18 +85,19 @@ impl AgentService {
         let existing: Vec<String> = sqlx::query_scalar("SELECT name FROM agents")
             .fetch_all(&self.pool)
             .await?;
-        let existing_names: std::collections::HashSet<&str> = existing.iter().map(|s| s.as_str()).collect();
+        let existing_names: std::collections::HashSet<&str> =
+            existing.iter().map(|s| s.as_str()).collect();
 
         // 查询默认模型 ID（is_default = 1）
-        let default_model_id: Option<String> = sqlx::query_scalar(
-            "SELECT id FROM models WHERE is_default = 1 LIMIT 1"
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let default_model_id: Option<String> =
+            sqlx::query_scalar("SELECT id FROM models WHERE is_default = 1 LIMIT 1")
+                .fetch_optional(&self.pool)
+                .await?;
 
-        let mut order_key: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(order_key), 0) + 1 FROM agents")
-            .fetch_one(&self.pool)
-            .await?;
+        let mut order_key: i64 =
+            sqlx::query_scalar("SELECT COALESCE(MAX(order_key), 0) + 1 FROM agents")
+                .fetch_one(&self.pool)
+                .await?;
 
         let now = chrono::Utc::now().timestamp_millis();
         for def in BUILTIN_AGENTS {
@@ -124,7 +124,9 @@ impl AgentService {
     }
 
     async fn ensure_source_column(pool: &SqlitePool) -> Result<(), AppError> {
-        let cols = sqlx::query("PRAGMA table_info('agents')").fetch_all(pool).await?;
+        let cols = sqlx::query("PRAGMA table_info('agents')")
+            .fetch_all(pool)
+            .await?;
         let has_source = cols.iter().any(|r| r.get::<String, _>("name") == "source");
         if !has_source {
             sqlx::query("ALTER TABLE agents ADD COLUMN source TEXT NOT NULL DEFAULT 'user'")
@@ -167,19 +169,21 @@ impl AgentService {
         let now = chrono::Utc::now().timestamp_millis();
 
         // 新建 Agent 默认参数（可配置，回退 0.7 / 8192）
-        let temperature = crate::data::settings::prefs::get_f64(&self.pool, "agent.default.temperature", 0.7)
-            .await
-            .clamp(0.0, 2.0);
-        let max_tokens = crate::data::settings::prefs::get_i64(&self.pool, "agent.default.max_tokens", 8192)
-            .await
-            .clamp(256, 128_000);
+        let temperature =
+            crate::data::settings::prefs::get_f64(&self.pool, "agent.default.temperature", 0.7)
+                .await
+                .clamp(0.0, 2.0);
+        let max_tokens =
+            crate::data::settings::prefs::get_i64(&self.pool, "agent.default.max_tokens", 8192)
+                .await
+                .clamp(256, 128_000);
 
         // 如果未指定 model_id，自动绑定默认模型（支持思考的模型）
         let effective_model_id = match model_id {
             Some(m) if !m.is_empty() => Some(m.to_string()),
             _ => {
                 sqlx::query_scalar::<_, String>(
-                    "SELECT id FROM models WHERE is_default = 1 LIMIT 1"
+                    "SELECT id FROM models WHERE is_default = 1 LIMIT 1",
                 )
                 .fetch_optional(&self.pool)
                 .await?
@@ -216,19 +220,35 @@ impl AgentService {
 
         if let Some(n) = name {
             sqlx::query("UPDATE agents SET name = ?, updated_at = ? WHERE id = ?")
-                .bind(n).bind(now).bind(id).execute(&self.pool).await?;
+                .bind(n)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
         }
         if let Some(d) = description {
             sqlx::query("UPDATE agents SET description = ?, updated_at = ? WHERE id = ?")
-                .bind(d).bind(now).bind(id).execute(&self.pool).await?;
+                .bind(d)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
         }
         if let Some(sp) = system_prompt {
             sqlx::query("UPDATE agents SET system_prompt = ?, updated_at = ? WHERE id = ?")
-                .bind(sp).bind(now).bind(id).execute(&self.pool).await?;
+                .bind(sp)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
         }
         if let Some(m) = model_id {
             sqlx::query("UPDATE agents SET model_id = ?, updated_at = ? WHERE id = ?")
-                .bind(m).bind(now).bind(id).execute(&self.pool).await?;
+                .bind(m)
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
         }
 
         self.get(id).await
@@ -236,14 +256,17 @@ impl AgentService {
 
     pub async fn delete(&self, id: &str) -> Result<(), AppError> {
         sqlx::query("DELETE FROM agents WHERE id = ?")
-            .bind(id).execute(&self.pool).await?;
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
 
 impl From<AgentRow> for AgentDto {
     fn from(r: AgentRow) -> Self {
-        let disabled_tools: Vec<String> = serde_json::from_str(&r.disabled_tools).unwrap_or_default();
+        let disabled_tools: Vec<String> =
+            serde_json::from_str(&r.disabled_tools).unwrap_or_default();
         Self {
             id: r.id,
             name: r.name,
@@ -283,7 +306,11 @@ mod tests {
         assert!(names.contains(&"周报月报生成器"));
         // 内置 Agent 应带完整 system_prompt
         let scriptwriter = agents.iter().find(|a| a.name == "短视频脚本师").unwrap();
-        assert!(scriptwriter.system_prompt.as_deref().unwrap_or("").contains("短视频脚本专家"));
+        assert!(scriptwriter
+            .system_prompt
+            .as_deref()
+            .unwrap_or("")
+            .contains("短视频脚本专家"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -302,12 +329,18 @@ mod tests {
         // 用户先创建同名 Agent（如用户自建「文案优化师」），ensure 不应再插入
         let (db2, dir2) = temp_db().await;
         let svc2 = AgentService::new(db2.pool.clone());
-        svc2.create("文案优化师", Some("用户自定义"), Some("自定义提示词"), None).await.unwrap();
+        svc2.create("文案优化师", Some("用户自定义"), Some("自定义提示词"), None)
+            .await
+            .unwrap();
         svc2.ensure_builtin_agents().await.unwrap();
         let agents = svc2.list().await.unwrap();
         assert_eq!(agents.len(), 8, "同名不重复，其余 7 个内置补齐");
         let dup = agents.iter().find(|a| a.name == "文案优化师").unwrap();
-        assert_eq!(dup.system_prompt.as_deref(), Some("自定义提示词"), "不应覆盖用户已有 Agent");
+        assert_eq!(
+            dup.system_prompt.as_deref(),
+            Some("自定义提示词"),
+            "不应覆盖用户已有 Agent"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&dir2);

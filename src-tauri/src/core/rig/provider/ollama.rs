@@ -49,10 +49,7 @@ impl ModelProvider for OllamaProvider {
         }
     }
 
-    async fn generate(
-        &self,
-        request: GenerationRequest,
-    ) -> Result<GenerationResponse, AgentError> {
+    async fn generate(&self, request: GenerationRequest) -> Result<GenerationResponse, AgentError> {
         // Ollama uses OpenAI-compatible API
         let provider = super::openai::OpenAiProvider::new(
             self.id.clone(),

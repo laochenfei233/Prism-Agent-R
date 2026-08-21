@@ -48,7 +48,9 @@ fn parse_score(text: &str) -> f32 {
         let body = &rest[..end];
         if let Some(start) = body.find('{') {
             if let Some(stop) = body[start..].rfind('}') {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body[start..start + stop + 1]) {
+                if let Ok(v) =
+                    serde_json::from_str::<serde_json::Value>(&body[start..start + stop + 1])
+                {
                     if let Some(score) = v.get("score").and_then(|s| s.as_f64()) {
                         return score as f32;
                     }
@@ -59,7 +61,9 @@ fn parse_score(text: &str) -> f32 {
     }
     if let Some(start) = cleaned.find('{') {
         if let Some(stop) = cleaned[start..].rfind('}') {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&cleaned[start..start + stop + 1]) {
+            if let Ok(v) =
+                serde_json::from_str::<serde_json::Value>(&cleaned[start..start + stop + 1])
+            {
                 if let Some(score) = v.get("score").and_then(|s| s.as_f64()) {
                     return score as f32;
                 }

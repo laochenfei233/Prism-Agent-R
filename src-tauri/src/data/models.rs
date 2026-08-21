@@ -697,9 +697,17 @@ pub struct WikiWritePlan {
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum WikiOp {
     /// 新建页面（path 相对 wiki/ 根）
-    CreatePage { path: String, title: String, content: String },
+    CreatePage {
+        path: String,
+        title: String,
+        content: String,
+    },
     /// 更新现有页面（content 为全文替换）
-    UpdatePage { path: String, content: String, summary: String },
+    UpdatePage {
+        path: String,
+        content: String,
+        summary: String,
+    },
     /// 删除页面（软删除到 .trash/）
     DeletePage { path: String, reason: String },
     /// 追加 index.md 条目

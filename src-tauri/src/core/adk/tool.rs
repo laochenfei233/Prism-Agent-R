@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 
 use super::error::AgentError;
 use super::model::ToolOutput;
@@ -48,7 +48,9 @@ pub enum ToolApprovalResponse {
 
 pub fn assess_risk(tool_name: &str, _args: &serde_json::Value) -> RiskLevel {
     match tool_name {
-        "read_file" | "list_dir" | "glob" | "grep" | "lsp:diagnostics" | "web_search" => RiskLevel::Low,
+        "read_file" | "list_dir" | "glob" | "grep" | "lsp:diagnostics" | "web_search" => {
+            RiskLevel::Low
+        }
         "write_file" | "edit_file" => RiskLevel::Medium,
         "delete_file" | "run_command" | "http_request" => RiskLevel::High,
         "rm_rf" | "database_drop" | "send_message" => RiskLevel::Critical,
@@ -100,7 +102,10 @@ impl ToolApprovalStore {
 
     /// Add a tool to the always-approve list.
     pub async fn add_always_approve(&self, tool_name: &str) {
-        self.always_approve.lock().await.insert(tool_name.to_string());
+        self.always_approve
+            .lock()
+            .await
+            .insert(tool_name.to_string());
     }
 }
 
@@ -136,7 +141,10 @@ impl ToolRegistry {
     }
 
     pub fn get(&self, name: &str) -> Option<&dyn ToolExecutor> {
-        self.tools.iter().find(|t| t.name() == name).map(|t| t.as_ref())
+        self.tools
+            .iter()
+            .find(|t| t.name() == name)
+            .map(|t| t.as_ref())
     }
 
     pub fn specs(&self) -> Vec<ToolSpec> {
@@ -155,11 +163,13 @@ impl ToolRegistry {
     pub fn specs_filtered(&self, names: &std::collections::HashSet<String>) -> Vec<ToolSpec> {
         names
             .iter()
-            .filter_map(|name| self.get(name).map(|t| ToolSpec {
-                name: t.name().to_string(),
-                description: t.description().to_string(),
-                parameters: t.schema(),
-            }))
+            .filter_map(|name| {
+                self.get(name).map(|t| ToolSpec {
+                    name: t.name().to_string(),
+                    description: t.description().to_string(),
+                    parameters: t.schema(),
+                })
+            })
             .collect()
     }
 

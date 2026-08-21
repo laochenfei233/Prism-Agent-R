@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use super::{SearchHit, SearchProvider};
+use async_trait::async_trait;
 
 pub struct SearxngProvider {
     base_url: String,

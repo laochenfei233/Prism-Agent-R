@@ -66,18 +66,17 @@ impl SessionStateManager {
         };
 
         // 1. 校验模型 Provider
-        let agent_id: Option<String> = sqlx::query_scalar(
-            "SELECT agent_id FROM sessions WHERE id = ?"
-        )
-        .bind(session_id)
-        .fetch_optional(db)
-        .await
-        .map_err(|e| format!("查询会话失败: {e}"))?
-        .ok_or_else(|| format!("会话不存在: {session_id}"))?;
+        let agent_id: Option<String> =
+            sqlx::query_scalar("SELECT agent_id FROM sessions WHERE id = ?")
+                .bind(session_id)
+                .fetch_optional(db)
+                .await
+                .map_err(|e| format!("查询会话失败: {e}"))?
+                .ok_or_else(|| format!("会话不存在: {session_id}"))?;
 
         if let Some(aid) = &agent_id {
             let model_check = sqlx::query_scalar::<_, String>(
-                "SELECT m.model_id FROM agents a JOIN models m ON a.model_id = m.id WHERE a.id = ?"
+                "SELECT m.model_id FROM agents a JOIN models m ON a.model_id = m.id WHERE a.id = ?",
             )
             .bind(aid)
             .fetch_optional(db)
@@ -97,13 +96,12 @@ impl SessionStateManager {
         }
 
         // 2. 校验 MCP 服务器（尽力而为，失败仅告警）
-        let mcp_links: Vec<(String,)> = sqlx::query_as(
-            "SELECT mcp_server_id FROM agent_mcp_servers WHERE agent_id = ?"
-        )
-        .bind(agent_id.as_deref().unwrap_or(""))
-        .fetch_all(db)
-        .await
-        .unwrap_or_default();
+        let mcp_links: Vec<(String,)> =
+            sqlx::query_as("SELECT mcp_server_id FROM agent_mcp_servers WHERE agent_id = ?")
+                .bind(agent_id.as_deref().unwrap_or(""))
+                .fetch_all(db)
+                .await
+                .unwrap_or_default();
 
         for (server_id,) in &mcp_links {
             if mcp_runtime.get_tools(server_id).await.is_empty() {
@@ -115,7 +113,8 @@ impl SessionStateManager {
         if report.all_ok() {
             self.set_state(session_id, SessionLifecycle::Ready).await;
         } else {
-            self.set_state(session_id, SessionLifecycle::InitFailed).await;
+            self.set_state(session_id, SessionLifecycle::InitFailed)
+                .await;
         }
 
         Ok(report)
@@ -149,7 +148,8 @@ impl SessionStateManager {
     pub async fn start_verify(&self, session_id: &str) {
         let current = self.get_state(session_id).await;
         if current == SessionLifecycle::Running {
-            self.set_state(session_id, SessionLifecycle::Verifying).await;
+            self.set_state(session_id, SessionLifecycle::Verifying)
+                .await;
         }
     }
 

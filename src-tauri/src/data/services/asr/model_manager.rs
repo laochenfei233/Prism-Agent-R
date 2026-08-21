@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::error::AppError;
 
+/// 下载进度回调：上报 0.0~1.0 进度与阶段描述
+pub type DownloadProgressCallback = Box<dyn Fn(f32, &str) + Send + Sync>;
+
 // ── 模型信息 ──────────────────────────────────────────────
 
 /// 模型类别：在线模型（API 链接）vs 本地模型（下载后离线运行）
@@ -388,7 +391,9 @@ impl AsrModelManager {
                     continue;
                 }
                 let id = entry.file_name().to_string_lossy().to_string();
-                let Some(backend) = detect_backend(&path) else { continue };
+                let Some(backend) = detect_backend(&path) else {
+                    continue;
+                };
                 out.push(InstalledAsrModel {
                     id,
                     path: path.to_string_lossy().to_string(),
@@ -411,7 +416,7 @@ impl AsrModelManager {
     pub async fn download(
         &self,
         model_id: &str,
-        progress: Option<Box<dyn Fn(f32, &str) + Send + Sync>>,
+        progress: Option<DownloadProgressCallback>,
     ) -> Result<PathBuf, AppError> {
         let info = builtin_catalog()
             .into_iter()
@@ -443,13 +448,20 @@ impl AsrModelManager {
             .await
             .map_err(|e| AppError::Internal(format!("模型下载失败: {e}")))?;
         if !resp.status().is_success() {
-            return Err(AppError::Internal(format!("模型下载 HTTP {}", resp.status())));
+            return Err(AppError::Internal(format!(
+                "模型下载 HTTP {}",
+                resp.status()
+            )));
         }
         let total = resp.content_length().unwrap_or(0);
         let mut downloaded: u64 = 0;
         let mut file = tokio::fs::File::create(&tmp_path).await?;
         use tokio::io::AsyncWriteExt;
-        while let Some(chunk) = resp.chunk().await.map_err(|e| AppError::Internal(e.to_string()))? {
+        while let Some(chunk) = resp
+            .chunk()
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+        {
             downloaded += chunk.len() as u64;
             file.write_all(&chunk).await?;
             if total > 0 {
@@ -469,7 +481,9 @@ impl AsrModelManager {
             let actual = format!("{:x}", hasher.finalize());
             if actual != info.sha256 {
                 let _ = tokio::fs::remove_file(&tmp_path).await;
-                return Err(AppError::Validation(format!("模型校验和不匹配（下载可能损坏），请重试")));
+                return Err(AppError::Validation(
+                    "模型校验和不匹配（下载可能损坏），请重试".to_string(),
+                ));
             }
         }
 
@@ -488,7 +502,9 @@ impl AsrModelManager {
         let _ = tokio::fs::remove_dir_all(&extract_tmp).await;
 
         if detect_backend(&target).is_none() {
-            return Err(AppError::Validation("解压后未找到模型文件，可能下载了错误包".into()));
+            return Err(AppError::Validation(
+                "解压后未找到模型文件，可能下载了错误包".into(),
+            ));
         }
 
         report(1.0, "完成");
@@ -515,8 +531,15 @@ fn extract_tar_bz2(archive: &Path, dest: &Path) -> Result<(), AppError> {
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?.into_owned();
-        if path.is_absolute() || path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-            return Err(AppError::Validation(format!("压缩包内含不安全路径: {}", path.display())));
+        if path.is_absolute()
+            || path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(AppError::Validation(format!(
+                "压缩包内含不安全路径: {}",
+                path.display()
+            )));
         }
         entry.unpack(dest.join(&path))?;
     }
@@ -547,13 +570,17 @@ async fn move_extracted(src: &Path, dest: &Path) -> Result<(), AppError> {
             v
         };
         for p in inner_entries {
-            let name = p.file_name().ok_or_else(|| AppError::Internal("文件名无效".into()))?;
-            tokio::fs::rename(&p, dest.join(&name)).await?;
+            let name = p
+                .file_name()
+                .ok_or_else(|| AppError::Internal("文件名无效".into()))?;
+            tokio::fs::rename(&p, dest.join(name)).await?;
         }
     } else {
         for p in entries {
-            let name = p.file_name().ok_or_else(|| AppError::Internal("文件名无效".into()))?;
-            tokio::fs::rename(&p, dest.join(&name)).await?;
+            let name = p
+                .file_name()
+                .ok_or_else(|| AppError::Internal("文件名无效".into()))?;
+            tokio::fs::rename(&p, dest.join(name)).await?;
         }
     }
     Ok(())
@@ -563,7 +590,12 @@ async fn move_extracted(src: &Path, dest: &Path) -> Result<(), AppError> {
 
 /// 识别模型目录属于哪个后端（支持解压后的子目录结构）
 fn detect_backend(dir: &Path) -> Option<String> {
-    let sherpa = ["model.int8.onnx", "model.onnx", "model_quant.onnx", "tokens.txt"];
+    let sherpa = [
+        "model.int8.onnx",
+        "model.onnx",
+        "model_quant.onnx",
+        "tokens.txt",
+    ];
     let vosk = ["conf/model.conf", "am/final.mdl"];
     if walk_has(dir, &sherpa, 3) {
         Some("SherpaOnnx".into())
@@ -578,7 +610,9 @@ fn walk_has(dir: &Path, candidates: &[&str], depth: usize) -> bool {
     if depth == 0 {
         return false;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return false };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
     for entry in entries.flatten() {
         let p = entry.path();
         if p.is_dir() {
@@ -621,5 +655,5 @@ fn dir_size_mb(path: &Path) -> u64 {
             }
         }
     }
-    (total + 1_048_575) / 1_048_576 // MB（向上取整）
+    total.div_ceil(1_048_576) // MB（向上取整）
 }

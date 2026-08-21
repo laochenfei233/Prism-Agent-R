@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::data::models::{IngestResultDto, RagDocumentDto, RagHitDto};
-use crate::data::services::rag_service::{EmbeddingConfig, RagService, embedding_status};
+use crate::data::services::rag_service::{embedding_status, EmbeddingConfig, RagService};
 use crate::utils::error::AppError;
 
 #[tauri::command]
@@ -32,7 +32,9 @@ pub async fn rag_search(
     let default_top_k = crate::data::settings::prefs::get_i64(&state.db.pool, "rag.top_k", 5)
         .await
         .clamp(1, 20) as usize;
-    let hits = svc.search(&wiki_id, &query, top_k.unwrap_or(default_top_k)).await?;
+    let hits = svc
+        .search(&wiki_id, &query, top_k.unwrap_or(default_top_k))
+        .await?;
     Ok(hits
         .into_iter()
         .map(|h| RagHitDto {
@@ -77,7 +79,12 @@ pub async fn rag_embedding_config(
     dim: Option<usize>,
 ) -> Result<serde_json::Value, AppError> {
     let mut svc = RagService::new(state.db.clone());
-    let cfg = EmbeddingConfig { mode, provider_id, model, dim };
+    let cfg = EmbeddingConfig {
+        mode,
+        provider_id,
+        model,
+        dim,
+    };
     svc.set_config(&cfg).await?;
     embedding_status(&state.db).await
 }
@@ -168,9 +175,17 @@ pub async fn rag_eval_add(
     use crate::data::rag::eval::{add_case, ensure_wiki, EvalCase, EvalExpect};
 
     let id = case["id"].as_str().unwrap_or_default();
-    let id = if id.is_empty() { uuid::Uuid::new_v4().to_string() } else { id.to_string() };
-    let wiki_id = case["wiki_id"].as_str().ok_or_else(|| AppError::Validation("缺少 wiki_id".into()))?;
-    let question = case["question"].as_str().ok_or_else(|| AppError::Validation("缺少 question".into()))?;
+    let id = if id.is_empty() {
+        uuid::Uuid::new_v4().to_string()
+    } else {
+        id.to_string()
+    };
+    let wiki_id = case["wiki_id"]
+        .as_str()
+        .ok_or_else(|| AppError::Validation("缺少 wiki_id".into()))?;
+    let question = case["question"]
+        .as_str()
+        .ok_or_else(|| AppError::Validation("缺少 question".into()))?;
     let suite = case["suite"].as_str().unwrap_or("default");
     let expect: EvalExpect = if let Some(e) = case.get("expect") {
         serde_json::from_value(e.clone())?
@@ -179,13 +194,16 @@ pub async fn rag_eval_add(
     };
 
     ensure_wiki(&state.db, wiki_id).await?;
-    add_case(&state.db, &EvalCase {
-        id: id.clone(),
-        wiki_id: wiki_id.into(),
-        question: question.into(),
-        expect,
-        suite: suite.into(),
-    })
+    add_case(
+        &state.db,
+        &EvalCase {
+            id: id.clone(),
+            wiki_id: wiki_id.into(),
+            question: question.into(),
+            expect,
+            suite: suite.into(),
+        },
+    )
     .await?;
     Ok(id)
 }

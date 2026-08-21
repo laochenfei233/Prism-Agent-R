@@ -1,7 +1,9 @@
-use std::sync::Arc;
-use crate::core::adk::model::{GenerationRequest, ModelProvider, ChatMessage, ChatRole, MessageContent};
+use crate::core::adk::model::{
+    ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider,
+};
 use crate::data::rag::embedding::Embedder;
 use crate::utils::error::AppError;
+use std::sync::Arc;
 
 /// HyDE 假设文档检索器（§16.1）
 ///
@@ -42,7 +44,8 @@ impl HydeRetriever {
             ..Default::default()
         };
 
-        let response = self.provider
+        let response = self
+            .provider
             .generate(request)
             .await
             .map_err(|e| AppError::Internal(format!("HyDE LLM 调用失败: {e}")))?;

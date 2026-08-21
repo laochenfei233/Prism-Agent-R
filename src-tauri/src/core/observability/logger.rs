@@ -22,7 +22,8 @@ impl LogLevel {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    /// 宽松解析：未知级别一律 Info（不 panic、不拒绝）
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "trace" => Self::Trace,
             "debug" => Self::Debug,
@@ -83,7 +84,7 @@ impl AgentLogger {
     }
 
     pub fn log(&self, entry: LogEntry) {
-        if LogLevel::from_str(&entry.level) >= self.level {
+        if LogLevel::parse(&entry.level) >= self.level {
             // 文件输出（JSON Lines，追加）
             if let Some(path) = &self.file_path {
                 if let Ok(json) = serde_json::to_string(&entry) {
@@ -161,13 +162,7 @@ impl AgentLogger {
         });
     }
 
-    pub fn llm_call(
-        &self,
-        model: &str,
-        tokens: TokenUsage,
-        cost: f64,
-        duration_ms: u64,
-    ) {
+    pub fn llm_call(&self, model: &str, tokens: TokenUsage, cost: f64, duration_ms: u64) {
         self.log(LogEntry {
             timestamp: chrono::Utc::now().to_rfc3339(),
             level: "info".into(),
@@ -191,7 +186,8 @@ impl AgentLogger {
 
     pub fn entries_json_lines(&self) -> String {
         let entries = self.entries.lock().unwrap();
-        entries.iter()
+        entries
+            .iter()
             .filter_map(|e| serde_json::to_string(e).ok())
             .collect::<Vec<_>>()
             .join("\n")

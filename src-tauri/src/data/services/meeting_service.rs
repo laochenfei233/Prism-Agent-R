@@ -14,11 +14,16 @@ impl MeetingService {
         Self { db, base_dir }
     }
 
-    pub async fn create(&self, title: &str, participants: Option<&[String]>) -> Result<Meeting, AppError> {
+    pub async fn create(
+        &self,
+        title: &str,
+        participants: Option<&[String]>,
+    ) -> Result<Meeting, AppError> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
         let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let participants_json = serde_json::to_string(participants.unwrap_or(&[])).unwrap_or_default();
+        let participants_json =
+            serde_json::to_string(participants.unwrap_or(&[])).unwrap_or_default();
         let folder = self.base_dir.join(&id);
         tokio::fs::create_dir_all(&folder).await?;
 
@@ -29,19 +34,35 @@ impl MeetingService {
         .bind(folder.to_string_lossy().to_string()).bind(now)
         .execute(&self.db.pool).await?;
 
-        Ok(Meeting { id, title: title.to_string(), date, transcript: String::new(), summary: String::new(), participants: participants.unwrap_or(&[]).to_vec(), recording_duration: 0, status: "idle".into(), created_at: now, updated_at: now })
+        Ok(Meeting {
+            id,
+            title: title.to_string(),
+            date,
+            transcript: String::new(),
+            summary: String::new(),
+            participants: participants.unwrap_or(&[]).to_vec(),
+            recording_duration: 0,
+            status: "idle".into(),
+            created_at: now,
+            updated_at: now,
+        })
     }
 
     pub async fn list(&self) -> Result<Vec<Meeting>, AppError> {
-        let rows = sqlx::query_as::<_, MeetingRow>("SELECT * FROM meetings ORDER BY created_at DESC")
-            .fetch_all(&self.db.pool).await?;
+        let rows =
+            sqlx::query_as::<_, MeetingRow>("SELECT * FROM meetings ORDER BY created_at DESC")
+                .fetch_all(&self.db.pool)
+                .await?;
         Ok(rows.into_iter().map(row_to_meeting).collect())
     }
 
     pub async fn get(&self, id: &str) -> Result<Meeting, AppError> {
         let row = sqlx::query_as::<_, MeetingRow>("SELECT * FROM meetings WHERE id = ?1")
-            .bind(id).fetch_optional(&self.db.pool).await?;
-        row.map(row_to_meeting).ok_or_else(|| AppError::Validation(format!("会议不存在: {id}")))
+            .bind(id)
+            .fetch_optional(&self.db.pool)
+            .await?;
+        row.map(row_to_meeting)
+            .ok_or_else(|| AppError::Validation(format!("会议不存在: {id}")))
     }
 
     /// 设置会议状态（§10.3 状态机：idle → recording ⇄ paused → transcribing → ready / cancelled）
@@ -86,13 +107,22 @@ impl MeetingService {
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM meetings WHERE id = ?1").bind(id).execute(&self.db.pool).await?;
+        sqlx::query("DELETE FROM meetings WHERE id = ?1")
+            .bind(id)
+            .execute(&self.db.pool)
+            .await?;
         let folder = self.base_dir.join(id);
-        if folder.exists() { let _ = tokio::fs::remove_dir_all(&folder).await; }
+        if folder.exists() {
+            let _ = tokio::fs::remove_dir_all(&folder).await;
+        }
         Ok(())
     }
 
-    pub async fn update_transcript(&self, id: &str, segments: &[TranscriptSegment]) -> Result<(), AppError> {
+    pub async fn update_transcript(
+        &self,
+        id: &str,
+        segments: &[TranscriptSegment],
+    ) -> Result<(), AppError> {
         let now = chrono::Utc::now().timestamp();
         let mut tx = self.db.pool.begin().await?;
         for seg in segments {
@@ -106,22 +136,32 @@ impl MeetingService {
             .bind(seg.is_final as i32).bind(seg.speaker_id.map(|s| s as i64)).bind(now)
             .execute(&mut *tx).await?;
         }
-        sqlx::query("UPDATE meetings SET updated_at = ?1 WHERE id = ?2").bind(now).bind(id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE meetings SET updated_at = ?1 WHERE id = ?2")
+            .bind(now)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
 
     pub async fn get_transcript(&self, id: &str) -> Result<Vec<TranscriptSegment>, AppError> {
         let rows = sqlx::query_as::<_, TranscriptSegmentRow>(
-            "SELECT * FROM meeting_transcripts WHERE meeting_id = ?1 ORDER BY \"index\" ASC"
-        ).bind(id).fetch_all(&self.db.pool).await?;
-        let mut segs: Vec<TranscriptSegment> = rows.into_iter().map(|r| TranscriptSegment {
-            index: r.index,
-            text: r.text,
-            is_final: r.is_final != 0,
-            translated: r.translated,
-            speaker_id: r.speaker_id.map(|s| s as u32),
-        }).collect();
+            "SELECT * FROM meeting_transcripts WHERE meeting_id = ?1 ORDER BY \"index\" ASC",
+        )
+        .bind(id)
+        .fetch_all(&self.db.pool)
+        .await?;
+        let mut segs: Vec<TranscriptSegment> = rows
+            .into_iter()
+            .map(|r| TranscriptSegment {
+                index: r.index,
+                text: r.text,
+                is_final: r.is_final != 0,
+                translated: r.translated,
+                speaker_id: r.speaker_id.map(|s| s as u32),
+            })
+            .collect();
 
         // §10.3.4 转写上限：总量 > 500KB 时丢弃最旧段（保持最近内容，防无限膨胀）
         let mut total: usize = segs.iter().map(|s| s.text.len()).sum();
@@ -151,7 +191,11 @@ impl MeetingService {
         if segments.is_empty() {
             return Err(AppError::Validation("暂无转写内容，无法生成摘要".into()));
         }
-        let transcript: String = segments.iter().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n");
+        let transcript: String = segments
+            .iter()
+            .map(|s| s.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         let participants = meeting.participants.join(", ");
 
         // 8K tokens ≈ 32K 字符（保守按 4 字符/token）；超过则分段
@@ -193,13 +237,19 @@ impl MeetingService {
         let mut chunks: Vec<String> = Vec::new();
         let mut current = String::new();
         for para in full.split('\n') {
-            if current.chars().count() + para.chars().count() + 1 > CHUNK_CHARS && !current.is_empty() {
+            if current.chars().count() + para.chars().count() + 1 > CHUNK_CHARS
+                && !current.is_empty()
+            {
                 chunks.push(std::mem::take(&mut current));
             }
-            if !current.is_empty() { current.push('\n'); }
+            if !current.is_empty() {
+                current.push('\n');
+            }
             current.push_str(para);
         }
-        if !current.is_empty() { chunks.push(current); }
+        if !current.is_empty() {
+            chunks.push(current);
+        }
 
         // map：每块独立摘要（关键信息抽取）
         let mut partials = Vec::with_capacity(chunks.len());
@@ -222,12 +272,20 @@ impl MeetingService {
     }
 
     /// 摘要后生成翻译稿并保存（§10.3.4：transcript_translated.md）
-    pub async fn export_translated_transcript(&self, id: &str, target_lang: &str) -> Result<String, AppError> {
+    pub async fn export_translated_transcript(
+        &self,
+        id: &str,
+        target_lang: &str,
+    ) -> Result<String, AppError> {
         let segments = self.get_transcript(id).await?;
         if segments.is_empty() {
             return Err(AppError::Validation("暂无转写内容".into()));
         }
-        let transcript: String = segments.iter().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n");
+        let transcript: String = segments
+            .iter()
+            .map(|s| s.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         let prompt = format!(
             "将以下会议转写翻译成{}。保留原意、专有名词和术语。输出翻译后的文本。\n\n{}",
             target_lang,
@@ -245,7 +303,11 @@ impl MeetingService {
     /// 转写清洗（§10.3.6）：修正错别字、补标点、按语义分段；结果落库（供导出/摘要复用）
     pub async fn clean_transcript(&self, id: &str) -> Result<String, AppError> {
         let segments = self.get_transcript(id).await?;
-        let raw: String = segments.iter().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n");
+        let raw: String = segments
+            .iter()
+            .map(|s| s.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         if raw.trim().is_empty() {
             return Err(AppError::Validation("暂无转写内容".into()));
         }
@@ -269,7 +331,11 @@ impl MeetingService {
     pub async fn qa(&self, id: &str, question: &str) -> Result<String, AppError> {
         let meeting = self.get(id).await?;
         let segments = self.get_transcript(id).await?;
-        let transcript: String = segments.iter().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n");
+        let transcript: String = segments
+            .iter()
+            .map(|s| s.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         let prompt = format!(
             "基于以下会议内容回答用户问题。\n\n标题：{}\n参会人：{}\n\n转写：\n{}\n\n摘要：\n{}\n\n问题：{}\n\n回答：",
             meeting.title,
@@ -282,10 +348,19 @@ impl MeetingService {
     }
 
     /// 推送给 Agent（§10.3.6）：构建消息注入 Agent 会话
-    pub async fn push_to_agent(&self, id: &str, agent_id: &str, session_id: Option<&str>) -> Result<String, AppError> {
+    pub async fn push_to_agent(
+        &self,
+        id: &str,
+        agent_id: &str,
+        session_id: Option<&str>,
+    ) -> Result<String, AppError> {
         let meeting = self.get(id).await?;
         let segments = self.get_transcript(id).await?;
-        let transcript: String = segments.iter().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n");
+        let transcript: String = segments
+            .iter()
+            .map(|s| s.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         let content = format!(
             "[会议纪要推送] 标题：{}\n日期：{}\n参会人：{}\n\n转写：\n{}\n\n摘要：\n{}",
             meeting.title,
@@ -334,7 +409,8 @@ impl MeetingService {
     }
 
     /// 追加录音（PCM 16kHz mono，WAV 头 + 流式追加写盘）
-    pub async fn append_recording(&self, id: &str, pcm: &[u8]) -> Result<(), AppError> {        use tokio::io::AsyncWriteExt;
+    pub async fn append_recording(&self, id: &str, pcm: &[u8]) -> Result<(), AppError> {
+        use tokio::io::AsyncWriteExt;
         const WAV_HEADER_LEN: u64 = 44;
 
         let folder = self.base_dir.join(id);
@@ -383,7 +459,11 @@ impl MeetingService {
         }
         let wav = tokio::fs::read(&wav_path).await?;
         // 跳过 44 字节 WAV 头，剩余为 PCM（16kHz 16bit mono）
-        let pcm = if wav.len() > 44 { wav[44..].to_vec() } else { Vec::new() };
+        let pcm = if wav.len() > 44 {
+            wav[44..].to_vec()
+        } else {
+            Vec::new()
+        };
         if pcm.is_empty() {
             return Err(AppError::Validation("录音文件为空".into()));
         }
@@ -393,10 +473,14 @@ impl MeetingService {
         let chunks: Vec<Vec<u8>> = pcm.chunks(BLOCK).map(|c| c.to_vec()).collect();
 
         let mut backend = create_asr_backend(asr_config);
-        backend.health_check().await.map_err(crate::utils::error::AppError::from)?;
+        backend
+            .health_check()
+            .await
+            .map_err(crate::utils::error::AppError::from)?;
 
         // 收集 on_segment 回调结果
-        let segments = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<TranscriptSegment>::new()));
+        let segments =
+            std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<TranscriptSegment>::new()));
         let segments_out = segments.clone();
         let events = AsrEventSink::new(
             move |seg: crate::data::services::asr::AsrSegment| {
@@ -417,7 +501,10 @@ impl MeetingService {
         // 音频源：静态 PCM 块流
         let audio: crate::data::services::asr::AudioSource =
             Box::pin(futures::stream::iter(chunks));
-        let handle = backend.start(audio, events).await.map_err(crate::utils::error::AppError::from)?;
+        let handle = backend
+            .start(audio, events)
+            .await
+            .map_err(crate::utils::error::AppError::from)?;
 
         // 等待后端完成（离线后端流结束后应自行结束；给个上限防止挂死）
         let timeout = tokio::time::Duration::from_secs(600);
@@ -488,9 +575,15 @@ impl MeetingService {
                 let mut out = String::new();
                 out.push_str(&format!("# {}\n\n", meeting.title));
                 out.push_str(&format!("- **日期**: {}\n", meeting.date));
-                out.push_str(&format!("- **参会人**: {}\n", meeting.participants.join(", ")));
+                out.push_str(&format!(
+                    "- **参会人**: {}\n",
+                    meeting.participants.join(", ")
+                ));
                 if meeting.recording_duration > 0 {
-                    out.push_str(&format!("- **录音时长**: {}s\n", meeting.recording_duration));
+                    out.push_str(&format!(
+                        "- **录音时长**: {}s\n",
+                        meeting.recording_duration
+                    ));
                 }
 
                 out.push_str("\n---\n\n## 转写\n\n");
@@ -530,10 +623,14 @@ impl MeetingService {
             }
             "docx" => {
                 // §10.3.7 DOCX 导出：docx-rs 生成，写入 {meetings}/{id}/export.docx
-                let path = self.export_docx(&meeting, &transcript, inc_summary, translated.as_deref()).await?;
+                let path = self
+                    .export_docx(&meeting, &transcript, inc_summary, translated.as_deref())
+                    .await?;
                 Ok(path.to_string_lossy().to_string())
             }
-            _ => Err(AppError::Validation("仅支持 markdown / text / docx 格式".into())),
+            _ => Err(AppError::Validation(
+                "仅支持 markdown / text / docx 格式".into(),
+            )),
         }
     }
 
@@ -550,9 +647,12 @@ impl MeetingService {
         let mut doc = Docx::new();
 
         // 标题（大字号加粗）
-        doc = doc.add_paragraph(Paragraph::new().size(32).bold().add_run(
-            Run::new().add_text(&meeting.title),
-        ));
+        doc = doc.add_paragraph(
+            Paragraph::new()
+                .size(32)
+                .bold()
+                .add_run(Run::new().add_text(&meeting.title)),
+        );
 
         let meta = format!(
             "日期: {} | 参会人: {}",
@@ -562,7 +662,12 @@ impl MeetingService {
         doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(&meta)));
 
         // 转写
-        doc = doc.add_paragraph(Paragraph::new().size(28).bold().add_run(Run::new().add_text("转写")));
+        doc = doc.add_paragraph(
+            Paragraph::new()
+                .size(28)
+                .bold()
+                .add_run(Run::new().add_text("转写")),
+        );
         for seg in transcript {
             let line = format!("{}{}", speaker_prefix(seg.speaker_id), seg.text);
             doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(&line)));
@@ -570,7 +675,12 @@ impl MeetingService {
 
         // 摘要
         if include_summary && !meeting.summary.trim().is_empty() {
-            doc = doc.add_paragraph(Paragraph::new().size(28).bold().add_run(Run::new().add_text("摘要")));
+            doc = doc.add_paragraph(
+                Paragraph::new()
+                    .size(28)
+                    .bold()
+                    .add_run(Run::new().add_text("摘要")),
+            );
             for line in meeting.summary.lines() {
                 doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
             }
@@ -578,7 +688,12 @@ impl MeetingService {
 
         // 翻译稿
         if let Some(t) = translated {
-            doc = doc.add_paragraph(Paragraph::new().size(28).bold().add_run(Run::new().add_text("翻译稿")));
+            doc = doc.add_paragraph(
+                Paragraph::new()
+                    .size(28)
+                    .bold()
+                    .add_run(Run::new().add_text("翻译稿")),
+            );
             for line in t.lines() {
                 doc = doc.add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
             }
@@ -589,28 +704,49 @@ impl MeetingService {
         let path = folder.join("export.docx");
         // pack 直接产出 ZIP 归档字节（Docx::pack → ZipResult<()>，需要 Write + Seek）
         let mut cursor = std::io::Cursor::new(Vec::new());
-        doc.pack(&mut cursor).map_err(|e| AppError::Internal(format!("DOCX 生成失败: {e}")))?;
+        doc.pack(&mut cursor)
+            .map_err(|e| AppError::Internal(format!("DOCX 生成失败: {e}")))?;
         tokio::fs::write(&path, cursor.into_inner()).await?;
         Ok(path)
     }
 
     pub async fn list_asr_configs(&self) -> Result<Vec<AsrConfig>, AppError> {
-        let rows = sqlx::query_as::<_, AsrConfigRow>("SELECT * FROM asr_configs ORDER BY is_default DESC")
-            .fetch_all(&self.db.pool).await?;
-        Ok(rows.into_iter().map(|r| AsrConfig {
-            id: r.id, name: r.name, kind: r.kind, base_url: r.base_url,
-            api_key: r.api_key_enc.as_deref().map(crate::commands::settings::decrypt_provider_key),
-            model: r.model, lang: r.lang, is_default: r.is_default != 0,
-            model_path: r.model_path,
-            extra: r.extra.and_then(|e| serde_json::from_str(&e).ok()),
-        }).collect())
+        let rows =
+            sqlx::query_as::<_, AsrConfigRow>("SELECT * FROM asr_configs ORDER BY is_default DESC")
+                .fetch_all(&self.db.pool)
+                .await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| AsrConfig {
+                id: r.id,
+                name: r.name,
+                kind: r.kind,
+                base_url: r.base_url,
+                api_key: r
+                    .api_key_enc
+                    .as_deref()
+                    .map(crate::commands::settings::decrypt_provider_key),
+                model: r.model,
+                lang: r.lang,
+                is_default: r.is_default != 0,
+                model_path: r.model_path,
+                extra: r.extra.and_then(|e| serde_json::from_str(&e).ok()),
+            })
+            .collect())
     }
 
     pub async fn save_asr_config(&self, input: AsrConfigInput) -> Result<AsrConfig, AppError> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
-        let extra = input.extra.as_ref().map(serde_json::to_string).transpose()?;
-        let api_key_enc = input.api_key.as_deref().map(crate::commands::settings::encrypt_provider_key);
+        let extra = input
+            .extra
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        let api_key_enc = input
+            .api_key
+            .as_deref()
+            .map(crate::commands::settings::encrypt_provider_key);
         sqlx::query(
             "INSERT INTO asr_configs (id, name, kind, base_url, api_key_enc, model, lang, is_default, model_path, extra, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)"
         )
@@ -619,18 +755,43 @@ impl MeetingService {
         .bind(&input.model).bind(&input.lang).bind(input.is_default as i32)
         .bind(&input.model_path).bind(&extra).bind(now)
         .execute(&self.db.pool).await?;
-        Ok(AsrConfig { id, name: input.name, kind: input.kind, base_url: input.base_url, api_key: input.api_key, model: input.model, lang: input.lang, is_default: input.is_default, model_path: input.model_path, extra: input.extra })
+        Ok(AsrConfig {
+            id,
+            name: input.name,
+            kind: input.kind,
+            base_url: input.base_url,
+            api_key: input.api_key,
+            model: input.model,
+            lang: input.lang,
+            is_default: input.is_default,
+            model_path: input.model_path,
+            extra: input.extra,
+        })
     }
 
     pub async fn delete_asr_config(&self, id: &str) -> Result<(), AppError> {
-        sqlx::query("DELETE FROM asr_configs WHERE id = ?1").bind(id).execute(&self.db.pool).await?;
+        sqlx::query("DELETE FROM asr_configs WHERE id = ?1")
+            .bind(id)
+            .execute(&self.db.pool)
+            .await?;
         Ok(())
     }
 }
 
 fn row_to_meeting(r: MeetingRow) -> Meeting {
     let participants: Vec<String> = serde_json::from_str(&r.participants).unwrap_or_default();
-    Meeting { id: r.id, title: r.title, date: r.date, transcript: r.transcript, summary: r.summary, participants, recording_duration: r.recording_duration, status: r.status, created_at: r.created_at, updated_at: r.updated_at }
+    Meeting {
+        id: r.id,
+        title: r.title,
+        date: r.date,
+        transcript: r.transcript,
+        summary: r.summary,
+        participants,
+        recording_duration: r.recording_duration,
+        status: r.status,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+    }
 }
 
 /// 16kHz 16bit mono WAV 头（44 字节，data 长度字段为 0，后续追加）
@@ -659,7 +820,9 @@ fn pcm_to_wav_header() -> Vec<u8> {
 }
 
 /// 解析默认模型构建 provider（会议 LLM 功能复用）
-async fn resolve_meeting_model(db: &Database) -> Result<(crate::core::rig::provider::OpenAiProvider, String), AppError> {
+async fn resolve_meeting_model(
+    db: &Database,
+) -> Result<(crate::core::rig::provider::OpenAiProvider, String), AppError> {
     use crate::data::models::{ModelRow, ProviderRow};
     let model_row = sqlx::query_as::<_, ModelRow>(
         "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE is_default = 1 LIMIT 1"
@@ -676,18 +839,21 @@ async fn resolve_meeting_model(db: &Database) -> Result<(crate::core::rig::provi
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row.base_url.unwrap_or_else(|| {
-        match provider_row.kind.as_str() {
+    let base_url = provider_row
+        .base_url
+        .unwrap_or_else(|| match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
-        }
-    });
+        });
     let api_key = provider_row
         .api_key_enc
         .as_deref()
         .map(crate::commands::settings::decrypt_provider_key)
         .unwrap_or_default();
-    let display = model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone());
+    let display = model_row
+        .display_name
+        .clone()
+        .unwrap_or_else(|| model_row.model_id.clone());
     let provider = crate::core::rig::provider::OpenAiProvider::new(
         model_row.provider_id.clone(),
         display.clone(),
@@ -728,12 +894,30 @@ mod tests {
         let meeting = svc.create("t", None).await.unwrap();
 
         // 同一 index 0 两次写入（第一次中间结果，第二次定稿）
-        svc.update_transcript(&meeting.id, &[TranscriptSegment {
-            index: 0, text: "今天天气".into(), is_final: false, translated: None, speaker_id: Some(1),
-        }]).await.unwrap();
-        svc.update_transcript(&meeting.id, &[TranscriptSegment {
-            index: 0, text: "今天天气很好。".into(), is_final: true, translated: None, speaker_id: Some(2),
-        }]).await.unwrap();
+        svc.update_transcript(
+            &meeting.id,
+            &[TranscriptSegment {
+                index: 0,
+                text: "今天天气".into(),
+                is_final: false,
+                translated: None,
+                speaker_id: Some(1),
+            }],
+        )
+        .await
+        .unwrap();
+        svc.update_transcript(
+            &meeting.id,
+            &[TranscriptSegment {
+                index: 0,
+                text: "今天天气很好。".into(),
+                is_final: true,
+                translated: None,
+                speaker_id: Some(2),
+            }],
+        )
+        .await
+        .unwrap();
 
         let segs = svc.get_transcript(&meeting.id).await.unwrap();
         assert_eq!(segs.len(), 1, "同 index 只能有一行");
@@ -770,7 +954,9 @@ mod tests {
         assert_eq!(m.recording_duration, 1, "1s PCM → 时长 1");
 
         // 再追加 2 秒 → 时长 3，文件 44 + 96000
-        svc.append_recording(&meeting.id, &vec![0u8; 64000]).await.unwrap();
+        svc.append_recording(&meeting.id, &vec![0u8; 64000])
+            .await
+            .unwrap();
         let bytes = tokio::fs::read(&wav_path).await.unwrap();
         assert_eq!(bytes.len(), 44 + 96000);
         let m = svc.get(&meeting.id).await.unwrap();
@@ -800,8 +986,14 @@ mod tests {
 
         // paused 时 resume → 合法（paused → recording）；recording 时 resume → 报错
         svc.pause(&meeting.id).await.unwrap();
-        assert!(svc.resume(&meeting.id).await.is_ok(), "paused → resume 合法");
-        assert!(svc.resume(&meeting.id).await.is_err(), "非 paused 不能 resume");
+        assert!(
+            svc.resume(&meeting.id).await.is_ok(),
+            "paused → resume 合法"
+        );
+        assert!(
+            svc.resume(&meeting.id).await.is_err(),
+            "非 paused 不能 resume"
+        );
 
         // recording → cancelled（任意状态可取消）
         svc.cancel(&meeting.id).await.unwrap();
@@ -821,18 +1013,39 @@ mod tests {
         // 600KB 文本 = 1 段 400KB + 1 段 250KB（超 500KB 上限）
         let seg_a = "A".repeat(400 * 1024);
         let seg_b = "B".repeat(250 * 1024);
-        svc.update_transcript(&meeting.id, &[
-            TranscriptSegment { index: 0, text: seg_a.clone(), is_final: true, translated: None, speaker_id: None },
-        ]).await.unwrap();
-        svc.update_transcript(&meeting.id, &[
-            TranscriptSegment { index: 1, text: seg_b.clone(), is_final: true, translated: None, speaker_id: None },
-        ]).await.unwrap();
+        svc.update_transcript(
+            &meeting.id,
+            &[TranscriptSegment {
+                index: 0,
+                text: seg_a.clone(),
+                is_final: true,
+                translated: None,
+                speaker_id: None,
+            }],
+        )
+        .await
+        .unwrap();
+        svc.update_transcript(
+            &meeting.id,
+            &[TranscriptSegment {
+                index: 1,
+                text: seg_b.clone(),
+                is_final: true,
+                translated: None,
+                speaker_id: None,
+            }],
+        )
+        .await
+        .unwrap();
 
         let segs = svc.get_transcript(&meeting.id).await.unwrap();
         let total: usize = segs.iter().map(|s| s.text.len()).sum();
         assert!(total <= 500 * 1024, "截断后总量 {total} 必须 ≤ 500KB");
         // 最旧段（index 0，400KB）应被截掉，保留 index 1
-        assert!(!segs.iter().any(|s| s.index == 0 && s.text.contains('A')), "最旧段应被截断");
+        assert!(
+            !segs.iter().any(|s| s.index == 0 && s.text.contains('A')),
+            "最旧段应被截断"
+        );
         assert!(segs.iter().any(|s| s.index == 1), "最近的段保留");
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -847,11 +1060,23 @@ mod tests {
         let svc = MeetingService::new(db, base.clone());
         let meeting = svc.create("docx", None).await.unwrap();
 
-        svc.update_transcript(&meeting.id, &[
-            TranscriptSegment { index: 0, text: "今天天气很好。".into(), is_final: true, translated: None, speaker_id: Some(1) },
-        ]).await.unwrap();
+        svc.update_transcript(
+            &meeting.id,
+            &[TranscriptSegment {
+                index: 0,
+                text: "今天天气很好。".into(),
+                is_final: true,
+                translated: None,
+                speaker_id: Some(1),
+            }],
+        )
+        .await
+        .unwrap();
 
-        let out = svc.export(&meeting.id, "docx", Some(true), Some(false)).await.unwrap();
+        let out = svc
+            .export(&meeting.id, "docx", Some(true), Some(false))
+            .await
+            .unwrap();
         // 返回文件路径字符串
         let path = std::path::PathBuf::from(&out);
         assert!(path.exists(), "docx 文件应生成: {out}");

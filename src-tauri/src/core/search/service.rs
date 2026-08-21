@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use super::{noop::NoopSearchProvider, SearchHit, SearchProvider};
+use std::sync::Arc;
 
 /// 搜索服务：管理多个 provider，支持选择/切换/降级
 pub struct SearchService {
@@ -20,21 +20,33 @@ impl SearchService {
         let mut providers: Vec<Arc<dyn SearchProvider>> = Vec::new();
 
         // 读取配置
-        let provider_name = config.get("search.provider").map(|s| s.as_str()).unwrap_or("noop");
+        let provider_name = config
+            .get("search.provider")
+            .map(|s| s.as_str())
+            .unwrap_or("noop");
         let api_key = config.get("search.api_key").cloned().unwrap_or_default();
-        let searxng_url = config.get("search.searxng_url").cloned().unwrap_or_default();
+        let searxng_url = config
+            .get("search.searxng_url")
+            .cloned()
+            .unwrap_or_default();
         let fallback_name = config.get("search.fallback_provider").cloned();
 
         // 按配置实例化 provider
         match provider_name {
             "tavily" if !api_key.is_empty() => {
-                providers.push(Arc::new(super::tavily::TavilyProvider::new(api_key.clone())));
+                providers.push(Arc::new(super::tavily::TavilyProvider::new(
+                    api_key.clone(),
+                )));
             }
             "serper" if !api_key.is_empty() => {
-                providers.push(Arc::new(super::serper::SerperProvider::new(api_key.clone())));
+                providers.push(Arc::new(super::serper::SerperProvider::new(
+                    api_key.clone(),
+                )));
             }
             "searxng" if !searxng_url.is_empty() => {
-                providers.push(Arc::new(super::searxng::SearxngProvider::new(searxng_url.clone())));
+                providers.push(Arc::new(super::searxng::SearxngProvider::new(
+                    searxng_url.clone(),
+                )));
             }
             _ => {}
         }
@@ -87,7 +99,11 @@ impl SearchService {
                 }
                 Err(e) => {
                     last_error = e;
-                    tracing::warn!("Search provider '{}' failed: {}", provider.name(), last_error);
+                    tracing::warn!(
+                        "Search provider '{}' failed: {}",
+                        provider.name(),
+                        last_error
+                    );
                 }
             }
         }

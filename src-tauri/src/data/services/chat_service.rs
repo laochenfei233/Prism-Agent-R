@@ -32,6 +32,7 @@ impl ChatService {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn save_message(
         &self,
         session_id: &str,
@@ -62,7 +63,10 @@ impl ChatService {
 
         // Update session timestamp
         sqlx::query("UPDATE sessions SET updated_at = ? WHERE id = ?")
-            .bind(now).bind(session_id).execute(&self.pool).await?;
+            .bind(now)
+            .bind(session_id)
+            .execute(&self.pool)
+            .await?;
 
         let row = sqlx::query_as::<_, MessageRow>(
             "SELECT id, session_id, role, content, tool_calls, tool_call_id, model_id, usage, created_at FROM messages WHERE id = ?"

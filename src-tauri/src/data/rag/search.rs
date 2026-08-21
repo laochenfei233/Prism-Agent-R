@@ -28,9 +28,10 @@ impl RagSearcher {
         let query_vec = self.embedder.embed(query).await?;
 
         // 混合检索权重（preferences: rag.vector_weight，默认 0.7；BM25 = 1 − w）
-        let vector_weight = crate::data::settings::prefs::get_f64(&self.db.pool, "rag.vector_weight", 0.7)
-            .await
-            .clamp(0.0, 1.0) as f32;
+        let vector_weight =
+            crate::data::settings::prefs::get_f64(&self.db.pool, "rag.vector_weight", 0.7)
+                .await
+                .clamp(0.0, 1.0) as f32;
 
         // Fetch all chunks for this wiki with embeddings
         let rows = sqlx::query(
@@ -51,10 +52,14 @@ impl RagSearcher {
             return Ok(vec![]);
         }
 
-        let avg_dl: f32 = rows.iter().map(|r| {
-            let content: String = r.get("content");
-            content.len() as f32
-        }).sum::<f32>() / rows.len() as f32;
+        let avg_dl: f32 = rows
+            .iter()
+            .map(|r| {
+                let content: String = r.get("content");
+                content.len() as f32
+            })
+            .sum::<f32>()
+            / rows.len() as f32;
 
         let mut scored: Vec<RagHit> = rows
             .iter()
@@ -92,7 +97,11 @@ impl RagSearcher {
             })
             .collect();
 
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(top_k);
         Ok(scored)
     }
@@ -105,9 +114,9 @@ impl RagSearcher {
 pub struct RagSearchConfig {
     pub hyde_enabled: bool,
     pub web_enabled: bool,
-    pub rrf_k: f32,           // RRF 参数 k，默认 60
-    pub cliff_min_gap: f32,   // 断崖截断：最小分数差，默认 0.15
-    pub cliff_rel_drop: f32,  // 断崖截断：相对下降比例，默认 0.25
+    pub rrf_k: f32,          // RRF 参数 k，默认 60
+    pub cliff_min_gap: f32,  // 断崖截断：最小分数差，默认 0.15
+    pub cliff_rel_drop: f32, // 断崖截断：相对下降比例，默认 0.25
 }
 
 impl Default for RagSearchConfig {
@@ -147,7 +156,8 @@ pub async fn multi_path_search(
     };
 
     // 三路并行
-    let (result_a, result_b): (Result<Vec<RagHit>, _>, Result<Vec<RagHit>, _>) = tokio::join!(path_a_fut, path_b_fut);
+    let (result_a, result_b): (Result<Vec<RagHit>, _>, Result<Vec<RagHit>, _>) =
+        tokio::join!(path_a_fut, path_b_fut);
 
     let mut hits_a = result_a.unwrap_or_default();
     let mut hits_b = result_b.unwrap_or_default();
@@ -158,19 +168,31 @@ pub async fn multi_path_search(
     let mut hit_map: HashMap<String, RagHit> = HashMap::new();
 
     // 路 A 排名赋分
-    hits_a.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    hits_a.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for (rank, hit) in hits_a.iter().enumerate() {
         let rrf = 1.0 / (k + rank as f32);
         *rrf_scores.entry(hit.chunk_id.clone()).or_insert(0.0) += rrf;
-        hit_map.entry(hit.chunk_id.clone()).or_insert_with(|| hit.clone());
+        hit_map
+            .entry(hit.chunk_id.clone())
+            .or_insert_with(|| hit.clone());
     }
 
     // 路 B 排名赋分
-    hits_b.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    hits_b.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for (rank, hit) in hits_b.iter().enumerate() {
         let rrf = 1.0 / (k + rank as f32);
         *rrf_scores.entry(hit.chunk_id.clone()).or_insert(0.0) += rrf;
-        hit_map.entry(hit.chunk_id.clone()).or_insert_with(|| hit.clone());
+        hit_map
+            .entry(hit.chunk_id.clone())
+            .or_insert_with(|| hit.clone());
     }
 
     // 按 RRF 分数排序
@@ -185,7 +207,11 @@ pub async fn multi_path_search(
         })
         .collect();
 
-    fused.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    fused.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // §16.4 断崖截断
     let cutoff = cliff_cutoff(&fused, config.cliff_min_gap, config.cliff_rel_drop);
@@ -227,11 +253,51 @@ mod tests {
     #[test]
     fn test_cliff_cutoff_abrupt_drop() {
         let hits = vec![
-            RagHit { chunk_id: "1".into(), score: 0.9, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "2".into(), score: 0.85, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "3".into(), score: 0.8, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "4".into(), score: 0.5, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() }, // 断崖
-            RagHit { chunk_id: "5".into(), score: 0.45, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
+            RagHit {
+                chunk_id: "1".into(),
+                score: 0.9,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "2".into(),
+                score: 0.85,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "3".into(),
+                score: 0.8,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "4".into(),
+                score: 0.5,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            }, // 断崖
+            RagHit {
+                chunk_id: "5".into(),
+                score: 0.45,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
         ];
         let cutoff = cliff_cutoff(&hits, 0.15, 0.25);
         assert_eq!(cutoff, 3); // 保留前 3 个
@@ -240,11 +306,51 @@ mod tests {
     #[test]
     fn test_cliff_cutoff_gradual() {
         let hits = vec![
-            RagHit { chunk_id: "1".into(), score: 0.9, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "2".into(), score: 0.85, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "3".into(), score: 0.8, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "4".into(), score: 0.75, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "5".into(), score: 0.7, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
+            RagHit {
+                chunk_id: "1".into(),
+                score: 0.9,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "2".into(),
+                score: 0.85,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "3".into(),
+                score: 0.8,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "4".into(),
+                score: 0.75,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "5".into(),
+                score: 0.7,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
         ];
         let cutoff = cliff_cutoff(&hits, 0.15, 0.25);
         assert_eq!(cutoff, 5); // 无断崖，全部保留
@@ -253,8 +359,24 @@ mod tests {
     #[test]
     fn test_cliff_cutoff_minimum_3() {
         let hits = vec![
-            RagHit { chunk_id: "1".into(), score: 1.0, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
-            RagHit { chunk_id: "2".into(), score: 0.1, document_title: "".into(), page_start: None, page_end: None, section: None, quote: "".into() },
+            RagHit {
+                chunk_id: "1".into(),
+                score: 1.0,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
+            RagHit {
+                chunk_id: "2".into(),
+                score: 0.1,
+                document_title: "".into(),
+                page_start: None,
+                page_end: None,
+                section: None,
+                quote: "".into(),
+            },
         ];
         let cutoff = cliff_cutoff(&hits, 0.15, 0.25);
         assert_eq!(cutoff, 2); // 少于 3 个，全部保留

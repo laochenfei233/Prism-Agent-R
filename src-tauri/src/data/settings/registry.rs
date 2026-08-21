@@ -277,14 +277,21 @@ pub fn spec_by_key(key: &str) -> Option<SettingSpec> {
 }
 
 /// 校验 value 是否符合该项的类型与范围；返回规范化后的 JSON 值
-pub fn validate(spec: &SettingSpec, value: &serde_json::Value) -> Result<serde_json::Value, String> {
+pub fn validate(
+    spec: &SettingSpec,
+    value: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     match spec.kind {
         SettingKind::Bool => {
-            let v = value.as_bool().ok_or_else(|| format!("{} 需要布尔值", spec.label))?;
+            let v = value
+                .as_bool()
+                .ok_or_else(|| format!("{} 需要布尔值", spec.label))?;
             Ok(serde_json::json!(v))
         }
         SettingKind::Int => {
-            let v = value.as_i64().ok_or_else(|| format!("{} 需要整数", spec.label))?;
+            let v = value
+                .as_i64()
+                .ok_or_else(|| format!("{} 需要整数", spec.label))?;
             let (min, max) = (spec.min.unwrap_or(0.0), spec.max.unwrap_or(i64::MAX as f64));
             if (v as f64) < min || (v as f64) > max {
                 return Err(format!("{} 超出范围 [{min}, {max}]", spec.label));
@@ -292,17 +299,25 @@ pub fn validate(spec: &SettingSpec, value: &serde_json::Value) -> Result<serde_j
             Ok(serde_json::json!(v))
         }
         SettingKind::Float => {
-            let v = value.as_f64().ok_or_else(|| format!("{} 需要数值", spec.label))?;
+            let v = value
+                .as_f64()
+                .ok_or_else(|| format!("{} 需要数值", spec.label))?;
             if let Some(min) = spec.min {
-                if v < min { return Err(format!("{} 小于下限 {min}", spec.label)); }
+                if v < min {
+                    return Err(format!("{} 小于下限 {min}", spec.label));
+                }
             }
             if let Some(max) = spec.max {
-                if v > max { return Err(format!("{} 大于上限 {max}", spec.label)); }
+                if v > max {
+                    return Err(format!("{} 大于上限 {max}", spec.label));
+                }
             }
             Ok(serde_json::json!(v))
         }
         SettingKind::String | SettingKind::Select => {
-            let v = value.as_str().ok_or_else(|| format!("{} 需要字符串", spec.label))?;
+            let v = value
+                .as_str()
+                .ok_or_else(|| format!("{} 需要字符串", spec.label))?;
             if let Some(opts) = &spec.options {
                 if !opts.contains(&v) {
                     return Err(format!("{} 的值不在允许选项内", spec.label));
@@ -340,8 +355,14 @@ mod tests {
     fn validate_checks_type_and_range() {
         let spec = spec_by_key("rag.chunk_size").unwrap();
         assert!(validate(&spec, &serde_json::json!(1500)).is_ok());
-        assert!(validate(&spec, &serde_json::json!(100)).is_err(), "低于下限应拒绝");
-        assert!(validate(&spec, &serde_json::json!("x")).is_err(), "非整数应拒绝");
+        assert!(
+            validate(&spec, &serde_json::json!(100)).is_err(),
+            "低于下限应拒绝"
+        );
+        assert!(
+            validate(&spec, &serde_json::json!("x")).is_err(),
+            "非整数应拒绝"
+        );
 
         let bool_spec = spec_by_key("reflection.enabled").unwrap();
         assert!(validate(&bool_spec, &serde_json::json!(true)).is_ok());

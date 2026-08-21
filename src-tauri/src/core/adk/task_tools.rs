@@ -36,7 +36,9 @@ pub struct TaskCreateTool;
 
 #[async_trait]
 impl ToolExecutor for TaskCreateTool {
-    fn name(&self) -> &str { "task_create" }
+    fn name(&self) -> &str {
+        "task_create"
+    }
 
     fn description(&self) -> &str {
         "创建任务到共享看板。参数：subject（任务描述，必填）、owner（负责人，可选）。返回创建的任务。"
@@ -86,7 +88,9 @@ pub struct TaskUpdateTool;
 
 #[async_trait]
 impl ToolExecutor for TaskUpdateTool {
-    fn name(&self) -> &str { "task_update" }
+    fn name(&self) -> &str {
+        "task_update"
+    }
 
     fn description(&self) -> &str {
         "更新任务状态。参数：id（任务 ID，必填）、status（新状态：todo/doing/done，可选）、subject（新描述，可选）。"
@@ -112,7 +116,9 @@ impl ToolExecutor for TaskUpdateTool {
         let new_subject = args["subject"].as_str().map(String::from);
 
         let mut store = task_store().write().await;
-        let task = store.iter_mut().find(|t| t.id == id)
+        let task = store
+            .iter_mut()
+            .find(|t| t.id == id)
             .ok_or_else(|| AgentError::InvalidArgs(format!("任务不存在: {id}")))?;
 
         if let Some(s) = new_status {
@@ -137,7 +143,9 @@ pub struct TaskListTool;
 
 #[async_trait]
 impl ToolExecutor for TaskListTool {
-    fn name(&self) -> &str { "task_list" }
+    fn name(&self) -> &str {
+        "task_list"
+    }
 
     fn description(&self) -> &str {
         "查询看板任务。参数：status（筛选状态：todo/doing/done，可选）、owner（筛选负责人，可选）。"
@@ -173,10 +181,17 @@ impl ToolExecutor for TaskListTool {
             return Ok(ToolOutput::text("看板为空".to_string()));
         }
 
-        let lines: Vec<String> = tasks.iter().map(|t| {
-            let owner_str = t.owner.as_deref().map(|o| format!(" @{o}")).unwrap_or_default();
-            format!("[{}] {}{} — {}", t.status, t.id, owner_str, t.subject)
-        }).collect();
+        let lines: Vec<String> = tasks
+            .iter()
+            .map(|t| {
+                let owner_str = t
+                    .owner
+                    .as_deref()
+                    .map(|o| format!(" @{o}"))
+                    .unwrap_or_default();
+                format!("[{}] {}{} — {}", t.status, t.id, owner_str, t.subject)
+            })
+            .collect();
 
         Ok(ToolOutput::text(lines.join("\n")))
     }
@@ -188,7 +203,9 @@ pub struct TaskDeleteTool;
 
 #[async_trait]
 impl ToolExecutor for TaskDeleteTool {
-    fn name(&self) -> &str { "task_delete" }
+    fn name(&self) -> &str {
+        "task_delete"
+    }
 
     fn description(&self) -> &str {
         "删除看板任务。参数：id（任务 ID，必填）。"

@@ -4,16 +4,16 @@ pub mod data;
 pub mod mcp;
 pub mod utils;
 
-use std::collections::HashMap;
 use data::Database;
+use std::collections::HashMap;
 use tauri::Manager;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use mcp::McpRuntime;
 use core::adk::tool::ToolApprovalStore;
 use core::session::state::SessionStateManager;
 use data::services::meeting::AudioStreamManager;
+use mcp::McpRuntime;
 
 pub struct AppState {
     pub db: Database,
@@ -23,9 +23,11 @@ pub struct AppState {
     pub audio_streams: std::sync::Arc<AudioStreamManager>,
     pub session_state: std::sync::Arc<SessionStateManager>,
     /// 翻译短文本缓存（跨 IPC 调用共享，<500 字符，TTL 24h）
-    pub translate_cache: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>>,
+    pub translate_cache:
+        std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>>,
     /// Compose sessions storage
-    pub compose_sessions: std::sync::Arc<tokio::sync::Mutex<HashMap<String, core::compose::ComposeSession>>>,
+    pub compose_sessions:
+        std::sync::Arc<tokio::sync::Mutex<HashMap<String, core::compose::ComposeSession>>>,
     /// Compose session cancellation tokens
     pub compose_cancels: std::sync::Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
 }
@@ -37,9 +39,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let app_data_dir = app.path().app_data_dir().expect("failed to get app data dir");
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
             let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
-            let db = rt.block_on(Database::new(&app_data_dir)).expect("failed to init database");
+            let db = rt
+                .block_on(Database::new(&app_data_dir))
+                .expect("failed to init database");
 
             let mcp_runtime = McpRuntime::new();
 
@@ -59,7 +66,7 @@ pub fn run() {
             {
                 let db_clone = db.clone();
                 let runtime_clone = mcp_runtime.clone();
-                let _ = rt.spawn(async move {
+                rt.spawn(async move {
                     let svc = data::services::McpService::new(db_clone, runtime_clone);
                     if let Err(e) = svc.load_all().await {
                         tracing::warn!("MCP load_all failed: {e}");
@@ -74,7 +81,9 @@ pub fn run() {
                 approval_store: std::sync::Arc::new(ToolApprovalStore::new()),
                 audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
                 session_state: std::sync::Arc::new(SessionStateManager::new()),
-                translate_cache: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+                translate_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+                    std::collections::HashMap::new(),
+                )),
                 compose_sessions: std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                 compose_cancels: std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             });

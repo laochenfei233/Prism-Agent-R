@@ -17,7 +17,9 @@ pub async fn compose_start(
         sessions: state.compose_sessions.clone(),
         cancels: state.compose_cancels.clone(),
     };
-    engine.start(user_request, agent_id, &state.db.pool, &app).await
+    engine
+        .start(user_request, agent_id, &state.db.pool, &app)
+        .await
 }
 
 /// Pause a running compose session.

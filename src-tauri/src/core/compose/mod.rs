@@ -95,6 +95,12 @@ pub struct ComposeEngine {
     pub cancels: Arc<Mutex<HashMap<String, CancellationToken>>>,
 }
 
+impl Default for ComposeEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComposeEngine {
     pub fn new() -> Self {
         Self {
@@ -224,10 +230,7 @@ impl ComposeEngine {
                     // Restore status
                     session.status = ComposeStatus::Brainstorming;
                     session.updated_at = chrono::Utc::now().timestamp_millis();
-                    (
-                        session.user_request.clone(),
-                        session.agent_id.clone(),
-                    )
+                    (session.user_request.clone(), session.agent_id.clone())
                 }
                 _ => {
                     return Err(AppError::Validation(
@@ -355,12 +358,12 @@ async fn create_provider(
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row.base_url.unwrap_or_else(|| {
-        match provider_row.kind.as_str() {
+    let base_url = provider_row
+        .base_url
+        .unwrap_or_else(|| match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
-        }
-    });
+        });
 
     let api_key = provider_row
         .api_key_enc
@@ -370,7 +373,10 @@ async fn create_provider(
 
     Ok(Arc::new(OpenAiProvider::new(
         model_row.provider_id.clone(),
-        model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone()),
+        model_row
+            .display_name
+            .clone()
+            .unwrap_or_else(|| model_row.model_id.clone()),
         api_key,
         base_url,
         model_row.model_id.clone(),
@@ -487,11 +493,7 @@ Keep tasks to 3-8 items. Make tasks actionable and specific."#
             description: t.description.clone(),
             acceptance: t.acceptance.clone(),
             status: TaskStatus::Pending,
-            depends_on: spec
-                .dependencies
-                .get(&t.id)
-                .cloned()
-                .unwrap_or_default(),
+            depends_on: spec.dependencies.get(&t.id).cloned().unwrap_or_default(),
             result: None,
             error: None,
         })
@@ -558,11 +560,23 @@ Provide a detailed implementation plan or code changes needed. Be specific about
             acceptance = tasks[i].acceptance
         );
 
-        match llm_generate(&provider, "You are a senior software engineer. Implement tasks precisely.", &impl_prompt).await {
+        match llm_generate(
+            &provider,
+            "You are a senior software engineer. Implement tasks precisely.",
+            &impl_prompt,
+        )
+        .await
+        {
             Ok(result) => {
                 tasks[i].status = TaskStatus::Completed;
                 tasks[i].result = Some(result.clone());
-                emit_task_event(app, session_id, &tasks[i].id, &tasks[i].status, Some(&result));
+                emit_task_event(
+                    app,
+                    session_id,
+                    &tasks[i].id,
+                    &tasks[i].status,
+                    Some(&result),
+                );
             }
             Err(e) => {
                 tasks[i].status = TaskStatus::Failed;
@@ -621,7 +635,12 @@ Provide a verification report with:
             .join("\n")
     );
 
-    let verify_result = llm_generate(&provider, "You are a QA engineer reviewing completed work.", &verify_prompt).await?;
+    let verify_result = llm_generate(
+        &provider,
+        "You are a QA engineer reviewing completed work.",
+        &verify_prompt,
+    )
+    .await?;
 
     // Step 5: Review
     update_status(sessions, session_id, ComposeStatus::Reviewing, app).await;
@@ -648,10 +667,17 @@ Return a JSON object with this exact structure:
 }}"#
     );
 
-    let review_text = llm_generate(&provider, "You are a code reviewer. Output ONLY valid JSON, no markdown fencing.", &review_prompt).await?;
+    let review_text = llm_generate(
+        &provider,
+        "You are a code reviewer. Output ONLY valid JSON, no markdown fencing.",
+        &review_prompt,
+    )
+    .await?;
 
     let review: ReviewResult = serde_json::from_str(&review_text).map_err(|e| {
-        AppError::Internal(format!("Failed to parse review JSON: {e}\nRaw: {review_text}"))
+        AppError::Internal(format!(
+            "Failed to parse review JSON: {e}\nRaw: {review_text}"
+        ))
     })?;
 
     {

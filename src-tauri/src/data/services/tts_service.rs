@@ -53,7 +53,9 @@ pub struct TtsVoiceInfo {
 
 /// 查询 TTS 状态（preferences: tts.lang / tts.rate，默认 zh-CN / 1.0）
 pub async fn voices_status(db: &Database) -> Result<TtsVoiceInfo, AppError> {
-    let lang = get_pref(db, "tts.lang").await.unwrap_or_else(|| "zh-CN".into());
+    let lang = get_pref(db, "tts.lang")
+        .await
+        .unwrap_or_else(|| "zh-CN".into());
     let rate = get_pref(db, "tts.rate")
         .await
         .and_then(|v| v.parse::<f32>().ok())
@@ -104,7 +106,11 @@ mod tests {
         let text = "长句无标点".repeat(50);
         assert_eq!(text.chars().count(), 250);
         let segs = split_for_speech(&text);
-        assert!(segs.len() > 1, "超长无边界文本应截断为多段，实际 {} 段", segs.len());
+        assert!(
+            segs.len() > 1,
+            "超长无边界文本应截断为多段，实际 {} 段",
+            segs.len()
+        );
         assert!(segs.iter().all(|s| s.chars().count() <= MAX_SEGMENT_CHARS));
     }
 

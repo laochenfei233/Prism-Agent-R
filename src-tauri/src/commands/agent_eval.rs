@@ -4,7 +4,9 @@ use std::time::Duration;
 use tauri::State;
 
 use crate::core::adk::model::ModelProvider;
-use crate::core::rig::judge::{aggregate_stats, AgentJudge, AgentStats, ComparisonResult, JudgeResult};
+use crate::core::rig::judge::{
+    aggregate_stats, AgentJudge, AgentStats, ComparisonResult, JudgeResult,
+};
 use crate::core::rig::provider::OpenAiProvider;
 use crate::data::models::{ModelRow, ProviderRow};
 use crate::data::services::trace_service::TraceService;
@@ -27,12 +29,12 @@ async fn build_judge_model(state: &State<'_, crate::AppState>) -> Result<AgentJu
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row.base_url.unwrap_or_else(|| {
-        match provider_row.kind.as_str() {
+    let base_url = provider_row
+        .base_url
+        .unwrap_or_else(|| match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
-        }
-    });
+        });
     let api_key = provider_row
         .api_key_enc
         .as_deref()
@@ -41,7 +43,10 @@ async fn build_judge_model(state: &State<'_, crate::AppState>) -> Result<AgentJu
 
     let provider: Arc<dyn ModelProvider> = Arc::new(OpenAiProvider::new(
         model_row.provider_id.clone(),
-        model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone()),
+        model_row
+            .display_name
+            .clone()
+            .unwrap_or_else(|| model_row.model_id.clone()),
         api_key,
         base_url,
         model_row.model_id.clone(),
@@ -58,7 +63,8 @@ pub async fn agent_judge_evaluate(
     criteria: Option<Vec<String>>,
 ) -> Result<JudgeResult, AppError> {
     let judge = build_judge_model(&state).await?;
-    let criteria = criteria.unwrap_or_else(|| vec!["准确性".into(), "完整性".into(), "清晰度".into()]);
+    let criteria =
+        criteria.unwrap_or_else(|| vec!["准确性".into(), "完整性".into(), "清晰度".into()]);
     let result = tokio::time::timeout(
         Duration::from_secs(120),
         judge.evaluate(&task, &output, &criteria),
@@ -117,11 +123,23 @@ pub async fn agent_stats(
             let steps_json: String = row.try_get("steps")?;
             let total_cost: f64 = row.try_get("total_cost")?;
             let outcome: String = row.try_get("outcome")?;
-            let steps: Vec<crate::data::services::trace_service::TraceStep> = serde_json::from_str(&steps_json).unwrap_or_default();
+            let steps: Vec<crate::data::services::trace_service::TraceStep> =
+                serde_json::from_str(&steps_json).unwrap_or_default();
             out.push(crate::data::services::trace_service::AgentTrace {
-                id, session_id, agent_id, trace_id, started_at, finished_at, steps,
-                total_prompt_tokens: 0, total_completion_tokens: 0, total_cost, outcome,
-                grade_score: None, grade_reason: None, graded_at: None,
+                id,
+                session_id,
+                agent_id,
+                trace_id,
+                started_at,
+                finished_at,
+                steps,
+                total_prompt_tokens: 0,
+                total_completion_tokens: 0,
+                total_cost,
+                outcome,
+                grade_score: None,
+                grade_reason: None,
+                graded_at: None,
             });
         }
         out

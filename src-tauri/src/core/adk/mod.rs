@@ -14,6 +14,6 @@ pub use instructions::{InstructionManager, InstructionMode};
 pub use model::{ChatMessage, ChatRole, GenerationRequest, ModelCapabilities, ModelProvider};
 pub use prompt::PromptBuilder;
 pub use tool::{
-    RiskLevel, ToolApprovalRequest, ToolApprovalResponse, ToolApprovalStore, ToolExecutor, ToolSpec,
-    assess_risk,
+    assess_risk, RiskLevel, ToolApprovalRequest, ToolApprovalResponse, ToolApprovalStore,
+    ToolExecutor, ToolSpec,
 };

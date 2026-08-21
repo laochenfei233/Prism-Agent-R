@@ -1,6 +1,8 @@
-use serde::{Deserialize, Serialize};
-use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
+use crate::core::adk::model::{
+    ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider,
+};
 use crate::utils::error::AppError;
+use serde::{Deserialize, Serialize};
 
 // ── §19.3.1 压缩策略 ──────────────────────────────────────
 
@@ -46,9 +48,7 @@ impl Compactor {
         history: &[ChatMessage],
     ) -> Result<Vec<ChatMessage>, AppError> {
         match self.strategy {
-            CompactStrategy::Truncate => {
-                Ok(self.truncate(history))
-            }
+            CompactStrategy::Truncate => Ok(self.truncate(history)),
             CompactStrategy::Summarize => {
                 match self.summarize(provider, history).await {
                     Ok(result) => Ok(result),
@@ -83,7 +83,8 @@ impl Compactor {
         }
 
         // 构建摘要请求：将历史消息转为文本
-        let history_text = history.iter()
+        let history_text = history
+            .iter()
             .map(|msg| {
                 let role = match msg.role {
                     ChatRole::User => "用户",
@@ -103,8 +104,7 @@ impl Compactor {
 
         let prompt = format!(
             "{}\n\n---\n\n以下是需要摘要的会话历史：\n\n{}",
-            self.summarize_prompt,
-            history_text
+            self.summarize_prompt, history_text
         );
 
         let request = GenerationRequest {
@@ -116,7 +116,9 @@ impl Compactor {
             ..Default::default()
         };
 
-        let response = provider.generate(request).await
+        let response = provider
+            .generate(request)
+            .await
             .map_err(|e| AppError::Internal(format!("Compactor LLM 调用失败: {e}")))?;
 
         // 构建压缩后的历史：系统消息 + 摘要 + 最近 5 条消息
@@ -203,10 +205,15 @@ pub fn estimate_tokens(text: &str) -> usize {
 
 pub fn pressure_level(used: usize, limit: usize) -> u8 {
     let ratio = used as f64 / limit as f64;
-    if ratio < 0.50 { 0 }
-    else if ratio < 0.70 { 1 }
-    else if ratio < 0.85 { 2 }
-    else { 3 }
+    if ratio < 0.50 {
+        0
+    } else if ratio < 0.70 {
+        1
+    } else if ratio < 0.85 {
+        2
+    } else {
+        3
+    }
 }
 
 pub fn soft_trim(output: &str) -> String {
@@ -216,7 +223,14 @@ pub fn soft_trim(output: &str) -> String {
         return output.to_string();
     }
     let head: String = output.chars().take(KEEP).collect();
-    let tail: String = output.chars().rev().take(KEEP).collect::<Vec<_>>().into_iter().rev().collect();
+    let tail: String = output
+        .chars()
+        .rev()
+        .take(KEEP)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
     format!("{head}[... trimmed ...]{tail}")
 }
 

@@ -5,7 +5,7 @@ use crate::core::budget::config::BudgetConfig;
 use crate::core::budget::policy::BudgetPolicy;
 use crate::core::budget::tracker::BudgetTracker;
 use crate::core::guardrails::tool_guard::{ToolGuardrail, ToolPolicy};
-use crate::core::observability::exception::{ExceptionRecorder, ExceptionQuery};
+use crate::core::observability::exception::{ExceptionQuery, ExceptionRecorder};
 use crate::utils::error::AppError;
 
 // ── 预算命令 ──────────────────────────────────────────────
@@ -80,9 +80,7 @@ pub async fn exception_resolve(
 
 /// §26.4 清除已处理的异常（可保留未处理的）
 #[tauri::command]
-pub async fn exception_clear(
-    state: State<'_, crate::AppState>,
-) -> Result<(), AppError> {
+pub async fn exception_clear(state: State<'_, crate::AppState>) -> Result<(), AppError> {
     sqlx::query("DELETE FROM agent_exceptions WHERE resolved_at IS NOT NULL")
         .execute(&state.db.pool)
         .await?;
@@ -91,33 +89,35 @@ pub async fn exception_clear(
 
 /// §26.4 导出结构化日志（JSON Lines）
 #[tauri::command]
-pub async fn log_export(
-    state: State<'_, crate::AppState>,
-) -> Result<String, AppError> {
+pub async fn log_export(state: State<'_, crate::AppState>) -> Result<String, AppError> {
     let rows = sqlx::query(
         "SELECT id, session_id, agent_id, exception_type, severity, message, created_at FROM agent_exceptions ORDER BY created_at DESC LIMIT 500",
     )
     .fetch_all(&state.db.pool)
     .await?;
 
-    let lines: Vec<String> = rows.iter().map(|row| {
-        let id: String = row.get("id");
-        let session_id: String = row.get("session_id");
-        let agent_id: String = row.get("agent_id");
-        let exception_type: String = row.get("exception_type");
-        let severity: String = row.get("severity");
-        let message: String = row.get("message");
-        let created_at: i64 = row.get("created_at");
-        serde_json::json!({
-            "id": id,
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "exception_type": exception_type,
-            "severity": severity,
-            "message": message,
-            "created_at": created_at,
-        }).to_string()
-    }).collect();
+    let lines: Vec<String> = rows
+        .iter()
+        .map(|row| {
+            let id: String = row.get("id");
+            let session_id: String = row.get("session_id");
+            let agent_id: String = row.get("agent_id");
+            let exception_type: String = row.get("exception_type");
+            let severity: String = row.get("severity");
+            let message: String = row.get("message");
+            let created_at: i64 = row.get("created_at");
+            serde_json::json!({
+                "id": id,
+                "session_id": session_id,
+                "agent_id": agent_id,
+                "exception_type": exception_type,
+                "severity": severity,
+                "message": message,
+                "created_at": created_at,
+            })
+            .to_string()
+        })
+        .collect();
 
     Ok(lines.join("\n"))
 }
@@ -133,18 +133,21 @@ pub async fn model_switch_list(
     .fetch_all(&state.db.pool)
     .await?;
 
-    let models = rows.iter().map(|row| {
-        let model_id: String = row.get("model_id");
-        let display_name: Option<String> = row.get("display_name");
-        let provider_name: String = row.get("provider_name");
-        let is_default: i64 = row.get("is_default");
-        serde_json::json!({
-            "model_id": model_id,
-            "display_name": display_name,
-            "provider_name": provider_name,
-            "is_default": is_default == 1,
+    let models = rows
+        .iter()
+        .map(|row| {
+            let model_id: String = row.get("model_id");
+            let display_name: Option<String> = row.get("display_name");
+            let provider_name: String = row.get("provider_name");
+            let is_default: i64 = row.get("is_default");
+            serde_json::json!({
+                "model_id": model_id,
+                "display_name": display_name,
+                "provider_name": provider_name,
+                "is_default": is_default == 1,
+            })
         })
-    }).collect();
+        .collect();
 
     Ok(models)
 }

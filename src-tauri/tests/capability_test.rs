@@ -19,8 +19,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use prism_agent_lib::core::adk::error::AgentError;
 use prism_agent_lib::core::adk::model::{
-    ChatMessage, ChatRole, GenerationRequest, GenerationResponse, MessageContent, ModelCapabilities,
-    ModelProvider, StreamEvent, StreamHandle, ToolCall, ToolOutput, Usage,
+    ChatMessage, ChatRole, GenerationRequest, GenerationResponse, MessageContent,
+    ModelCapabilities, ModelProvider, StreamEvent, StreamHandle, ToolCall, ToolOutput, Usage,
 };
 use prism_agent_lib::core::adk::tool::{ToolApprovalStore, ToolExecutor, ToolRegistry};
 use prism_agent_lib::core::guardrails::sandbox::SandboxPolicy;
@@ -108,7 +108,11 @@ impl ToolExecutor for EchoTool {
 
     async fn execute(&self, args: serde_json::Value) -> Result<ToolOutput, AgentError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let text = args.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let text = args
+            .get("text")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         Ok(ToolOutput::text(format!("echo: {text}")))
     }
 }
@@ -168,21 +172,24 @@ impl ToolExecutor for FileTools {
     async fn execute(&self, args: serde_json::Value) -> Result<ToolOutput, AgentError> {
         match self.0 {
             FileToolKind::Write => {
-                let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| {
-                    AgentError::InvalidArgs("path required".into())
-                })?;
-                let content = args.get("content").and_then(|v| v.as_str()).ok_or_else(|| {
-                    AgentError::InvalidArgs("content required".into())
-                })?;
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| AgentError::InvalidArgs("path required".into()))?;
+                let content = args
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| AgentError::InvalidArgs("content required".into()))?;
                 prism_agent_lib::commands::file::file_write(path.to_string(), content.to_string())
                     .await
                     .map_err(|e| AgentError::Tool(e.to_string()))?;
                 Ok(ToolOutput::text(format!("wrote {path}")))
             }
             FileToolKind::Read => {
-                let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| {
-                    AgentError::InvalidArgs("path required".into())
-                })?;
+                let path = args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| AgentError::InvalidArgs("path required".into()))?;
                 let text = prism_agent_lib::commands::file::file_read_text(path.to_string())
                     .await
                     .map_err(|e| AgentError::Tool(e.to_string()))?;
@@ -220,11 +227,18 @@ async fn conversation_roundtrip() {
     let provider = Arc::new(FakeProvider::new(vec![GenerationResponse {
         text: "你好，这是对话回复".into(),
         tool_calls: vec![],
-        usage: Some(Usage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }),
+        usage: Some(Usage {
+            prompt_tokens: 10,
+            completion_tokens: 5,
+            total_tokens: 15,
+        }),
     }]));
 
     let agent = RigAgent::new(provider, "system".into(), ToolRegistry::new());
-    let result = agent.run(plain_request()).await.expect("conversation should succeed");
+    let result = agent
+        .run(plain_request())
+        .await
+        .expect("conversation should succeed");
 
     assert_eq!(result.text, "你好，这是对话回复");
     assert!(result.tool_calls.is_empty());
@@ -255,7 +269,9 @@ async fn tool_execution_roundtrip() {
     ]));
 
     let mut registry = ToolRegistry::new();
-    registry.register(Box::new(EchoTool { calls: echo_calls.clone() }));
+    registry.register(Box::new(EchoTool {
+        calls: echo_calls.clone(),
+    }));
 
     // echo_tool 风险为 High：预置 always-approve 以走真实 HITL 门控的直通分支
     let store = Arc::new(ToolApprovalStore::new());
@@ -269,10 +285,17 @@ async fn tool_execution_roundtrip() {
             traces_cb.lock().unwrap().push(trace);
         });
 
-    let result = agent.run(plain_request()).await.expect("tool loop should succeed");
+    let result = agent
+        .run(plain_request())
+        .await
+        .expect("tool loop should succeed");
 
     assert_eq!(result.text, "工具结果 echo: hello 已收到");
-    assert_eq!(echo_calls.load(Ordering::SeqCst), 1, "tool must be executed exactly once");
+    assert_eq!(
+        echo_calls.load(Ordering::SeqCst),
+        1,
+        "tool must be executed exactly once"
+    );
     let trace_guard = traces.lock().unwrap();
     let kinds: Vec<&str> = trace_guard
         .first()
@@ -297,11 +320,15 @@ async fn local_fs_read_write() {
         .await
         .expect("write should succeed");
     assert_eq!(
-        prism_agent_lib::commands::file::file_read_text(txt_path.clone()).await.unwrap(),
+        prism_agent_lib::commands::file::file_read_text(txt_path.clone())
+            .await
+            .unwrap(),
         "hello world"
     );
 
-    let parsed = prism_agent_lib::commands::file::file_parse(txt_path.clone()).await.unwrap();
+    let parsed = prism_agent_lib::commands::file::file_parse(txt_path.clone())
+        .await
+        .unwrap();
     assert_eq!(parsed.kind, "text");
     assert_eq!(parsed.content.as_deref(), Some("hello world"));
 
@@ -310,7 +337,9 @@ async fn local_fs_read_write() {
     prism_agent_lib::commands::file::file_write(json_path.clone(), r#"{"a":1}"#.into())
         .await
         .expect("write json should succeed");
-    let parsed_json = prism_agent_lib::commands::file::file_parse(json_path).await.unwrap();
+    let parsed_json = prism_agent_lib::commands::file::file_parse(json_path)
+        .await
+        .unwrap();
     assert_eq!(parsed_json.kind, "json");
     assert!(parsed_json.json.is_some());
 
@@ -321,11 +350,15 @@ async fn local_fs_read_write() {
     assert!(listed.iter().any(|e| e.name == "note.txt"));
 
     assert_eq!(
-        prism_agent_lib::commands::file::file_pick(Some(txt_path.clone())).await.unwrap(),
+        prism_agent_lib::commands::file::file_pick(Some(txt_path.clone()))
+            .await
+            .unwrap(),
         txt_path
     );
     let missing = dir.join("missing.txt").to_string_lossy().to_string();
-    assert!(prism_agent_lib::commands::file::file_pick(Some(missing)).await.is_err());
+    assert!(prism_agent_lib::commands::file::file_pick(Some(missing))
+        .await
+        .is_err());
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -341,16 +374,23 @@ async fn local_fs_truncation() {
     for i in 0..30_000 {
         content.push_str(&format!("0123456789 line {i}\n"));
     }
-    prism_agent_lib::commands::file::file_write(big_path.clone(), content).await.unwrap();
+    prism_agent_lib::commands::file::file_write(big_path.clone(), content)
+        .await
+        .unwrap();
 
-    let out = prism_agent_lib::commands::file::file_read_text(big_path).await.unwrap();
+    let out = prism_agent_lib::commands::file::file_read_text(big_path)
+        .await
+        .unwrap();
     assert!(out.contains("[内容过大，已截断"));
     let lines: Vec<&str> = out.lines().collect();
     // 100 行正文 + 1 空行（截断标记前置 \n）+ 1 行截断标记
     assert_eq!(lines.len(), 102);
     assert!(lines[0].starts_with("0123456789 line 0"));
     assert!(lines[99].starts_with("0123456789 line 99"));
-    assert_eq!(lines[101], "[内容过大，已截断：文件超过 200KB，仅显示前 100 行]");
+    assert_eq!(
+        lines[101],
+        "[内容过大，已截断：文件超过 200KB，仅显示前 100 行]"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -358,9 +398,18 @@ async fn local_fs_truncation() {
 #[test]
 fn sandbox_path_and_command() {
     let policy = SandboxPolicy::default();
-    assert!(policy.check_path("/etc/passwd").is_err(), "黑名单路径必须拒绝");
-    assert!(policy.check_path("./src/main.rs").is_ok(), "白名单路径必须放行");
-    assert!(policy.check_command("rm -rf /").is_err(), "黑名单命令必须拒绝");
+    assert!(
+        policy.check_path("/etc/passwd").is_err(),
+        "黑名单路径必须拒绝"
+    );
+    assert!(
+        policy.check_path("./src/main.rs").is_ok(),
+        "白名单路径必须放行"
+    );
+    assert!(
+        policy.check_command("rm -rf /").is_err(),
+        "黑名单命令必须拒绝"
+    );
     assert!(policy.check_command("ls -la").is_ok(), "白名单命令必须放行");
 }
 

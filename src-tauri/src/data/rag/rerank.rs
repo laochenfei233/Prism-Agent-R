@@ -3,7 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::core::adk::error::AgentError;
-use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
+use crate::core::adk::model::{
+    ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider,
+};
 
 // ── 重排序（§10.2.2 可选 reranking） ──────────────────────
 // 初检 top-150 → reranker 重打分 → top-20 注入。
@@ -12,7 +14,12 @@ use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageC
 #[async_trait]
 pub trait Reranker: Send + Sync {
     /// 对候选 (query, doc) 打分（分数越高越相关），返回重排后的索引顺序
-    async fn rerank(&self, query: &str, docs: &[String], top_k: usize) -> Result<Vec<usize>, AgentError>;
+    async fn rerank(
+        &self,
+        query: &str,
+        docs: &[String],
+        top_k: usize,
+    ) -> Result<Vec<usize>, AgentError>;
 }
 
 /// 零成本降级：无 reranker 时原序保留（取前 top_k）
@@ -20,7 +27,12 @@ pub struct NoopReranker;
 
 #[async_trait]
 impl Reranker for NoopReranker {
-    async fn rerank(&self, _query: &str, docs: &[String], top_k: usize) -> Result<Vec<usize>, AgentError> {
+    async fn rerank(
+        &self,
+        _query: &str,
+        docs: &[String],
+        top_k: usize,
+    ) -> Result<Vec<usize>, AgentError> {
         Ok((0..docs.len().min(top_k)).collect())
     }
 }
@@ -33,13 +45,21 @@ pub struct LlmReranker {
 
 impl LlmReranker {
     pub fn new(model: Arc<dyn ModelProvider>) -> Self {
-        Self { model, max_candidates: 150 }
+        Self {
+            model,
+            max_candidates: 150,
+        }
     }
 }
 
 #[async_trait]
 impl Reranker for LlmReranker {
-    async fn rerank(&self, query: &str, docs: &[String], top_k: usize) -> Result<Vec<usize>, AgentError> {
+    async fn rerank(
+        &self,
+        query: &str,
+        docs: &[String],
+        top_k: usize,
+    ) -> Result<Vec<usize>, AgentError> {
         if docs.is_empty() {
             return Ok(Vec::new());
         }
@@ -83,12 +103,17 @@ fn parse_index_list(text: &str, n: usize, top_k: usize) -> Vec<usize> {
         cleaned
     };
     let start = body.find('[').unwrap_or(0);
-    let stop = body[start..].rfind(']').map(|i| i + start).unwrap_or(body.len());
+    let stop = body[start..]
+        .rfind(']')
+        .map(|i| i + start)
+        .unwrap_or(body.len());
     let slice = &body[start..stop];
     let mut idx: Vec<usize> = slice
         .split(|c: char| !c.is_ascii_digit() && c != '-')
         .filter_map(|s| {
-            if s.is_empty() { return None; }
+            if s.is_empty() {
+                return None;
+            }
             s.parse::<usize>().ok().filter(|i| *i < n)
         })
         .collect();
@@ -110,8 +135,13 @@ pub async fn rerank_top<T: Clone>(
         return Ok(Vec::new());
     }
     let docs: Vec<String> = candidates.iter().map(|(s, _)| s.clone()).collect();
-    let order = reranker.rerank(query, &docs, top_k.min(candidates.len())).await?;
-    Ok(order.into_iter().filter_map(|i| candidates.get(i).cloned()).collect())
+    let order = reranker
+        .rerank(query, &docs, top_k.min(candidates.len()))
+        .await?;
+    Ok(order
+        .into_iter()
+        .filter_map(|i| candidates.get(i).cloned())
+        .collect())
 }
 
 #[cfg(test)]
@@ -138,7 +168,10 @@ mod tests {
 
     #[tokio::test]
     async fn noop_preserves_order() {
-        let r = NoopReranker.rerank("q", &["a".into(), "b".into()], 2).await.unwrap();
+        let r = NoopReranker
+            .rerank("q", &["a".into(), "b".into()], 2)
+            .await
+            .unwrap();
         assert_eq!(r, vec![0, 1]);
     }
 }
