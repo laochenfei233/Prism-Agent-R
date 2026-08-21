@@ -3,7 +3,7 @@ feature: engineering-polish
 status: delivered
 updated: 2026-08-21
 branch: feat/eng-hardening
-commits: 42f2adb..37f9f72
+commits: 42f2adb..f50f2f5
 ---
 
 # 工程化改造（商业软件化）
