@@ -1,0 +1,8 @@
+# Generated / third-party
+node_modules/
+build/
+.svelte-kit/
+package-lock.json
+src-tauri/
+docs/
+CHANGELOG.md
