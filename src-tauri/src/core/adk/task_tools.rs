@@ -175,7 +175,7 @@ impl ToolExecutor for TaskListTool {
             tasks.retain(|t| t.owner.as_deref() == Some(o));
         }
 
-        tasks.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        tasks.sort_by_key(|t| t.created_at);
 
         if tasks.is_empty() {
             return Ok(ToolOutput::text("看板为空".to_string()));

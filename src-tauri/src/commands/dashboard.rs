@@ -33,6 +33,6 @@ pub async fn dashboard_tasks(
     if let Some(s) = &status {
         tasks.retain(|t| t.status == *s);
     }
-    tasks.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    tasks.sort_by_key(|t| t.created_at);
     Ok(tasks)
 }

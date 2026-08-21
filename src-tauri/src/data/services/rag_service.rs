@@ -178,7 +178,7 @@ impl RagService {
         // Build (content, embedding_bytes) pairs
         let chunk_pairs: Vec<(String, Option<Vec<u8>>)> = chunks
             .into_iter()
-            .zip(embeddings.into_iter())
+            .zip(embeddings)
             .map(|(text, emb)| {
                 let bytes = embedding::embedding_to_bytes(&emb);
                 (text, Some(bytes))
