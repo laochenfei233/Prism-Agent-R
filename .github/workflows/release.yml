@@ -1,3 +1,8 @@
+# Release: runs on push to master/main. The quality gates live in build.yml's
+# `test` job — with branch protection marking `test` as a required check, a
+# release only happens for changes that passed the full gate. If branch
+# protection is not enabled, consider switching this to `workflow_run` on the
+# build workflow to keep the "tests passed before release" guarantee.
 name: Release
 
 on:

@@ -28,7 +28,8 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Svelte 5 runes: properties are accessed as normal JS, not $props destructuring lint targets
+      // {@html} is used for trusted static content (SVG provider icons,
+      // markdown-it rendered HTML); keep the rule off for the whole svelte tree.
       'svelte/no-at-html-tags': 'off',
     },
   },
@@ -41,8 +42,9 @@ export default tseslint.config(
   },
   {
     rules: {
-      // SvelteKit 2.x: goto() remains a valid navigation API; resolve() migration is a
-      // suggestion, not a defect — turning it off avoids churning 14 call sites.
+      // SvelteKit 2.x: goto() remains a valid navigation API; resolve() migration
+      // is a suggestion, not a defect — leaving the rule off avoids churn in
+      // PrimaryNav/+layout/+page navigation calls.
       'svelte/no-navigation-without-resolve': 'off',
     },
   },

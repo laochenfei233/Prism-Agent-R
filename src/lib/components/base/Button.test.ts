@@ -6,7 +6,10 @@ import Button from './Button.svelte';
 
 // Svelte 5 renders snippet props only when they are real snippets
 // (createSnippet / createRawSnippet), not plain arrow functions.
-const text = (content: string) => createRawSnippet(() => ({ render: () => content }));
+// createRawSnippet's render must return a single element, not bare text,
+// otherwise dev mode logs invalid_raw_snippet_render.
+const text = (content: string) =>
+  createRawSnippet(() => ({ render: () => `<span>${content}</span>` }));
 
 function renderButton(props: Record<string, unknown> = {}) {
   return render(Button, {

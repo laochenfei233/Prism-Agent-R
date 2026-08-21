@@ -1,14 +1,30 @@
 ---
 feature: engineering-polish
-status: in-progress
+status: delivered
 updated: 2026-08-21
 branch: feat/eng-hardening
-commits: # filled at delivery
+commits: 42f2adb..37f9f72
 ---
 
 # 工程化改造（商业软件化）
 
 ## Report
+
+**What was built** — 面向「商业软件观感」的四项工程化改造，全部落地并全链路验证：
+
+1. **门面工程**：根 README.md（定位/特性表/架构图/快速开始/文档索引）、MIT LICENSE、CHANGELOG.md（Unreleased + 0.1.0 快照）、CONTRIBUTING.md（质量门禁/Conventional Commits/PR 流程）。
+2. **质量门禁**：eslint flat config + prettier + .editorconfig；存量 167 处 lint 错误全部修复（无 baseline 豁免）；Rust 端 cargo fmt 首次全量格式化（155 文件）+ clippy 66 处警告清零（5 处 too_many_arguments 因 tauri 命令签名豁免）；build.yml test job 增加 fmt/clippy/lint/format:check/test 五道门禁。
+3. **前端测试**：vitest + @testing-library/svelte + user-event 独立配置（vitest.config.ts），12 个真实渲染用例（Button 5 / Badge 3 / theme store 4）。
+4. **发版流程**：semantic-release 25（conventionalcommits + changelog + git + github 插件），release.yml workflow + build.yml 增加 `v*` tag 触发与 tauri-action Release 上传。
+
+**Verification** — 全部门禁通过：eslint 0 errors；prettier --check 全过；vitest 12/12 passed；svelte-check 0 errors（1 个既有 warning）；cargo fmt --check 通过；cargo clippy -D warnings 0 警告；cargo test 124 passed（lib 118 + capability 6）。semantic-release --dry-run 配置加载通过。审查（独立 subagent）：Spec compliance / Correctness / Consistency 三项 PASS，无 critical。
+
+**Journey log** —
+- **Svelte 5 snippet 测试的坑**：`@testing-library/svelte` render 传普通箭头函数作 children 不会渲染——Svelte 5 要求 snippet prop 必须是真 snippet（`createRawSnippet`），且其 render 必须返回单元素 HTML（纯文本触发 `invalid_raw_snippet_render` dev 噪音）。这是 svelte 5 + vitest 组合的首个关键坑。
+- **svelte 包条件导出**：vitest 不启用 `browser` 条件时解析到 SSR 构建，`Svelte.mount` 抛 `lifecycle_function_unavailable`；在 vitest.config.ts `resolve.conditions: ['browser']` 修复，且独立配置文件不污染 tauri 主构建。
+- **模块级单例 store 测试**：`theme.svelte.ts` 在 import 时即初始化，需 `vi.resetModules()` + 动态 import 保证 matchMedia/localStorage 状态确定。
+- **clippy 首次全量格式化**：项目从未跑过 `cargo fmt`（155/155 文件有 diff）；一次性格式化 + `cargo clippy --fix` 后手工处理 19 处残留（type alias 化解复杂类型、`from_str`→`parse` 改名、tauri 命令参数豁免）。
+- **仓库多 remote 陷阱**：git 同时有内网 gitee 镜像与 GitHub remote，semantic-release 无法推断 repositoryUrl——显式指向 GitHub 防止误发内网镜像。
 
 ## [S1] Problem
 
@@ -24,7 +40,7 @@ commits: # filled at delivery
 ### 门面工程（S2.1）
 
 - **README.md**（根目录，英文为主 + 中文要点）：项目定位、功能特性清单（对齐 docs/design 五阶段）、架构概览（Tauri 2 + SvelteKit 5 + Rust core）、快速开始（npm install + tauri dev）、构建/测试命令、文档索引（docs/design、docs/compose/specs）、徽章占位（CI/版本）
-- **LICENSE**：MIT，2026，作者名用 GitHub 用户名 chenfei 的实际显示名？→ 采用 MIT + `Chenfei`，占位符不引入
+- **LICENSE**：MIT，2026，版权人 `laochenfei233`（GitHub 用户名，与 remote 一致）
 - **CHANGELOG.md**：手写初始版本，后续由 semantic-release 自动追加
 - **CONTRIBUTING.md**：开发环境、代码规范（commit 规范 → 对齐 semantic-release）、测试要求、PR 流程
 
@@ -76,4 +92,4 @@ commits: # filled at delivery
 - [x] T5: vitest 测试框架接入 — acceptance: `npm test` 跑通示例测试，CI 含 test 步骤 (covers: S2.3)
 - [x] T6: 首批前端测试（base 组件 + 逻辑/store） — acceptance: ≥6 个真实渲染测试用例全部通过 (covers: S2.3; depends: T5)
 - [x] T7: semantic-release 配置 + release workflow — acceptance: 本地 dry-run 通过，workflow 文件就位 (covers: S2.4)
-- [ ] T8: CI 全链路验证 — acceptance: 本地模拟 CI 各步骤（test/lint/format/clippy/fmt）全部通过 (covers: S2.2, S2.3, S2.4; depends: T3, T4, T6, T7)
+- [x] T8: CI 全链路验证 — acceptance: 本地模拟 CI 各步骤（test/lint/format/clippy/fmt）全部通过 (covers: S2.2, S2.3, S2.4; depends: T3, T4, T6, T7)
