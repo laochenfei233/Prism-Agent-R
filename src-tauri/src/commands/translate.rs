@@ -1,8 +1,6 @@
 use tauri::State;
 
-use crate::data::models::{
-    DetectResultDto, TranslateHistoryResultDto, TranslateResultDto,
-};
+use crate::data::models::{DetectResultDto, TranslateHistoryResultDto, TranslateResultDto};
 use crate::data::services::translate_service::TranslateService;
 use crate::utils::error::AppError;
 
@@ -33,9 +31,7 @@ pub async fn translate_batch(
     target: String,
 ) -> Result<Vec<TranslateResultDto>, AppError> {
     let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
-    let results = svc
-        .batch(&texts, source.as_deref(), &target)
-        .await?;
+    let results = svc.batch(&texts, source.as_deref(), &target).await?;
     Ok(results
         .into_iter()
         .map(|r| TranslateResultDto {
@@ -70,9 +66,7 @@ pub async fn translate_history(
     offset: Option<i64>,
 ) -> Result<TranslateHistoryResultDto, AppError> {
     let svc = TranslateService::new(state.db.pool.clone(), state.translate_cache.clone());
-    let result = svc
-        .history(query.as_deref(), limit, offset)
-        .await?;
+    let result = svc.history(query.as_deref(), limit, offset).await?;
     Ok(TranslateHistoryResultDto {
         items: result.items,
         total: result.total,

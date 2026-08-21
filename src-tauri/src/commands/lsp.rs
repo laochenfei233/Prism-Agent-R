@@ -99,7 +99,7 @@ pub async fn lsp_list() -> Result<Vec<LspServerInfo>, AppError> {
     let mut dead = Vec::new();
 
     for (id, server) in guard.iter() {
-        if server.child.id().is_some_and(|pid| pid_alive(pid)) {
+        if server.child.id().is_some_and(pid_alive) {
             servers.push(LspServerInfo {
                 id: id.clone(),
                 cmd: server.cmd.clone(),

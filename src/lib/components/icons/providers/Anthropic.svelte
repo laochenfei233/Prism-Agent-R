@@ -1,6 +1,7 @@
 <script lang="ts">
-	let { size = 24 }: { size?: number } = $props();
-	let svg = $derived(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" fill="none" viewBox="9 9 102 102" >
+  let { size = 24 }: { size?: number } = $props();
+  let svg =
+    $derived(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" fill="none" viewBox="9 9 102 102" >
       <g clip-path="url(#anthropic-i-anthropiclight__a)">
         <mask
           id="anthropic-i-anthropiclight__b"
@@ -30,6 +31,5 @@
       </defs>
     </svg>`);
 </script>
-
 
 {@html svg}

@@ -6,16 +6,24 @@ use super::*;
 // 新增后端 = 实现 AsrBackend + 在此 register 一行；不修改工厂 match。
 
 pub fn builtin_register() {
-    register_backend("DashScopeFunasr", |cfg| Box::new(DashScopeFunasrBackend::new(cfg)));
-    register_backend("MiMoHttp", |cfg| Box::new(OpenAiCompatibleBackend::new(cfg)));
+    register_backend("DashScopeFunasr", |cfg| {
+        Box::new(DashScopeFunasrBackend::new(cfg))
+    });
+    register_backend("MiMoHttp", |cfg| {
+        Box::new(OpenAiCompatibleBackend::new(cfg))
+    });
     register_backend("Custom", |cfg| Box::new(OpenAiCompatibleBackend::new(cfg)));
     register_backend("WhisperApi", |cfg| Box::new(WhisperApiBackend::new(cfg)));
     // SherpaOnnx：启用 `sherpa-native` feature 时走真实本地推理；否则骨架（校验模型路径，提示安装）
     #[cfg(feature = "sherpa-native")]
     register_backend("SherpaOnnx", |cfg| Box::new(SherpaOnnxBackend::new(cfg)));
     #[cfg(not(feature = "sherpa-native"))]
-    register_backend("SherpaOnnx", |cfg| Box::new(LocalNativeBackend::sherpa(cfg)));
-    register_backend("LocalFunasrWs", |cfg| Box::new(LocalFunasrWsBackend::new(cfg)));
+    register_backend("SherpaOnnx", |cfg| {
+        Box::new(LocalNativeBackend::sherpa(cfg))
+    });
+    register_backend("LocalFunasrWs", |cfg| {
+        Box::new(LocalFunasrWsBackend::new(cfg))
+    });
     // Vosk：启用 `vosk-native` feature 时走真实本地推理；否则骨架（校验模型路径，提示安装）
     #[cfg(feature = "vosk-native")]
     register_backend("Vosk", |cfg| Box::new(VoskBackend::new(cfg)));
@@ -60,17 +68,27 @@ impl OpenAiCompatibleBackend {
             .map(|u| u.contains("xiaomi"))
             .unwrap_or(false);
         Self {
-            base_url: cfg.base_url.clone().unwrap_or_else(|| "https://api.xiaomimimo.com/v1".into()),
+            base_url: cfg
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "https://api.xiaomimimo.com/v1".into()),
             api_key: cfg.api_key.clone().unwrap_or_default(),
             model: cfg.model.clone().unwrap_or_else(|| "mimo-v2.5-asr".into()),
             use_api_key_header,
-            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::MiMoHttp.languages()),
+            langs: cfg
+                .lang
+                .clone()
+                .map(|l| vec![l])
+                .unwrap_or_else(|| AsrKind::MiMoHttp.languages()),
         }
     }
 
     async fn transcribe_chunk(&self, wav: Vec<u8>) -> Result<String, AsrError> {
         // §10.3.3② MiMo 协议：audio_url + data URL 内联（与 prism-agent MiMoAsrService 一致）
-        let data_url = format!("data:audio/wav;base64,{}", base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &wav));
+        let data_url = format!(
+            "data:audio/wav;base64,{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &wav)
+        );
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let body = serde_json::json!({
             "model": self.model,
@@ -82,7 +100,9 @@ impl OpenAiCompatibleBackend {
             "max_tokens": 1024,
         });
 
-        let mut req = reqwest::Client::new().post(&url).header("Content-Type", "application/json");
+        let mut req = reqwest::Client::new()
+            .post(&url)
+            .header("Content-Type", "application/json");
         if !self.api_key.is_empty() {
             if self.use_api_key_header {
                 req = req.header("api-key", self.api_key.clone());
@@ -91,7 +111,11 @@ impl OpenAiCompatibleBackend {
             }
         }
 
-        let resp = req.json(&body).send().await.map_err(|e| AsrError::Network(e.to_string()))?;
+        let resp = req
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AsrError::Network(e.to_string()))?;
         let status = resp.status();
         if status.as_u16() == 401 {
             return Err(AsrError::Unauthorized);
@@ -103,16 +127,26 @@ impl OpenAiCompatibleBackend {
             let text = resp.text().await.unwrap_or_default();
             return Err(AsrError::Protocol(format!("HTTP {status}: {text}")));
         }
-        let data: serde_json::Value = resp.json().await.map_err(|e| AsrError::Protocol(e.to_string()))?;
-        Ok(data["choices"][0]["message"]["content"].as_str().unwrap_or_default().to_string())
+        let data: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| AsrError::Protocol(e.to_string()))?;
+        Ok(data["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string())
     }
 }
 
 #[async_trait::async_trait]
 impl AsrBackend for OpenAiCompatibleBackend {
-    fn kind(&self) -> AsrKind { AsrKind::MiMoHttp }
+    fn kind(&self) -> AsrKind {
+        AsrKind::MiMoHttp
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         // 轻量探测：GET /models（兼容端点多支持）。鉴权头与写入路径保持一致
@@ -125,7 +159,10 @@ impl AsrBackend for OpenAiCompatibleBackend {
                 req = req.header("Authorization", format!("Bearer {}", self.api_key));
             }
         }
-        let resp = req.send().await.map_err(|e| AsrError::Network(e.to_string()))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| AsrError::Network(e.to_string()))?;
         if resp.status().is_success() {
             Ok(())
         } else if resp.status().as_u16() == 401 {
@@ -161,7 +198,9 @@ impl AsrBackend for OpenAiCompatibleBackend {
             let mut prev_full = String::new();
 
             while let Some(chunk) = audio.next().await {
-                if cancel.is_cancelled() { break; }
+                if cancel.is_cancelled() {
+                    break;
+                }
                 buf.extend_from_slice(&chunk);
                 if buf.len() >= BUF_LEN {
                     let wav = pcm_to_wav(&buf);
@@ -233,15 +272,25 @@ pub struct WhisperApiBackend {
 impl WhisperApiBackend {
     pub fn new(cfg: &AsrBackendConfig) -> Self {
         Self {
-            base_url: cfg.base_url.clone().unwrap_or_else(|| "https://api.openai.com/v1".into()),
+            base_url: cfg
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "https://api.openai.com/v1".into()),
             api_key: cfg.api_key.clone().unwrap_or_default(),
             model: cfg.model.clone().unwrap_or_else(|| "whisper-1".into()),
-            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::WhisperApi.languages()),
+            langs: cfg
+                .lang
+                .clone()
+                .map(|l| vec![l])
+                .unwrap_or_else(|| AsrKind::WhisperApi.languages()),
         }
     }
 
     async fn transcribe_wav(&self, wav: Vec<u8>) -> Result<String, AsrError> {
-        let url = format!("{}/audio/transcriptions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/audio/transcriptions",
+            self.base_url.trim_end_matches('/')
+        );
         let part = reqwest::multipart::Part::bytes(wav)
             .file_name("audio.wav")
             .mime_str("audio/wav")
@@ -255,10 +304,17 @@ impl WhisperApiBackend {
         if !self.api_key.is_empty() {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
-        let resp = req.send().await.map_err(|e| AsrError::Network(e.to_string()))?;
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| AsrError::Network(e.to_string()))?;
         let status = resp.status();
-        if status.as_u16() == 401 { return Err(AsrError::Unauthorized); }
-        if status.as_u16() == 429 { return Err(AsrError::QuotaExceeded); }
+        if status.as_u16() == 401 {
+            return Err(AsrError::Unauthorized);
+        }
+        if status.as_u16() == 429 {
+            return Err(AsrError::QuotaExceeded);
+        }
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
             return Err(AsrError::Protocol(format!("HTTP {status}: {text}")));
@@ -269,9 +325,13 @@ impl WhisperApiBackend {
 
 #[async_trait::async_trait]
 impl AsrBackend for WhisperApiBackend {
-    fn kind(&self) -> AsrKind { AsrKind::WhisperApi }
+    fn kind(&self) -> AsrKind {
+        AsrKind::WhisperApi
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         let url = format!("{}/models", self.base_url.trim_end_matches('/'));
@@ -279,10 +339,17 @@ impl AsrBackend for WhisperApiBackend {
         if !self.api_key.is_empty() {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
-        let resp = req.send().await.map_err(|e| AsrError::Network(e.to_string()))?;
-        if resp.status().is_success() { Ok(()) }
-        else if resp.status().as_u16() == 401 { Err(AsrError::Unauthorized) }
-        else { Err(AsrError::Protocol(format!("HTTP {}", resp.status()))) }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| AsrError::Network(e.to_string()))?;
+        if resp.status().is_success() {
+            Ok(())
+        } else if resp.status().as_u16() == 401 {
+            Err(AsrError::Unauthorized)
+        } else {
+            Err(AsrError::Protocol(format!("HTTP {}", resp.status())))
+        }
     }
 
     async fn start(
@@ -292,7 +359,7 @@ impl AsrBackend for WhisperApiBackend {
     ) -> Result<AsrSessionHandle, AsrError> {
         // 15s 分片 + 1s 重叠（= 480000 字节/15s）
         const SLICE_BYTES: usize = 15 * 32000;
-        const OVERLAP_BYTES: usize = 1 * 32000;
+        const OVERLAP_BYTES: usize = 32000;
 
         let handle = AsrSessionHandle::new();
         let cancel = handle.token();
@@ -309,7 +376,9 @@ impl AsrBackend for WhisperApiBackend {
             let mut prev_text = String::new();
 
             while let Some(chunk) = audio.next().await {
-                if cancel.is_cancelled() { break; }
+                if cancel.is_cancelled() {
+                    break;
+                }
                 buf.extend_from_slice(&chunk);
                 if buf.len() >= SLICE_BYTES {
                     // 取整片前 15s，保留尾部 1s 重叠
@@ -322,9 +391,14 @@ impl AsrBackend for WhisperApiBackend {
                             let text = dedup_overlap(&prev_text, &text, 20);
                             if !text.is_empty() {
                                 events.segment(AsrSegment {
-                                    index, text: text.clone(), is_final: true,
-                                    start_ms: 0, end_ms: 0,
-                                    language: None, confidence: None, speaker_id: None,
+                                    index,
+                                    text: text.clone(),
+                                    is_final: true,
+                                    start_ms: 0,
+                                    end_ms: 0,
+                                    language: None,
+                                    confidence: None,
+                                    speaker_id: None,
                                 });
                                 index += 1;
                             }
@@ -339,9 +413,14 @@ impl AsrBackend for WhisperApiBackend {
                         let text = dedup_overlap(&prev_text, &text, 20);
                         if !text.is_empty() {
                             events.segment(AsrSegment {
-                                index, text, is_final: true,
-                                start_ms: 0, end_ms: 0,
-                                language: None, confidence: None, speaker_id: None,
+                                index,
+                                text,
+                                is_final: true,
+                                start_ms: 0,
+                                end_ms: 0,
+                                language: None,
+                                confidence: None,
+                                speaker_id: None,
                             });
                         }
                     }
@@ -373,7 +452,10 @@ impl DashScopeFunasrBackend {
     pub fn new(cfg: &AsrBackendConfig) -> Self {
         Self {
             api_key: cfg.api_key.clone().unwrap_or_default(),
-            model: cfg.model.clone().unwrap_or_else(|| "fun-asr-realtime".into()),
+            model: cfg
+                .model
+                .clone()
+                .unwrap_or_else(|| "fun-asr-realtime".into()),
             langs: vec!["zh".into()],
         }
     }
@@ -381,9 +463,13 @@ impl DashScopeFunasrBackend {
 
 #[async_trait::async_trait]
 impl AsrBackend for DashScopeFunasrBackend {
-    fn kind(&self) -> AsrKind { AsrKind::DashScopeFunasr }
+    fn kind(&self) -> AsrKind {
+        AsrKind::DashScopeFunasr
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         if self.api_key.is_empty() {
@@ -411,14 +497,22 @@ impl AsrBackend for DashScopeFunasrBackend {
         tokio::spawn(async move {
             // 鉴权：DashScope 要求 Authorization: Bearer header；
             // tokio-tungstenite 通过 IntoClientRequest 自定义 request 携带 header（huiji 同方案）。
-            let mut request = match tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(URL) {
-                Ok(req) => req,
-                Err(e) => { events.status(&format!("构造请求失败: {e}")); return; }
-            };
+            let mut request =
+                match tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+                    URL,
+                ) {
+                    Ok(req) => req,
+                    Err(e) => {
+                        events.status(&format!("构造请求失败: {e}"));
+                        return;
+                    }
+                };
             if !api_key.is_empty() {
                 let auth = format!("Bearer {api_key}");
                 if let Ok(val) = http::HeaderValue::from_str(&auth) {
-                    request.headers_mut().insert(http::header::AUTHORIZATION, val);
+                    request
+                        .headers_mut()
+                        .insert(http::header::AUTHORIZATION, val);
                 }
             }
             let (mut ws, _resp) = match connect_async(request).await {
@@ -446,7 +540,11 @@ impl AsrBackend for DashScopeFunasrBackend {
                     "input": {}
                 }
             });
-            if ws.send(WsMessage::Text(run_task.to_string().into())).await.is_err() {
+            if ws
+                .send(WsMessage::Text(run_task.to_string()))
+                .await
+                .is_err()
+            {
                 events.status("发送 run-task 失败");
                 return;
             }
@@ -464,7 +562,7 @@ impl AsrBackend for DashScopeFunasrBackend {
                             "header": { "action": "finish-task", "task_id": task_id },
                             "payload": { "input": {} }
                         });
-                        let _ = ws.send(WsMessage::Text(finish.to_string().into())).await;
+                        let _ = ws.send(WsMessage::Text(finish.to_string())).await;
                         let _ = ws.close(None).await;
                         break;
                     }
@@ -473,7 +571,7 @@ impl AsrBackend for DashScopeFunasrBackend {
                             Some(pcm) => {
                                 if task_started {
                                     // 二进制帧直接发送（新版协议音频为裸 PCM 二进制）
-                                    if ws.send(WsMessage::Binary(pcm.into())).await.is_err() {
+                                    if ws.send(WsMessage::Binary(pcm)).await.is_err() {
                                         events.status("发送音频失败");
                                         break;
                                     }
@@ -487,21 +585,28 @@ impl AsrBackend for DashScopeFunasrBackend {
                                     "header": { "action": "finish-task", "task_id": task_id },
                                     "payload": { "input": {} }
                                 });
-                                let _ = ws.send(WsMessage::Text(finish.to_string().into())).await;
+                                let _ = ws.send(WsMessage::Text(finish.to_string())).await;
                                 finished = true;
                             }
                         }
                     }
                 }
 
-                if finished { break; }
+                if finished {
+                    break;
+                }
 
                 // 非阻塞读结果
-                while let Ok(Some(msg)) = tokio::time::timeout(std::time::Duration::from_millis(10), ws.next()).await {
+                while let Ok(Some(msg)) =
+                    tokio::time::timeout(std::time::Duration::from_millis(10), ws.next()).await
+                {
                     match msg {
                         Ok(WsMessage::Text(text)) => {
                             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
-                                let event = v["header"]["action"].as_str().or_else(|| v["header"]["event"].as_str()).unwrap_or("");
+                                let event = v["header"]["action"]
+                                    .as_str()
+                                    .or_else(|| v["header"]["event"].as_str())
+                                    .unwrap_or("");
                                 match event {
                                     "task-started" => {
                                         task_started = true;
@@ -512,7 +617,8 @@ impl AsrBackend for DashScopeFunasrBackend {
                                         let output = &payload["output"];
                                         // 两种格式：output.sentence 或 output.text
                                         let sentence = &output["sentence"];
-                                        let (seg_text, is_end, speaker_id) = if sentence.is_object() {
+                                        let (seg_text, is_end, speaker_id) = if sentence.is_object()
+                                        {
                                             (
                                                 sentence["text"].as_str().unwrap_or("").to_string(),
                                                 sentence["sentence_end"].as_bool().unwrap_or(false),
@@ -536,7 +642,9 @@ impl AsrBackend for DashScopeFunasrBackend {
                                                 confidence: None,
                                                 speaker_id: speaker_id.and_then(|s| s.parse().ok()),
                                             });
-                                            if is_end { index += 1; }
+                                            if is_end {
+                                                index += 1;
+                                            }
                                         }
                                     }
                                     "task-finished" => {
@@ -565,16 +673,22 @@ impl AsrBackend for DashScopeFunasrBackend {
             // 排空阶段：finish-task 已发送后，服务端仍会推送尾部定稿与 task-finished。
             // 若直接退出循环，尾部 result-generated 会丢失（§10.3.3 协议：需读到 task-finished 为止）。
             if finished && !task_finished_received {
-                while let Ok(Some(msg)) = tokio::time::timeout(std::time::Duration::from_secs(5), ws.next()).await {
+                while let Ok(Some(msg)) =
+                    tokio::time::timeout(std::time::Duration::from_secs(5), ws.next()).await
+                {
                     match msg {
                         Ok(WsMessage::Text(text)) => {
                             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
-                                let event = v["header"]["action"].as_str().or_else(|| v["header"]["event"].as_str()).unwrap_or("");
+                                let event = v["header"]["action"]
+                                    .as_str()
+                                    .or_else(|| v["header"]["event"].as_str())
+                                    .unwrap_or("");
                                 match event {
                                     "result-generated" => {
                                         let output = &v["payload"]["output"];
                                         let sentence = &output["sentence"];
-                                        let (seg_text, is_end, speaker_id) = if sentence.is_object() {
+                                        let (seg_text, is_end, speaker_id) = if sentence.is_object()
+                                        {
                                             (
                                                 sentence["text"].as_str().unwrap_or("").to_string(),
                                                 sentence["sentence_end"].as_bool().unwrap_or(false),
@@ -598,7 +712,9 @@ impl AsrBackend for DashScopeFunasrBackend {
                                                 confidence: None,
                                                 speaker_id: speaker_id.and_then(|s| s.parse().ok()),
                                             });
-                                            if is_end { index += 1; }
+                                            if is_end {
+                                                index += 1;
+                                            }
                                         }
                                     }
                                     "task-finished" => {
@@ -638,7 +754,10 @@ pub struct LocalFunasrWsBackend {
 impl LocalFunasrWsBackend {
     pub fn new(cfg: &AsrBackendConfig) -> Self {
         Self {
-            base_url: cfg.base_url.clone().unwrap_or_else(|| "ws://localhost:10095".into()),
+            base_url: cfg
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "ws://localhost:10095".into()),
             langs: vec!["zh".into()],
         }
     }
@@ -646,13 +765,17 @@ impl LocalFunasrWsBackend {
 
 #[async_trait::async_trait]
 impl AsrBackend for LocalFunasrWsBackend {
-    fn kind(&self) -> AsrKind { AsrKind::LocalFunasrWs }
+    fn kind(&self) -> AsrKind {
+        AsrKind::LocalFunasrWs
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         use tokio_tungstenite::connect_async;
-        let url = format!("{}", self.base_url);
+        let url = self.base_url.to_string();
         connect_async(&url)
             .await
             .map(|_| ())
@@ -674,32 +797,48 @@ impl AsrBackend for LocalFunasrWsBackend {
         tokio::spawn(async move {
             let (mut ws, _resp) = match connect_async(&url).await {
                 Ok(v) => v,
-                Err(e) => { events.status(&format!("连接失败: {e}")); return; }
+                Err(e) => {
+                    events.status(&format!("连接失败: {e}"));
+                    return;
+                }
             };
             let init = serde_json::json!({
                 "mode": "2pass", "chunk_size": [5,10,5],
                 "wav_name": "meeting", "is_speaking": true, "itn": true
             });
-            let _ = ws.send(WsMessage::Text(init.to_string().into())).await;
+            let _ = ws.send(WsMessage::Text(init.to_string())).await;
             events.status("connected");
 
             let mut index: u64 = 0;
             while let Some(chunk) = audio.next().await {
-                if cancel.is_cancelled() { break; }
-                if ws.send(WsMessage::Binary(chunk.into())).await.is_err() { break; }
+                if cancel.is_cancelled() {
+                    break;
+                }
+                if ws.send(WsMessage::Binary(chunk)).await.is_err() {
+                    break;
+                }
                 // 读离线结果
-                while let Ok(Some(msg)) = tokio::time::timeout(std::time::Duration::from_millis(5), ws.next()).await {
+                while let Ok(Some(msg)) =
+                    tokio::time::timeout(std::time::Duration::from_millis(5), ws.next()).await
+                {
                     if let Ok(WsMessage::Text(text)) = msg {
                         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
                             let seg_text = v["text"].as_str().unwrap_or("").to_string();
                             let is_final = v["is_final"].as_bool().unwrap_or(false);
                             if !seg_text.is_empty() {
                                 events.segment(AsrSegment {
-                                    index, text: seg_text, is_final,
-                                    start_ms: 0, end_ms: 0,
-                                    language: None, confidence: None, speaker_id: None,
+                                    index,
+                                    text: seg_text,
+                                    is_final,
+                                    start_ms: 0,
+                                    end_ms: 0,
+                                    language: None,
+                                    confidence: None,
+                                    speaker_id: None,
                                 });
-                                if is_final { index += 1; }
+                                if is_final {
+                                    index += 1;
+                                }
                             }
                         }
                     }
@@ -733,7 +872,11 @@ impl SherpaOnnxBackend {
     pub fn new(cfg: &AsrBackendConfig) -> Self {
         Self {
             model_path: cfg.model_path.clone(),
-            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::SherpaOnnx.languages()),
+            langs: cfg
+                .lang
+                .clone()
+                .map(|l| vec![l])
+                .unwrap_or_else(|| AsrKind::SherpaOnnx.languages()),
         }
     }
 
@@ -753,16 +896,29 @@ impl SherpaOnnxBackend {
         find_file_recursive(base, &["silero_vad.onnx"], 3)
     }
 
-    fn resolve(&self) -> Result<(std::path::PathBuf, std::path::PathBuf, Option<std::path::PathBuf>), AsrError> {
+    fn resolve(
+        &self,
+    ) -> Result<
+        (
+            std::path::PathBuf,
+            std::path::PathBuf,
+            Option<std::path::PathBuf>,
+        ),
+        AsrError,
+    > {
         let Some(path) = &self.model_path else {
-            return Err(AsrError::ModelNotFound("SherpaOnnx 未配置模型路径（model_path）".into()));
+            return Err(AsrError::ModelNotFound(
+                "SherpaOnnx 未配置模型路径（model_path）".into(),
+            ));
         };
         let dir = std::path::Path::new(path);
         if !dir.exists() {
             return Err(AsrError::ModelNotFound(format!("模型目录不存在: {path}")));
         }
         let model = self.find_model(dir).ok_or_else(|| {
-            AsrError::ModelNotFound(format!("模型目录中未找到 model.onnx/model.int8.onnx（{path}）"))
+            AsrError::ModelNotFound(format!(
+                "模型目录中未找到 model.onnx/model.int8.onnx（{path}）"
+            ))
         })?;
         let tokens = self.find_tokens(dir).ok_or_else(|| {
             AsrError::ModelNotFound(format!("模型目录中未找到 tokens.txt/tokens.json（{path}）"))
@@ -775,9 +931,13 @@ impl SherpaOnnxBackend {
 #[cfg(feature = "sherpa-native")]
 #[async_trait::async_trait]
 impl AsrBackend for SherpaOnnxBackend {
-    fn kind(&self) -> AsrKind { AsrKind::SherpaOnnx }
+    fn kind(&self) -> AsrKind {
+        AsrKind::SherpaOnnx
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         self.resolve().map(|_| ())
@@ -851,13 +1011,17 @@ impl AsrBackend for SherpaOnnxBackend {
 
             rt.block_on(async {
                 while let Some(pcm) = audio.next().await {
-                    if cancel.is_cancelled() { break; }
+                    if cancel.is_cancelled() {
+                        break;
+                    }
                     // PCM i16 LE → f32 [-1,1]
                     let samples: Vec<f32> = pcm
                         .chunks_exact(2)
                         .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
                         .collect();
-                    if samples.is_empty() { continue; }
+                    if samples.is_empty() {
+                        continue;
+                    }
 
                     // VAD 模式：喂 VAD 提取语音段；无 VAD：累积后整段识别
                     if let Some(vad) = vad.as_mut() {
@@ -865,7 +1029,9 @@ impl AsrBackend for SherpaOnnxBackend {
                         while !vad.is_empty() {
                             let segment = vad.front();
                             vad.pop();
-                            if segment.samples.is_empty() { continue; }
+                            if segment.samples.is_empty() {
+                                continue;
+                            }
                             let result = recognizer.transcribe(16000, &segment.samples);
                             if !result.text.trim().is_empty() {
                                 // 差集：只发新内容
@@ -940,7 +1106,11 @@ impl VoskBackend {
     pub fn new(cfg: &AsrBackendConfig) -> Self {
         Self {
             model_path: cfg.model_path.clone(),
-            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::Vosk.languages()),
+            langs: cfg
+                .lang
+                .clone()
+                .map(|l| vec![l])
+                .unwrap_or_else(|| AsrKind::Vosk.languages()),
         }
     }
 }
@@ -948,20 +1118,28 @@ impl VoskBackend {
 #[cfg(feature = "vosk-native")]
 #[async_trait::async_trait]
 impl AsrBackend for VoskBackend {
-    fn kind(&self) -> AsrKind { AsrKind::Vosk }
+    fn kind(&self) -> AsrKind {
+        AsrKind::Vosk
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         let Some(path) = &self.model_path else {
-            return Err(AsrError::ModelNotFound("Vosk 未配置模型路径，请在配置中指定 model_path".into()));
+            return Err(AsrError::ModelNotFound(
+                "Vosk 未配置模型路径，请在配置中指定 model_path".into(),
+            ));
         };
         let dir = std::path::Path::new(path);
         if !dir.exists() {
             return Err(AsrError::ModelNotFound(format!("模型目录不存在: {path}")));
         }
         // Vosk 模型关键文件：am/final.mdl 与 conf/model.conf
-        if !dir.join("am").join("final.mdl").exists() || !dir.join("conf").join("model.conf").exists() {
+        if !dir.join("am").join("final.mdl").exists()
+            || !dir.join("conf").join("model.conf").exists()
+        {
             return Err(AsrError::ModelNotFound(format!(
                 "{} 目录不是有效的 Vosk 模型（缺少 am/final.mdl 或 conf/model.conf）",
                 dir.display()
@@ -995,7 +1173,9 @@ impl AsrBackend for VoskBackend {
             let mut index: u64 = 0;
             let mut seg_buf: Vec<i16> = Vec::new();
             while let Some(chunk) = audio.next().await {
-                if cancel.is_cancelled() { break; }
+                if cancel.is_cancelled() {
+                    break;
+                }
                 // PCM 块：16kHz 16bit 小端 → i16 样本
                 let samples: Vec<i16> = chunk
                     .chunks_exact(2)
@@ -1017,9 +1197,14 @@ impl AsrBackend for VoskBackend {
                             };
                             if !text.is_empty() {
                                 events.segment(AsrSegment {
-                                    index, text: text.clone(), is_final: true,
-                                    start_ms: 0, end_ms: 0,
-                                    language: langs.first().cloned(), confidence: None, speaker_id: None,
+                                    index,
+                                    text: text.clone(),
+                                    is_final: true,
+                                    start_ms: 0,
+                                    end_ms: 0,
+                                    language: langs.first().cloned(),
+                                    confidence: None,
+                                    speaker_id: None,
                                 });
                                 index += 1;
                             }
@@ -1030,9 +1215,14 @@ impl AsrBackend for VoskBackend {
                             let text = partial.partial.trim().to_string();
                             if !text.is_empty() {
                                 events.segment(AsrSegment {
-                                    index, text, is_final: false,
-                                    start_ms: 0, end_ms: 0,
-                                    language: langs.first().cloned(), confidence: None, speaker_id: None,
+                                    index,
+                                    text,
+                                    is_final: false,
+                                    start_ms: 0,
+                                    end_ms: 0,
+                                    language: langs.first().cloned(),
+                                    confidence: None,
+                                    speaker_id: None,
                                 });
                             }
                         }
@@ -1053,9 +1243,14 @@ impl AsrBackend for VoskBackend {
             };
             if !text.is_empty() {
                 events.segment(AsrSegment {
-                    index, text, is_final: true,
-                    start_ms: 0, end_ms: 0,
-                    language: langs.first().cloned(), confidence: None, speaker_id: None,
+                    index,
+                    text,
+                    is_final: true,
+                    start_ms: 0,
+                    end_ms: 0,
+                    language: langs.first().cloned(),
+                    confidence: None,
+                    speaker_id: None,
                 });
             }
             events.status("stopped");
@@ -1070,7 +1265,11 @@ impl AsrBackend for VoskBackend {
 }
 
 #[cfg(feature = "sherpa-native")]
-fn find_file_recursive(dir: &std::path::Path, names: &[&str], depth: usize) -> Option<std::path::PathBuf> {
+fn find_file_recursive(
+    dir: &std::path::Path,
+    names: &[&str],
+    depth: usize,
+) -> Option<std::path::PathBuf> {
     if depth == 0 {
         return None;
     }
@@ -1106,25 +1305,38 @@ pub struct AzureSpeechBackend {
 impl AzureSpeechBackend {
     pub fn new(cfg: &AsrBackendConfig) -> Self {
         Self {
-            base_url: cfg.base_url.clone().unwrap_or_else(|| "https://eastasia.stt.speech.microsoft.com".into()),
+            base_url: cfg
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "https://eastasia.stt.speech.microsoft.com".into()),
             api_key: cfg.api_key.clone().unwrap_or_default(),
-            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::AzureSpeech.languages()),
+            langs: cfg
+                .lang
+                .clone()
+                .map(|l| vec![l])
+                .unwrap_or_else(|| AsrKind::AzureSpeech.languages()),
         }
     }
 }
 
 #[async_trait::async_trait]
 impl AsrBackend for AzureSpeechBackend {
-    fn kind(&self) -> AsrKind { AsrKind::AzureSpeech }
+    fn kind(&self) -> AsrKind {
+        AsrKind::AzureSpeech
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         if self.api_key.is_empty() {
             return Err(AsrError::Unauthorized);
         }
         if !self.base_url.contains(".stt.speech.microsoft.com") {
-            return Err(AsrError::Protocol("base_url 应为 https://{region}.stt.speech.microsoft.com".into()));
+            return Err(AsrError::Protocol(
+                "base_url 应为 https://{region}.stt.speech.microsoft.com".into(),
+            ));
         }
         Ok(())
     }
@@ -1139,7 +1351,11 @@ impl AsrBackend for AzureSpeechBackend {
         let cancel = handle.token();
         let base_url = self.base_url.clone();
         let api_key = self.api_key.clone();
-        let lang = self.langs.first().cloned().unwrap_or_else(|| "zh-CN".into());
+        let lang = self
+            .langs
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "zh-CN".into());
 
         tokio::spawn(async move {
             use tokio_tungstenite::connect_async;
@@ -1153,7 +1369,9 @@ impl AsrBackend for AzureSpeechBackend {
 
             // 鉴权：Azure 要求 Ocp-Apim-Subscription-Key header（IntoClientRequest 携带自定义 header）
             let mut request =
-                match tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(&url) {
+                match tokio_tungstenite::tungstenite::client::IntoClientRequest::into_client_request(
+                    &url,
+                ) {
                     Ok(req) => req,
                     Err(e) => {
                         events.status(&format!("构造请求失败: {e}"));
@@ -1161,7 +1379,9 @@ impl AsrBackend for AzureSpeechBackend {
                     }
                 };
             if let Ok(val) = http::HeaderValue::from_str(&api_key) {
-                request.headers_mut().insert("Ocp-Apim-Subscription-Key", val);
+                request
+                    .headers_mut()
+                    .insert("Ocp-Apim-Subscription-Key", val);
             }
             let (mut ws, _resp) = match connect_async(request).await {
                 Ok(v) => v,
@@ -1175,7 +1395,7 @@ impl AsrBackend for AzureSpeechBackend {
             let config = serde_json::json!({
                 "context": { "system": { "name": "PrismAgent", "version": "0.1.0" } }
             });
-            if ws.send(WsMessage::Text(config.to_string().into())).await.is_err() {
+            if ws.send(WsMessage::Text(config.to_string())).await.is_err() {
                 events.status("发送 speech.config 失败");
                 return;
             }
@@ -1211,7 +1431,9 @@ impl AsrBackend for AzureSpeechBackend {
                             if !t.is_empty() {
                                 let speaker_id = v["speakerId"]
                                     .as_u64()
-                                    .or_else(|| v["speakerId"].as_str().and_then(|s| s.parse().ok()))
+                                    .or_else(|| {
+                                        v["speakerId"].as_str().and_then(|s| s.parse().ok())
+                                    })
                                     .map(|s| s as u32);
                                 events.segment(AsrSegment {
                                     index,
@@ -1263,7 +1485,7 @@ impl AsrBackend for AzureSpeechBackend {
                     chunk = audio.next() => {
                         match chunk {
                             Some(pcm) => {
-                                if ws.send(WsMessage::Binary(pcm.into())).await.is_err() {
+                                if ws.send(WsMessage::Binary(pcm)).await.is_err() {
                                     events.status("发送音频失败");
                                     break;
                                 }
@@ -1296,13 +1518,14 @@ impl AsrBackend for AzureSpeechBackend {
                         }
                     }
                 }
-                if finished { break; }
+                if finished {
+                    break;
+                }
 
                 // 非阻塞读结果
-                while let Ok(Some(msg)) = tokio::time::timeout(
-                    std::time::Duration::from_millis(10),
-                    ws.next(),
-                ).await {
+                while let Ok(Some(msg)) =
+                    tokio::time::timeout(std::time::Duration::from_millis(10), ws.next()).await
+                {
                     match msg {
                         Ok(WsMessage::Text(text)) => handle_frame(text, &mut finished),
                         Ok(WsMessage::Close(_)) => {
@@ -1346,8 +1569,17 @@ impl LocalNativeBackend {
         Self {
             kind: AsrKind::SherpaOnnx,
             model_path: cfg.model_path.clone(),
-            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::SherpaOnnx.languages()),
-            expected: &["model.int8.onnx", "model.onnx", "model_quant.onnx", "tokens.txt"],
+            langs: cfg
+                .lang
+                .clone()
+                .map(|l| vec![l])
+                .unwrap_or_else(|| AsrKind::SherpaOnnx.languages()),
+            expected: &[
+                "model.int8.onnx",
+                "model.onnx",
+                "model_quant.onnx",
+                "tokens.txt",
+            ],
         }
     }
 
@@ -1355,7 +1587,11 @@ impl LocalNativeBackend {
         Self {
             kind: AsrKind::Vosk,
             model_path: cfg.model_path.clone(),
-            langs: cfg.lang.clone().map(|l| vec![l]).unwrap_or_else(|| AsrKind::Vosk.languages()),
+            langs: cfg
+                .lang
+                .clone()
+                .map(|l| vec![l])
+                .unwrap_or_else(|| AsrKind::Vosk.languages()),
             expected: &["conf/model.conf", "am/final.mdl"],
         }
     }
@@ -1408,9 +1644,13 @@ fn walk_find(dir: &std::path::Path, candidates: &[&str], depth: usize) -> bool {
 
 #[async_trait::async_trait]
 impl AsrBackend for LocalNativeBackend {
-    fn kind(&self) -> AsrKind { self.kind }
+    fn kind(&self) -> AsrKind {
+        self.kind
+    }
 
-    fn languages(&self) -> &[String] { &self.langs }
+    fn languages(&self) -> &[String] {
+        &self.langs
+    }
 
     async fn health_check(&self) -> Result<(), AsrError> {
         self.check_ready()
@@ -1450,7 +1690,7 @@ pub fn pcm_to_wav(pcm: &[u8]) -> Vec<u8> {
     wav.extend_from_slice(b"WAVE");
     wav.extend_from_slice(b"fmt ");
     wav.extend_from_slice(&16u32.to_le_bytes());
-    wav.extend_from_slice(&1u16.to_le_bytes());          // PCM
+    wav.extend_from_slice(&1u16.to_le_bytes()); // PCM
     wav.extend_from_slice(&channels.to_le_bytes());
     wav.extend_from_slice(&sample_rate.to_le_bytes());
     wav.extend_from_slice(&byte_rate.to_le_bytes());
@@ -1480,7 +1720,14 @@ fn dedup_overlap(prev: &str, next: &str, max_overlap_chars: usize) -> String {
     if prev.is_empty() || next.is_empty() {
         return next.to_string();
     }
-    let prev_tail: String = prev.chars().rev().take(max_overlap_chars).collect::<Vec<_>>().into_iter().rev().collect();
+    let prev_tail: String = prev
+        .chars()
+        .rev()
+        .take(max_overlap_chars)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
     let next_head_len = next.chars().take(max_overlap_chars).count();
     let next_head: String = next.chars().take(next_head_len).collect();
     // 找 prev_tail 与 next_head 的最长公共后缀/前缀匹配

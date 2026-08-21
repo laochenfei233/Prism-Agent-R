@@ -5,44 +5,28 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GuardrailDecision {
     Allow,
-    Deny { reason: String },
-    NeedApproval { tool: String, args: serde_json::Value },
+    Deny {
+        reason: String,
+    },
+    NeedApproval {
+        tool: String,
+        args: serde_json::Value,
+    },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ToolPolicy {
     pub allowed_tools: Option<Vec<String>>,
     pub denied_tools: Vec<String>,
     pub tool_configs: HashMap<String, ToolConfig>,
 }
 
-impl Default for ToolPolicy {
-    fn default() -> Self {
-        Self {
-            allowed_tools: None,
-            denied_tools: Vec::new(),
-            tool_configs: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ToolConfig {
     pub max_calls_per_run: Option<u32>,
     pub require_approval: bool,
     pub param_validators: Vec<ParamValidator>,
     pub timeout_secs: Option<u64>,
-}
-
-impl Default for ToolConfig {
-    fn default() -> Self {
-        Self {
-            max_calls_per_run: None,
-            require_approval: false,
-            param_validators: Vec::new(),
-            timeout_secs: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,7 +135,11 @@ impl ToolGuardrail {
             for validator in &config.param_validators {
                 if !validator.validate(args) {
                     return GuardrailDecision::Deny {
-                        reason: format!("工具 '{}' 参数校验失败: {}", tool_name, validator.error_msg()),
+                        reason: format!(
+                            "工具 '{}' 参数校验失败: {}",
+                            tool_name,
+                            validator.error_msg()
+                        ),
                     };
                 }
             }
@@ -199,7 +187,8 @@ mod tests {
     fn allow_normal_tool() {
         let guard = ToolGuardrail::new(ToolPolicy::default());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(guard.check_tool_call("web_search", &serde_json::json!({"query": "test"})));
+        let result =
+            rt.block_on(guard.check_tool_call("web_search", &serde_json::json!({"query": "test"})));
         assert!(matches!(result, GuardrailDecision::Allow));
     }
 }

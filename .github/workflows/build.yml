@@ -3,6 +3,9 @@ name: Build
 on:
   push:
     branches: [main, master, feat/*]
+    # semantic-release pushes a vX.Y.Z tag on release; build installers then and
+    # attach them to the GitHub Release via tauri-action.
+    tags: ['v*']
   pull_request:
     branches: [main, master]
 
@@ -50,6 +53,21 @@ jobs:
 
       - name: Run Rust tests (含 RAG 五维评测回归门槛)
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Rust formatting gate
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Rust lint gate (clippy -D warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Frontend lint gate
+        run: npm run lint
+
+      - name: Frontend formatting gate
+        run: npm run format:check
+
+      - name: Frontend unit tests (vitest)
+        run: npm test
 
       - name: SvelteKit sync (生成 .svelte-kit 类型文件，svelte-check 依赖)
         run: npx svelte-kit sync
@@ -118,6 +136,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npx tauri
+          # On a vX.Y.Z tag push, tauri-action creates/updates the GitHub
+          # Release and uploads the bundles; on branch builds it only builds.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseDraft: true
           args: --target ${{ matrix.target }} ${{ matrix.bundles }}
 
       - name: Upload artifacts

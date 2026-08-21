@@ -34,7 +34,9 @@ pub trait TrajectoryCheck: Send + Sync {
 pub struct CredentialConcatenationCheck;
 
 impl TrajectoryCheck for CredentialConcatenationCheck {
-    fn name(&self) -> &str { "credential_concatenation" }
+    fn name(&self) -> &str {
+        "credential_concatenation"
+    }
 
     fn check(&self, steps: &[String]) -> Option<Violation> {
         let patterns = ["sk-", "api_key", "token", "password", "secret", "bearer"];
@@ -67,7 +69,9 @@ pub struct SandboxEscapeCheck {
 }
 
 impl TrajectoryCheck for SandboxEscapeCheck {
-    fn name(&self) -> &str { "sandbox_escape" }
+    fn name(&self) -> &str {
+        "sandbox_escape"
+    }
 
     fn check(&self, steps: &[String]) -> Option<Violation> {
         let mut violations = Vec::new();
@@ -100,7 +104,9 @@ pub struct ResourceExhaustionCheck {
 }
 
 impl TrajectoryCheck for ResourceExhaustionCheck {
-    fn name(&self) -> &str { "resource_exhaustion" }
+    fn name(&self) -> &str {
+        "resource_exhaustion"
+    }
 
     fn check(&self, steps: &[String]) -> Option<Violation> {
         if steps.len() < self.max_repeated_tool_calls {
@@ -132,8 +138,12 @@ impl TrajectoryGuardrail {
         Self {
             checks: vec![
                 Box::new(CredentialConcatenationCheck),
-                Box::new(SandboxEscapeCheck { allowed_paths: vec![] }),
-                Box::new(ResourceExhaustionCheck { max_repeated_tool_calls: 5 }),
+                Box::new(SandboxEscapeCheck {
+                    allowed_paths: vec![],
+                }),
+                Box::new(ResourceExhaustionCheck {
+                    max_repeated_tool_calls: 5,
+                }),
             ],
             on_violation,
         }

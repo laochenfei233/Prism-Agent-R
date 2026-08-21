@@ -40,8 +40,15 @@ pub struct AgentBudgetState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BudgetCheckResult {
     Ok,
-    Warning { level: String, current: f64, limit: f64 },
-    Exceeded { level: String, action: BudgetAction },
+    Warning {
+        level: String,
+        current: f64,
+        limit: f64,
+    },
+    Exceeded {
+        level: String,
+        action: BudgetAction,
+    },
 }
 
 // ── 预算追踪器 ────────────────────────────────────────────
@@ -118,10 +125,16 @@ impl BudgetTracker {
                     current: Some(global.daily_tokens_used as f64),
                     limit: Some(limit as f64),
                     action: Some(action.clone()),
-                    message: Some(format!("每日 token 已超限: {}/{}", global.daily_tokens_used, limit)),
+                    message: Some(format!(
+                        "每日 token 已超限: {}/{}",
+                        global.daily_tokens_used, limit
+                    )),
                     timestamp: chrono::Utc::now().timestamp_millis(),
                 });
-                return Ok(BudgetCheckResult::Exceeded { level: "daily_tokens".into(), action });
+                return Ok(BudgetCheckResult::Exceeded {
+                    level: "daily_tokens".into(),
+                    action,
+                });
             }
             let pct = global.daily_tokens_used as f64 / limit as f64;
             if pct >= 0.8 {
@@ -151,10 +164,16 @@ impl BudgetTracker {
                     current: Some(global.daily_cost_used),
                     limit: Some(limit),
                     action: Some(action.clone()),
-                    message: Some(format!("每日费用已超限: ${:.2}/${:.2}", global.daily_cost_used, limit)),
+                    message: Some(format!(
+                        "每日费用已超限: ${:.2}/${:.2}",
+                        global.daily_cost_used, limit
+                    )),
                     timestamp: chrono::Utc::now().timestamp_millis(),
                 });
-                return Ok(BudgetCheckResult::Exceeded { level: "daily_cost".into(), action });
+                return Ok(BudgetCheckResult::Exceeded {
+                    level: "daily_cost".into(),
+                    action,
+                });
             }
             let pct = global.daily_cost_used / limit;
             if pct >= 0.8 {
@@ -183,13 +202,16 @@ impl BudgetTracker {
         _config: &CrewBudget,
     ) -> Result<(), String> {
         let mut crews = self.crews.write().await;
-        crews.insert(run_id.to_string(), CrewBudgetState {
-            tokens_used: 0,
-            cost_used: 0.0,
-            start_time: chrono::Utc::now().timestamp(),
-            iterations: 0,
-            requests_made: Vec::new(),
-        });
+        crews.insert(
+            run_id.to_string(),
+            CrewBudgetState {
+                tokens_used: 0,
+                cost_used: 0.0,
+                start_time: chrono::Utc::now().timestamp(),
+                iterations: 0,
+                requests_made: Vec::new(),
+            },
+        );
         let mut global = self.global.write().await;
         global.active_workflows += 1;
         Ok(())
@@ -259,7 +281,11 @@ impl BudgetTracker {
         // RPM check
         if let Some(limit) = config.max_rpm {
             let now = chrono::Utc::now().timestamp_millis();
-            let window = state.requests_made.iter().filter(|&&t| now - t < 60_000).count() as u32;
+            let window = state
+                .requests_made
+                .iter()
+                .filter(|&&t| now - t < 60_000)
+                .count() as u32;
             if window >= limit {
                 return BudgetCheckResult::Exceeded {
                     level: "crew_rpm".into(),
@@ -271,17 +297,14 @@ impl BudgetTracker {
         BudgetCheckResult::Ok
     }
 
-    pub async fn record_crew_usage(
-        &self,
-        run_id: &str,
-        tokens: u64,
-        cost: f64,
-    ) {
+    pub async fn record_crew_usage(&self, run_id: &str, tokens: u64, cost: f64) {
         let mut crews = self.crews.write().await;
         if let Some(state) = crews.get_mut(run_id) {
             state.tokens_used += tokens;
             state.cost_used += cost;
-            state.requests_made.push(chrono::Utc::now().timestamp_millis());
+            state
+                .requests_made
+                .push(chrono::Utc::now().timestamp_millis());
         }
 
         let mut global = self.global.write().await;
@@ -349,18 +372,16 @@ impl BudgetTracker {
         BudgetCheckResult::Ok
     }
 
-    pub async fn record_agent_usage(
-        &self,
-        agent_id: &str,
-        tokens: u64,
-    ) {
+    pub async fn record_agent_usage(&self, agent_id: &str, tokens: u64) {
         let mut agents = self.agents.write().await;
-        let state = agents.entry(agent_id.to_string()).or_insert_with(|| AgentBudgetState {
-            tokens_used: 0,
-            iterations: 0,
-            start_time: chrono::Utc::now().timestamp(),
-            retry_count: 0,
-        });
+        let state = agents
+            .entry(agent_id.to_string())
+            .or_insert_with(|| AgentBudgetState {
+                tokens_used: 0,
+                iterations: 0,
+                start_time: chrono::Utc::now().timestamp(),
+                retry_count: 0,
+            });
         state.tokens_used += tokens;
     }
 
@@ -396,7 +417,10 @@ mod tests {
     #[tokio::test]
     async fn crew_budget_tracking() {
         let tracker = BudgetTracker::new(BudgetConfig::default(), BudgetPolicy::default());
-        let config = CrewBudget { max_tokens: Some(100), ..Default::default() };
+        let config = CrewBudget {
+            max_tokens: Some(100),
+            ..Default::default()
+        };
         tracker.create_crew_budget("run1", &config).await.unwrap();
         tracker.record_crew_usage("run1", 50, 0.01).await;
         let result = tracker.check_crew_budget("run1", &config).await;

@@ -3,7 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::core::adk::error::AgentError;
-use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
+use crate::core::adk::model::{
+    ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider,
+};
 
 /// 上下文生成器 trait（§10.2.2 Contextual Retrieval）
 /// 摄取时为每个 chunk 生成 50-150 token 的中文上下文说明，prepend 到原文前
@@ -81,7 +83,10 @@ mod tests {
     #[tokio::test]
     async fn heuristic_works() {
         let c = HeuristicContextualizer;
-        let ctx = c.contextualize("这是一篇关于公司财务的文档，介绍季度收入。", "收入增长3%").await.unwrap();
+        let ctx = c
+            .contextualize("这是一篇关于公司财务的文档，介绍季度收入。", "收入增长3%")
+            .await
+            .unwrap();
         assert!(ctx.contains("公司财务"));
     }
 }

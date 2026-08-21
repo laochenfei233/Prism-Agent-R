@@ -1,6 +1,6 @@
 <script lang="ts">
-	let { size = 24 }: { size?: number } = $props();
-	let svg = $derived(`<svg
+  let { size = 24 }: { size?: number } = $props();
+  let svg = $derived(`<svg
       xmlns="http://www.w3.org/2000/svg"
       xmlns:xlink="http://www.w3.org/1999/xlink"
       width="${size}"
@@ -28,6 +28,5 @@
       </defs>
     </svg>`);
 </script>
-
 
 {@html svg}

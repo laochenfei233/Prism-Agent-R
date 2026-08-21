@@ -1,8 +1,6 @@
 use tauri::State;
 
-use crate::data::models::{
-    WikiDto, WikiPageDto, WikiPageHitDto, WikiPage, WikiPageHit, WikiRow,
-};
+use crate::data::models::{WikiDto, WikiPage, WikiPageDto, WikiPageHit, WikiPageHitDto, WikiRow};
 use crate::data::services::WikiService;
 use crate::utils::error::AppError;
 
@@ -55,29 +53,21 @@ pub async fn wiki_create(
 }
 
 #[tauri::command]
-pub async fn wiki_list(
-    state: State<'_, crate::AppState>,
-) -> Result<Vec<WikiDto>, AppError> {
+pub async fn wiki_list(state: State<'_, crate::AppState>) -> Result<Vec<WikiDto>, AppError> {
     let svc = WikiService::new(state.db.clone());
     let rows = svc.list_wikis().await?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
 #[tauri::command]
-pub async fn wiki_get(
-    state: State<'_, crate::AppState>,
-    id: String,
-) -> Result<WikiDto, AppError> {
+pub async fn wiki_get(state: State<'_, crate::AppState>, id: String) -> Result<WikiDto, AppError> {
     let svc = WikiService::new(state.db.clone());
     let row = svc.get_wiki(&id).await?;
     Ok(row.into())
 }
 
 #[tauri::command]
-pub async fn wiki_delete(
-    state: State<'_, crate::AppState>,
-    id: String,
-) -> Result<(), AppError> {
+pub async fn wiki_delete(state: State<'_, crate::AppState>, id: String) -> Result<(), AppError> {
     let svc = WikiService::new(state.db.clone());
     svc.delete_wiki(&id).await
 }

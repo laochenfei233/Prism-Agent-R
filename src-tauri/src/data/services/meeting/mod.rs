@@ -1,3 +1,3 @@
 pub mod audio_stream;
 
-pub use audio_stream::{AudioStreamManager, buffered_to_source};
+pub use audio_stream::{buffered_to_source, AudioStreamManager};

@@ -26,19 +26,23 @@ impl McpService {
         .fetch_all(&self.db.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|r| McpServerDto {
-            id: r.id,
-            name: r.name,
-            r#type: r.r#type,
-            command: r.command,
-            args: serde_json::from_str(&r.args).unwrap_or_default(),
-            base_url: r.base_url,
-            is_active: r.is_active != 0,
-            timeout_ms: r.timeout_ms,
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| McpServerDto {
+                id: r.id,
+                name: r.name,
+                r#type: r.r#type,
+                command: r.command,
+                args: serde_json::from_str(&r.args).unwrap_or_default(),
+                base_url: r.base_url,
+                is_active: r.is_active != 0,
+                timeout_ms: r.timeout_ms,
+            })
+            .collect())
     }
 
     /// 添加 MCP 服务器
+    #[allow(clippy::too_many_arguments)]
     pub async fn add(
         &self,
         name: String,
@@ -52,9 +56,12 @@ impl McpService {
     ) -> Result<McpServerDto, AppError> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp_millis();
-        let args_json = serde_json::to_string(&args.unwrap_or_default()).unwrap_or_else(|_| "[]".into());
-        let env_json = serde_json::to_string(&env.unwrap_or_default()).unwrap_or_else(|_| "{}".into());
-        let headers_json = serde_json::to_string(&headers.unwrap_or_default()).unwrap_or_else(|_| "{}".into());
+        let args_json =
+            serde_json::to_string(&args.unwrap_or_default()).unwrap_or_else(|_| "[]".into());
+        let env_json =
+            serde_json::to_string(&env.unwrap_or_default()).unwrap_or_else(|_| "{}".into());
+        let headers_json =
+            serde_json::to_string(&headers.unwrap_or_default()).unwrap_or_else(|_| "{}".into());
 
         sqlx::query(
             "INSERT INTO mcp_servers (id, name, type, command, args, env, base_url, headers, is_active, timeout_ms, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)"
@@ -67,7 +74,7 @@ impl McpService {
         .bind(&env_json)
         .bind(&base_url)
         .bind(&headers_json)
-        .bind(&timeout_ms.unwrap_or(30000))
+        .bind(timeout_ms.unwrap_or(30000))
         .bind(now)
         .bind(now)
         .execute(&self.db.pool)
@@ -103,6 +110,7 @@ impl McpService {
     }
 
     /// 更新 MCP 服务器
+    #[allow(clippy::too_many_arguments)]
     pub async fn update(
         &self,
         id: &str,
@@ -118,7 +126,9 @@ impl McpService {
         let new_name = name.unwrap_or(existing.name);
         let new_type = r#type.unwrap_or(existing.r#type);
         let new_command = command.or(existing.command);
-        let new_args = args.map(|a| serde_json::to_string(&a).unwrap_or_else(|_| "[]".into())).unwrap_or(existing.args);
+        let new_args = args
+            .map(|a| serde_json::to_string(&a).unwrap_or_else(|_| "[]".into()))
+            .unwrap_or(existing.args);
         let new_base_url = base_url.or(existing.base_url);
         let new_timeout = timeout_ms.unwrap_or(existing.timeout_ms.unwrap_or(30000));
         let now = chrono::Utc::now().timestamp_millis();
@@ -131,7 +141,7 @@ impl McpService {
         .bind(&new_command)
         .bind(&new_args)
         .bind(&new_base_url)
-        .bind(&new_timeout)
+        .bind(new_timeout)
         .bind(now)
         .bind(id)
         .execute(&self.db.pool)
@@ -197,19 +207,20 @@ impl McpService {
                     error: None,
                 })
             }
-            Err(e) => {
-                Ok(McpTestResult {
-                    ok: false,
-                    tools_count: 0,
-                    latency_ms: None,
-                    error: Some(e.to_string()),
-                })
-            }
+            Err(e) => Ok(McpTestResult {
+                ok: false,
+                tools_count: 0,
+                latency_ms: None,
+                error: Some(e.to_string()),
+            }),
         }
     }
 
     /// 获取服务器工具列表
-    pub async fn tools(&self, server_id: Option<&str>) -> Result<Vec<crate::mcp::transport::McpTool>, AppError> {
+    pub async fn tools(
+        &self,
+        server_id: Option<&str>,
+    ) -> Result<Vec<crate::mcp::transport::McpTool>, AppError> {
         if let Some(sid) = server_id {
             Ok(self.runtime.get_tools(sid).await)
         } else {

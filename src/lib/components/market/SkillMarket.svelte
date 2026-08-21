@@ -1,346 +1,365 @@
 <script lang="ts">
-	import { invoke } from '$lib/api/client';
-	import { skillApi, type LocalSkill } from '$lib/api';
-	import SkillCard from './SkillCard.svelte';
+  import { invoke } from '$lib/api/client';
+  import { skillApi, type LocalSkill } from '$lib/api';
+  import SkillCard from './SkillCard.svelte';
 
-	let query = $state('');
-	let results = $state<any[]>([]);
-	let loading = $state(false);
-	let sourceFilter = $state('all');
+  let query = $state('');
+  let results = $state<MarketSkillHit[]>([]);
+  let loading = $state(false);
+  let sourceFilter = $state('all');
 
-	let debounceTimer: ReturnType<typeof setTimeout>;
+  let debounceTimer: ReturnType<typeof setTimeout>;
 
-	function onInput() {
-		clearTimeout(debounceTimer);
-		debounceTimer = setTimeout(() => search(), 300);
-	}
+  interface MarketSkillHit {
+    id?: string;
+    name?: string;
+    skill_name?: string;
+    description?: string | null;
+    source: string;
+    stars: number | null;
+    tags?: string[];
+    installed?: boolean;
+    install_source?: string;
+  }
 
-	async function search() {
-		if (!query.trim()) {
-			results = [];
-			return;
-		}
-		loading = true;
-		try {
-			results = await invoke<any[]>('skill_search_market', { query });
-		} catch (e) {
-			console.error('Search failed:', e);
-			results = [];
-		} finally {
-			loading = false;
-		}
-	}
+  function onInput() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => search(), 300);
+  }
 
-	let filtered = $derived(
-		sourceFilter === 'all' ? results : results.filter((r) => r.source === sourceFilter)
-	);
+  async function search() {
+    if (!query.trim()) {
+      results = [];
+      return;
+    }
+    loading = true;
+    try {
+      results = await invoke<MarketSkillHit[]>('skill_search_market', { query });
+    } catch (e) {
+      console.error('Search failed:', e);
+      results = [];
+    } finally {
+      loading = false;
+    }
+  }
 
-	// 本地技能（.claude/skills 等目录）
-	let localSkills = $state<LocalSkill[]>([]);
-	let localLoading = $state(false);
-	let localInstalling = $state<string | null>(null);
+  let filtered = $derived(
+    sourceFilter === 'all' ? results : results.filter((r) => r.source === sourceFilter),
+  );
 
-	async function loadLocalSkills() {
-		localLoading = true;
-		try {
-			let workdir = '';
-			try {
-				const ws = await invoke<{ current_dir: string }>('workspace_get');
-				workdir = ws.current_dir || '';
-			} catch {
-				// 非 Tauri 环境或未设置工作区：沿用空目录
-			}
-			localSkills = await skillApi.listLocal(workdir);
-		} catch (e) {
-			console.error('Load local skills failed:', e);
-			localSkills = [];
-		} finally {
-			localLoading = false;
-		}
-	}
+  // 本地技能（.claude/skills 等目录）
+  let localSkills = $state<LocalSkill[]>([]);
+  let localLoading = $state(false);
+  let localInstalling = $state<string | null>(null);
 
-	async function installLocal(skill: LocalSkill) {
-		localInstalling = skill.path;
-		try {
-			await skillApi.install(skill.path);
-			await loadLocalSkills();
-		} catch (e) {
-			console.error('Install local skill failed:', e);
-		} finally {
-			localInstalling = null;
-		}
-	}
+  async function loadLocalSkills() {
+    localLoading = true;
+    try {
+      let workdir = '';
+      try {
+        const ws = await invoke<{ current_dir: string }>('workspace_get');
+        workdir = ws.current_dir || '';
+      } catch {
+        // 非 Tauri 环境或未设置工作区：沿用空目录
+      }
+      localSkills = await skillApi.listLocal(workdir);
+    } catch (e) {
+      console.error('Load local skills failed:', e);
+      localSkills = [];
+    } finally {
+      localLoading = false;
+    }
+  }
 
-	$effect(() => { loadLocalSkills(); });
+  async function installLocal(skill: LocalSkill) {
+    localInstalling = skill.path;
+    try {
+      await skillApi.install(skill.path);
+      await loadLocalSkills();
+    } catch (e) {
+      console.error('Install local skill failed:', e);
+    } finally {
+      localInstalling = null;
+    }
+  }
+
+  $effect(() => {
+    loadLocalSkills();
+  });
 </script>
 
 <div class="skill-market">
-	<div class="local-section">
-		<div class="local-header">本地技能</div>
-		{#if localLoading}
-			<div class="loading">
-				<div class="spinner"></div>
-				<span>加载中...</span>
-			</div>
-		{:else if localSkills.length > 0}
-			<div class="local-list">
-				{#each localSkills as skill (skill.path)}
-					<div class="local-item">
-						<div class="local-info">
-							<span class="local-name">{skill.name}</span>
-							{#if skill.description}
-								<span class="local-desc">{skill.description}</span>
-							{/if}
-						</div>
-						<button
-							class="install-btn"
-							onclick={() => installLocal(skill)}
-							disabled={localInstalling === skill.path}
-						>
-							{localInstalling === skill.path ? '安装中…' : '安装到应用'}
-						</button>
-					</div>
-				{/each}
-			</div>
-		{:else}
-			<div class="empty">
-				<p>未发现本地技能（查看 .claude/skills 目录）</p>
-			</div>
-		{/if}
-	</div>
+  <div class="local-section">
+    <div class="local-header">本地技能</div>
+    {#if localLoading}
+      <div class="loading">
+        <div class="spinner"></div>
+        <span>加载中...</span>
+      </div>
+    {:else if localSkills.length > 0}
+      <div class="local-list">
+        {#each localSkills as skill (skill.path)}
+          <div class="local-item">
+            <div class="local-info">
+              <span class="local-name">{skill.name}</span>
+              {#if skill.description}
+                <span class="local-desc">{skill.description}</span>
+              {/if}
+            </div>
+            <button
+              class="install-btn"
+              onclick={() => installLocal(skill)}
+              disabled={localInstalling === skill.path}
+            >
+              {localInstalling === skill.path ? '安装中…' : '安装到应用'}
+            </button>
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div class="empty">
+        <p>未发现本地技能（查看 .claude/skills 目录）</p>
+      </div>
+    {/if}
+  </div>
 
-	<div class="market-header">
-		<div class="search-wrapper">
-			<svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-			</svg>
-			<input
-				type="text"
-				placeholder="Search skills..."
-				bind:value={query}
-				oninput={onInput}
-				class="search-input"
-			/>
-		</div>
-		<div class="source-filters">
-			{#each [
-				{ value: 'all', label: 'All' },
-				{ value: 'skills.sh', label: 'skills.sh' },
-				{ value: 'claude-plugins.dev', label: 'Claude 插件' },
-				{ value: 'clawhub.ai', label: 'ClawHub' },
-			] as { value, label }}
-				<button
-					class="filter-chip"
-					class:active={sourceFilter === value}
-					onclick={() => (sourceFilter = value)}
-				>
-					{label}
-				</button>
-			{/each}
-		</div>
-	</div>
+  <div class="market-header">
+    <div class="search-wrapper">
+      <svg
+        class="search-icon"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+      <input
+        type="text"
+        placeholder="Search skills..."
+        bind:value={query}
+        oninput={onInput}
+        class="search-input"
+      />
+    </div>
+    <div class="source-filters">
+      {#each [{ value: 'all', label: 'All' }, { value: 'skills.sh', label: 'skills.sh' }, { value: 'claude-plugins.dev', label: 'Claude 插件' }, { value: 'clawhub.ai', label: 'ClawHub' }] as { value, label } (value)}
+        <button
+          class="filter-chip"
+          class:active={sourceFilter === value}
+          onclick={() => (sourceFilter = value)}
+        >
+          {label}
+        </button>
+      {/each}
+    </div>
+  </div>
 
-	{#if loading}
-		<div class="loading">
-			<div class="spinner"></div>
-			<span>Searching...</span>
-		</div>
-	{:else if filtered.length > 0}
-		<div class="results-grid">
-			{#each filtered as hit (hit.id || hit.name)}
-				<SkillCard {hit} />
-			{/each}
-		</div>
-	{:else if query && !loading}
-		<div class="empty">
-			<p>No results found for "{query}".</p>
-		</div>
-	{/if}
+  {#if loading}
+    <div class="loading">
+      <div class="spinner"></div>
+      <span>Searching...</span>
+    </div>
+  {:else if filtered.length > 0}
+    <div class="results-grid">
+      {#each filtered as hit (hit.id || hit.name)}
+        <SkillCard {hit} />
+      {/each}
+    </div>
+  {:else if query && !loading}
+    <div class="empty">
+      <p>No results found for "{query}".</p>
+    </div>
+  {/if}
 </div>
 
 <style>
-	.skill-market {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
+  .skill-market {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
 
-	.market-header {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
+  .market-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
 
-	.local-section {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		padding: var(--space-3);
-		border: 1px solid var(--color-separator);
-		border-radius: var(--radius-md);
-		background: var(--color-bg-secondary);
-	}
+  .local-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--color-separator);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-secondary);
+  }
 
-	.local-header {
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--color-fg-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
+  .local-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-fg-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
 
-	.local-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
+  .local-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
 
-	.local-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-3);
-		padding: 8px 0;
-		border-bottom: 1px solid var(--color-separator);
-	}
-	.local-item:last-child {
-		border-bottom: none;
-	}
+  .local-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-separator);
+  }
+  .local-item:last-child {
+    border-bottom: none;
+  }
 
-	.local-info {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 0;
-	}
+  .local-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
 
-	.local-name {
-		font-size: 14px;
-		font-weight: 500;
-		color: var(--color-fg);
-	}
+  .local-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-fg);
+  }
 
-	.local-desc {
-		font-size: 12px;
-		color: var(--color-fg-secondary);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
+  .local-desc {
+    font-size: 12px;
+    color: var(--color-fg-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-	.install-btn {
-		padding: 5px 12px;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--color-accent);
-		background: transparent;
-		color: var(--color-accent);
-		font-size: 12px;
-		font-weight: 500;
-		flex-shrink: 0;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-	.install-btn:hover {
-		background: var(--color-accent);
-		color: #fff;
-	}
-	.install-btn:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
+  .install-btn {
+    padding: 5px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-accent);
+    background: transparent;
+    color: var(--color-accent);
+    font-size: 12px;
+    font-weight: 500;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .install-btn:hover {
+    background: var(--color-accent);
+    color: #fff;
+  }
+  .install-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 
-	.search-wrapper {
-		position: relative;
-	}
+  .search-wrapper {
+    position: relative;
+  }
 
-	.search-icon {
-		position: absolute;
-		left: 12px;
-		top: 50%;
-		transform: translateY(-50%);
-		color: var(--color-fg-tertiary);
-		pointer-events: none;
-	}
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-fg-tertiary);
+    pointer-events: none;
+  }
 
-	.search-input {
-		width: 100%;
-		padding: 10px 12px 10px 38px;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg-secondary);
-		color: var(--color-fg);
-		font-size: 15px;
-		outline: none;
-		box-sizing: border-box;
-		transition: border-color 0.15s ease;
-	}
-	.search-input:focus {
-		border-color: var(--color-accent);
-	}
+  .search-input {
+    width: 100%;
+    padding: 10px 12px 10px 38px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-separator);
+    background: var(--color-bg-secondary);
+    color: var(--color-fg);
+    font-size: 15px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease;
+  }
+  .search-input:focus {
+    border-color: var(--color-accent);
+  }
 
-	.source-filters {
-		display: flex;
-		gap: var(--space-2);
-		flex-wrap: wrap;
-	}
+  .source-filters {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
 
-	.filter-chip {
-		padding: 6px 14px;
-		border-radius: var(--radius-md);
-		border: 1px solid var(--color-separator);
-		background: var(--color-bg-secondary);
-		color: var(--color-fg-secondary);
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-	.filter-chip:hover {
-		background: var(--color-bg-tertiary);
-	}
-	.filter-chip.active {
-		background: var(--color-accent);
-		color: #fff;
-		border-color: var(--color-accent);
-	}
+  .filter-chip {
+    padding: 6px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-separator);
+    background: var(--color-bg-secondary);
+    color: var(--color-fg-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .filter-chip:hover {
+    background: var(--color-bg-tertiary);
+  }
+  .filter-chip.active {
+    background: var(--color-accent);
+    color: #fff;
+    border-color: var(--color-accent);
+  }
 
-	.loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-2);
-		padding: var(--space-8);
-		color: var(--color-fg-secondary);
-		font-size: 14px;
-	}
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-8);
+    color: var(--color-fg-secondary);
+    font-size: 14px;
+  }
 
-	.spinner {
-		width: 20px;
-		height: 20px;
-		border: 2px solid var(--color-separator);
-		border-top-color: var(--color-accent);
-		border-radius: 50%;
-		animation: spin 0.6s linear infinite;
-	}
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-separator);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
 
-	.results-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-		gap: var(--space-3);
-	}
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-3);
+  }
 
-	.empty {
-		text-align: center;
-		padding: var(--space-8);
-		color: var(--color-fg-tertiary);
-		font-size: 14px;
-	}
+  .empty {
+    text-align: center;
+    padding: var(--space-8);
+    color: var(--color-fg-tertiary);
+    font-size: 14px;
+  }
 
-	.empty p {
-		margin: 0;
-	}
+  .empty p {
+    margin: 0;
+  }
 
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 </style>

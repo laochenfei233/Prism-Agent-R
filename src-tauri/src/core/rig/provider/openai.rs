@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures::SinkExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -58,10 +58,7 @@ impl ModelProvider for OpenAiProvider {
         }
     }
 
-    async fn generate(
-        &self,
-        request: GenerationRequest,
-    ) -> Result<GenerationResponse, AgentError> {
+    async fn generate(&self, request: GenerationRequest) -> Result<GenerationResponse, AgentError> {
         let body = build_request_body(&self.model, &request, false);
         let url = format!("{}/chat/completions", self.base_url);
 
@@ -86,9 +83,10 @@ impl ModelProvider for OpenAiProvider {
             .await
             .map_err(|e| AgentError::Provider(e.to_string()))?;
 
-        let choice = data.choices.first().ok_or_else(|| {
-            AgentError::Provider("No choices in response".to_string())
-        })?;
+        let choice = data
+            .choices
+            .first()
+            .ok_or_else(|| AgentError::Provider("No choices in response".to_string()))?;
 
         let mut tool_calls = Vec::new();
         let mut text = choice.message.content.clone().unwrap_or_default();
@@ -139,20 +137,43 @@ impl ModelProvider for OpenAiProvider {
             return Err(AgentError::Provider(format!("HTTP {status}: {text}")));
         }
 
+        // Buffered SSE streaming: collect bytes, split on \n\n, parse each complete event.
+        let (tx, rx) = futures::channel::mpsc::channel::<StreamEvent>(64);
         let stream = resp.bytes_stream();
-        let mapped = stream.filter_map(move |chunk| {
-            async move {
+
+        tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            use futures::StreamExt;
+            let mut stream = stream;
+            while let Some(chunk) = stream.next().await {
                 match chunk {
                     Ok(bytes) => {
-                        let text = String::from_utf8_lossy(&bytes).to_string();
-                        parse_sse_chunk(&text)
+                        buffer.extend_from_slice(&bytes);
+                        // Process all complete SSE events (separated by \n\n)
+                        while let Some(pos) = find_event_boundary(&buffer) {
+                            let event_bytes = buffer[..pos].to_vec();
+                            buffer = buffer[pos..].to_vec();
+                            let event_text = String::from_utf8_lossy(&event_bytes).to_string();
+                            for evt in parse_sse_buffer(&event_text) {
+                                if tx.clone().send(evt).await.is_err() {
+                                    return;
+                                }
+                            }
+                        }
                     }
-                    Err(_) => None,
+                    Err(_) => break,
+                }
+            }
+            // Process any remaining data in buffer
+            if !buffer.is_empty() {
+                let event_text = String::from_utf8_lossy(&buffer).to_string();
+                for evt in parse_sse_buffer(&event_text) {
+                    let _ = tx.clone().send(evt).await;
                 }
             }
         });
 
-        Ok(Box::pin(mapped))
+        Ok(Box::pin(rx))
     }
 }
 
@@ -232,11 +253,7 @@ struct OpenAiUsage {
     total_tokens: u64,
 }
 
-fn build_request_body(
-    model: &str,
-    request: &GenerationRequest,
-    stream: bool,
-) -> OpenAiRequest {
+fn build_request_body(model: &str, request: &GenerationRequest, stream: bool) -> OpenAiRequest {
     let mut messages = Vec::new();
 
     if let Some(sys) = &request.system {
@@ -317,34 +334,87 @@ pub fn parse_sse_chunk(text: &str) -> Option<StreamEvent> {
         if data == "[DONE]" {
             return Some(StreamEvent::Finish { usage: None });
         }
-        if let Ok(chunk) = serde_json::from_str::<OpenAiStreamChunk>(data) {
-            if let Some(choice) = chunk.choices.first() {
-                if let Some(delta) = &choice.delta {
-                    if let Some(content) = &delta.content {
-                        if !content.is_empty() {
-                            return Some(StreamEvent::Text(content.clone()));
-                        }
-                    }
-                    if let Some(tc) = &delta.tool_calls {
-                        for t in tc {
-                            if let Some(name) = &t.function {
-                                let args: serde_json::Value =
-                                    serde_json::from_str(&name.arguments).unwrap_or_default();
-                                return Some(StreamEvent::ToolCall(ToolCall {
-                                    id: t.id.clone().unwrap_or_default(),
-                                    name: name.name.clone().unwrap_or_default(),
-                                    arguments: args,
-                                }));
-                            }
-                        }
-                    }
-                }
-                if choice.finish_reason.as_deref() == Some("stop") {
-                    return Some(StreamEvent::Finish { usage: None });
-                }
+        if let Some(evt) = parse_sse_data(data) {
+            return Some(evt);
+        }
+    }
+    None
+}
+
+/// Find the position of the next SSE event boundary (\n\n) in the buffer.
+/// Returns the byte position AFTER the \n\n separator, or None if not found.
+fn find_event_boundary(buf: &[u8]) -> Option<usize> {
+    for i in 0..buf.len().saturating_sub(1) {
+        if buf[i] == b'\n' && buf[i + 1] == b'\n' {
+            return Some(i + 2);
+        }
+    }
+    None
+}
+
+/// Parse all SSE events from a buffered text block (handles multi-event chunks).
+fn parse_sse_buffer(text: &str) -> Vec<StreamEvent> {
+    let mut events = Vec::new();
+    for block in text.split("\n\n") {
+        for line in block.lines() {
+            let line = line.trim();
+            if !line.starts_with("data: ") {
+                continue;
+            }
+            let data = &line[6..];
+            if data == "[DONE]" {
+                events.push(StreamEvent::Finish { usage: None });
+                continue;
+            }
+            if let Some(evt) = parse_sse_data(data) {
+                events.push(evt);
             }
         }
     }
+    events
+}
+
+/// Parse a single SSE data payload into a StreamEvent.
+fn parse_sse_data(data: &str) -> Option<StreamEvent> {
+    let chunk = serde_json::from_str::<OpenAiStreamChunk>(data).ok()?;
+    let choice = chunk.choices.first()?;
+
+    // Tool calls
+    if let Some(delta) = &choice.delta {
+        if let Some(tc) = &delta.tool_calls {
+            for t in tc {
+                if let Some(name) = &t.function {
+                    let args: serde_json::Value =
+                        serde_json::from_str(&name.arguments).unwrap_or_default();
+                    return Some(StreamEvent::ToolCall(ToolCall {
+                        id: t.id.clone().unwrap_or_default(),
+                        name: name.name.clone().unwrap_or_default(),
+                        arguments: args,
+                    }));
+                }
+            }
+        }
+
+        // Content (actual response text)
+        if let Some(content) = &delta.content {
+            if !content.is_empty() {
+                return Some(StreamEvent::Text(content.clone()));
+            }
+        }
+
+        // Reasoning content (thinking process — MiMo/DeepSeek API specific)
+        if let Some(reasoning) = &delta.reasoning_content {
+            if !reasoning.is_empty() {
+                return Some(StreamEvent::Reasoning(reasoning.clone()));
+            }
+        }
+    }
+
+    // Finish
+    if choice.finish_reason.as_deref() == Some("stop") {
+        return Some(StreamEvent::Finish { usage: None });
+    }
+
     None
 }
 
@@ -362,6 +432,7 @@ struct OpenAiStreamChoice {
 #[derive(Deserialize)]
 struct OpenAiStreamDelta {
     content: Option<String>,
+    reasoning_content: Option<String>,
     tool_calls: Option<Vec<OpenAiStreamToolCall>>,
 }
 

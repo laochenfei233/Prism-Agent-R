@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::json;
+use std::sync::Arc;
 
+use super::service::SearchService;
 use crate::core::adk::error::AgentError;
 use crate::core::adk::model::ToolOutput;
 use crate::core::adk::tool::ToolExecutor;
-use super::service::SearchService;
 
 pub struct WebSearchTool {
     service: Arc<SearchService>,
@@ -44,7 +44,9 @@ impl ToolExecutor for WebSearchTool {
             .ok_or_else(|| AgentError::Internal("web_search: 缺少 query 参数".to_string()))?;
 
         if query.trim().is_empty() {
-            return Ok(ToolOutput::text("搜索词不能为空，请提供具体的搜索查询。".to_string()));
+            return Ok(ToolOutput::text(
+                "搜索词不能为空，请提供具体的搜索查询。".to_string(),
+            ));
         }
 
         let limit = args["limit"].as_u64().unwrap_or(5).min(10) as usize;

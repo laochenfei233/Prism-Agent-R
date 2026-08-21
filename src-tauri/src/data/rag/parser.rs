@@ -34,9 +34,17 @@ pub struct ParsedPage {
 
 #[derive(Debug, Clone)]
 pub enum ParsedBlock {
-    Table { text: String, table_json: Option<String> },
-    Image { path: PathBuf, caption: Option<String> },
-    Text { text: String },
+    Table {
+        text: String,
+        table_json: Option<String>,
+    },
+    Image {
+        path: PathBuf,
+        caption: Option<String>,
+    },
+    Text {
+        text: String,
+    },
 }
 
 /// 文档解析器抽象：按扩展名分发（可插拔管线）
@@ -59,7 +67,11 @@ impl DocumentParser for TextParser {
     async fn parse(&self, path: &Path) -> Result<ParsedDoc, AppError> {
         let text = tokio::fs::read_to_string(path).await?;
         Ok(ParsedDoc {
-            pages: vec![ParsedPage { page_no: 1, text: text.clone(), image_path: None }],
+            pages: vec![ParsedPage {
+                page_no: 1,
+                text: text.clone(),
+                image_path: None,
+            }],
             blocks: vec![ParsedBlock::Text { text }],
             title: path.file_stem().map(|s| s.to_string_lossy().into_owned()),
             page_count: 1,
@@ -100,7 +112,11 @@ impl DocumentParser for PdfParser {
         if !non_empty.is_empty() {
             for (page_no, text) in non_empty {
                 doc.blocks.push(ParsedBlock::Text { text: text.clone() });
-                doc.pages.push(ParsedPage { page_no, text, image_path: None });
+                doc.pages.push(ParsedPage {
+                    page_no,
+                    text,
+                    image_path: None,
+                });
             }
             doc.page_count = pages.len();
             return Ok(doc);
@@ -164,7 +180,10 @@ impl PdfPageRenderer {
         let mut page_no = 0u32;
         while let Some(entry) = entries.next_entry().await? {
             let p = entry.path();
-            if p.extension().map(|e| e == "png" || e == "jpg").unwrap_or(false) {
+            if p.extension()
+                .map(|e| e == "png" || e == "jpg")
+                .unwrap_or(false)
+            {
                 page_no += 1;
                 pages.push(ParsedPage {
                     page_no,
@@ -198,11 +217,17 @@ fn find_in_path(name: &str) -> Option<PathBuf> {
 
 /// 按扩展名分发到对应解析器（§10.2.3 摄取整合）
 pub fn parser_for(path: &Path) -> Box<dyn DocumentParser> {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
         Some("pdf") => Box::new(PdfParser),
-        Some("md" | "markdown" | "txt" | "log" | "json" | "yaml" | "yml" | "toml" | "rs" | "ts" | "svelte" | "html" | "css") => {
-            Box::new(TextParser)
-        }
+        Some(
+            "md" | "markdown" | "txt" | "log" | "json" | "yaml" | "yml" | "toml" | "rs" | "ts"
+            | "svelte" | "html" | "css",
+        ) => Box::new(TextParser),
         _ => Box::new(TextParser), // 未知类型按文本尝试；二进制会报错
     }
 }

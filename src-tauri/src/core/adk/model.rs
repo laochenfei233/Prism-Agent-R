@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
-
 use super::error::AgentError;
 
 // ── Chat Role ─────────────────────────────────────────────
@@ -39,11 +38,17 @@ pub struct ToolOutput {
 
 impl ToolOutput {
     pub fn text(content: String) -> Self {
-        Self { content, is_error: false }
+        Self {
+            content,
+            is_error: false,
+        }
     }
 
     pub fn error(content: String) -> Self {
-        Self { content, is_error: true }
+        Self {
+            content,
+            is_error: true,
+        }
     }
 }
 
@@ -58,7 +63,7 @@ pub struct ChatMessage {
 
 // ── Generation Request ────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GenerationRequest {
     pub messages: Vec<ChatMessage>,
     pub system: Option<String>,
@@ -66,19 +71,6 @@ pub struct GenerationRequest {
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
     pub stop: Option<Vec<String>>,
-}
-
-impl Default for GenerationRequest {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            system: None,
-            tools: Vec::new(),
-            temperature: None,
-            max_tokens: None,
-            stop: None,
-        }
-    }
 }
 
 // ── Tool Spec ─────────────────────────────────────────────
@@ -111,6 +103,7 @@ pub struct Usage {
 #[derive(Debug, Clone)]
 pub enum StreamEvent {
     Text(String),
+    Reasoning(String),
     ToolCall(ToolCall),
     Finish { usage: Option<Usage> },
     Error(String),

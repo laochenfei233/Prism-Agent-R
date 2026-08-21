@@ -4,17 +4,16 @@ pub mod data;
 pub mod mcp;
 pub mod utils;
 
-use std::collections::HashMap;
 use data::Database;
+use std::collections::HashMap;
 use tauri::Manager;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use mcp::McpRuntime;
 use core::adk::tool::ToolApprovalStore;
-use core::autoagents::loop_scheduler::LoopScheduler;
 use core::session::state::SessionStateManager;
 use data::services::meeting::AudioStreamManager;
+use mcp::McpRuntime;
 
 pub struct AppState {
     pub db: Database,
@@ -23,9 +22,14 @@ pub struct AppState {
     pub approval_store: std::sync::Arc<ToolApprovalStore>,
     pub audio_streams: std::sync::Arc<AudioStreamManager>,
     pub session_state: std::sync::Arc<SessionStateManager>,
-    pub loop_scheduler: std::sync::Arc<LoopScheduler>,
     /// 翻译短文本缓存（跨 IPC 调用共享，<500 字符，TTL 24h）
-    pub translate_cache: std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>>,
+    pub translate_cache:
+        std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, (String, i64)>>>,
+    /// Compose sessions storage
+    pub compose_sessions:
+        std::sync::Arc<tokio::sync::Mutex<HashMap<String, core::compose::ComposeSession>>>,
+    /// Compose session cancellation tokens
+    pub compose_cancels: std::sync::Arc<tokio::sync::Mutex<HashMap<String, CancellationToken>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -35,9 +39,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let app_data_dir = app.path().app_data_dir().expect("failed to get app data dir");
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
             let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
-            let db = rt.block_on(Database::new(&app_data_dir)).expect("failed to init database");
+            let db = rt
+                .block_on(Database::new(&app_data_dir))
+                .expect("failed to init database");
 
             let mcp_runtime = McpRuntime::new();
 
@@ -57,7 +66,7 @@ pub fn run() {
             {
                 let db_clone = db.clone();
                 let runtime_clone = mcp_runtime.clone();
-                let _ = rt.spawn(async move {
+                rt.spawn(async move {
                     let svc = data::services::McpService::new(db_clone, runtime_clone);
                     if let Err(e) = svc.load_all().await {
                         tracing::warn!("MCP load_all failed: {e}");
@@ -72,8 +81,11 @@ pub fn run() {
                 approval_store: std::sync::Arc::new(ToolApprovalStore::new()),
                 audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
                 session_state: std::sync::Arc::new(SessionStateManager::new()),
-                loop_scheduler: std::sync::Arc::new(LoopScheduler::new()),
-                translate_cache: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+                translate_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+                    std::collections::HashMap::new(),
+                )),
+                compose_sessions: std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+                compose_cancels: std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             });
             Ok(())
         })
@@ -130,19 +142,6 @@ pub fn run() {
             commands::skill::skill_search_market,
             commands::skill::skill_install_market,
             commands::skill::skill_list_local,
-            commands::workflow::workflow_list,
-            commands::workflow::workflow_run,
-            commands::workflow::workflow_stop,
-            commands::workflow::workflow_result,
-            commands::workflow::task_list_templates,
-            commands::workflow::task_save_template,
-            commands::workflow::task_run,
-            commands::workflow::task_validate,
-            commands::workflow::task_rerun,
-            commands::workflow::goal_evaluate,
-            commands::loop_cmd::loop_start,
-            commands::loop_cmd::loop_stop,
-            commands::loop_cmd::loop_list,
             commands::workspace::workspace_get,
             commands::workspace::workspace_set,
             commands::workspace::workspace_tree,
@@ -243,6 +242,8 @@ pub fn run() {
             commands::tts::tts_stop,
             commands::tts::tts_voices,
             commands::dashboard::dashboard_overview,
+            commands::dashboard::dashboard_kanban,
+            commands::dashboard::dashboard_tasks,
             commands::search::search_config,
             commands::search::search_config_save,
             commands::search::search_test,
@@ -253,17 +254,14 @@ pub fn run() {
             commands::monitor::monitor_get_budget,
             commands::monitor::monitor_get_exceptions,
             commands::monitor::guardrail_check_tool,
-            commands::monitor::orchestrator_start,
-            commands::monitor::orchestrator_resume,
-            commands::monitor::orchestrator_pause,
-            commands::monitor::orchestrator_stop,
-            commands::monitor::orchestrator_list,
             commands::monitor::exception_clear,
             commands::monitor::log_export,
             commands::monitor::model_switch_list,
-            commands::monitor::workflow_pause,
-            commands::monitor::workflow_resume,
-            commands::monitor::monitor_list_active_workflows,
+            commands::compose::compose_start,
+            commands::compose::compose_pause,
+            commands::compose::compose_resume,
+            commands::compose::compose_stop,
+            commands::compose::compose_get,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

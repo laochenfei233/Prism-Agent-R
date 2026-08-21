@@ -59,18 +59,21 @@ pub async fn session_init(
     state: State<'_, crate::AppState>,
     session_id: String,
 ) -> Result<SessionInitReport, AppError> {
-    let report = state.session_state.init_session(
-        &session_id,
-        &state.db.pool,
-        &state.mcp_runtime,
-    ).await.map_err(|e| AppError::Internal(e))?;
+    let report = state
+        .session_state
+        .init_session(&session_id, &state.db.pool, &state.mcp_runtime)
+        .await
+        .map_err(AppError::Internal)?;
 
     let lifecycle = state.session_state.get_state(&session_id).await;
-    let _ = app.emit("session:state-changed", serde_json::json!({
-        "session_id": session_id,
-        "lifecycle": lifecycle,
-        "report": report,
-    }));
+    let _ = app.emit(
+        "session:state-changed",
+        serde_json::json!({
+            "session_id": session_id,
+            "lifecycle": lifecycle,
+            "report": report,
+        }),
+    );
 
     Ok(report)
 }
@@ -92,10 +95,13 @@ pub async fn session_cleanup(
     session_id: String,
 ) -> Result<(), AppError> {
     state.session_state.complete(&session_id).await;
-    let _ = app.emit("session:state-changed", serde_json::json!({
-        "session_id": session_id,
-        "lifecycle": SessionLifecycle::Done,
-    }));
+    let _ = app.emit(
+        "session:state-changed",
+        serde_json::json!({
+            "session_id": session_id,
+            "lifecycle": SessionLifecycle::Done,
+        }),
+    );
     Ok(())
 }
 
@@ -111,7 +117,12 @@ pub async fn session_fork(
     let original = svc.get(&session_id).await?;
 
     // 创建新会话（继承 agent_id）
-    let new_session = svc.create(&original.agent_id, Some(&format!("{} (分支)", original.title.unwrap_or_default()))).await?;
+    let new_session = svc
+        .create(
+            &original.agent_id,
+            Some(&format!("{} (分支)", original.title.unwrap_or_default())),
+        )
+        .await?;
 
     // 这里简化处理：fork 会复制原会话的历史到新会话
     // 完整实现需要复制 messages 表中的消息

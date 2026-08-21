@@ -1,8 +1,6 @@
 use tauri::State;
 
-use crate::data::models::{
-    GlossaryTermDto, GlossaryTermInput, ImportResultDto,
-};
+use crate::data::models::{GlossaryTermDto, GlossaryTermInput, ImportResultDto};
 use crate::data::services::glossary_service::GlossaryService;
 use crate::utils::error::AppError;
 
@@ -128,7 +126,9 @@ pub async fn glossary_import_builtin(
 /// 内置词表目录：resource_dir()/glossary
 fn builtin_glossary_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {
     use tauri::Manager;
-    let resource_dir = app.path().resource_dir()
+    let resource_dir = app
+        .path()
+        .resource_dir()
         .map_err(|e| AppError::Internal(format!("无法获取资源目录: {e}")))?;
     Ok(resource_dir.join("glossary"))
 }
@@ -136,7 +136,10 @@ fn builtin_glossary_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, Ap
 /// 词表文件 → (显示名, 描述)
 fn builtin_label(file: &str) -> (&'static str, &'static str) {
     match file {
-        "microsoft_terms_zh-CN.csv" => ("微软通用术语", "Microsoft Terminology Collection，33K+ 条通用词汇"),
+        "microsoft_terms_zh-CN.csv" => (
+            "微软通用术语",
+            "Microsoft Terminology Collection，33K+ 条通用词汇",
+        ),
         "foreign_trade_terms.csv" => ("外贸术语", "INCOTERMS 2020 + 外贸单证/结算/物流"),
         "hs_codes_chapters.csv" => ("HS 编码章节", "HS 协调制度 01-99 章商品分类"),
         "nutrition_supplements.csv" => ("营养品术语", "营养成分/剂型/法规/宣称"),

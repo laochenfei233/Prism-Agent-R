@@ -1,9 +1,7 @@
 use chrono::Utc;
 use sqlx::SqlitePool;
 
-use crate::data::models::{
-    GlossaryTerm, GlossaryTermInput, GlossaryTermRow, ImportResult,
-};
+use crate::data::models::{GlossaryTerm, GlossaryTermInput, GlossaryTermRow, ImportResult};
 use crate::utils::error::AppError;
 
 pub struct GlossaryService {
@@ -44,15 +42,18 @@ impl GlossaryService {
             .await?
         };
 
-        Ok(rows.into_iter().map(|r| GlossaryTerm {
-            id: r.id,
-            source_lang: r.source_lang,
-            target_lang: r.target_lang,
-            source_term: r.source_term,
-            target_term: r.target_term,
-            category: r.category,
-            enabled: r.enabled != 0,
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| GlossaryTerm {
+                id: r.id,
+                source_lang: r.source_lang,
+                target_lang: r.target_lang,
+                source_term: r.source_term,
+                target_term: r.target_term,
+                category: r.category,
+                enabled: r.enabled != 0,
+            })
+            .collect())
     }
 
     pub async fn add(&self, term: GlossaryTermInput) -> Result<(), AppError> {
@@ -180,32 +181,47 @@ mod tests {
             source_term: "Prism".into(),
             target_term: "棱镜".into(),
             category: Some("产品名".into()),
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         let terms = svc.list(None).await.unwrap();
         assert_eq!(terms.len(), 1);
         let id = terms[0].id.clone();
 
         // 更新译文
-        svc.update(&id, GlossaryTermInput {
-            source_lang: "en".into(),
-            target_lang: "zh".into(),
-            source_term: "Prism".into(),
-            target_term: "棱镜（平台）".into(),
-            category: Some("产品名".into()),
-        }).await.unwrap();
+        svc.update(
+            &id,
+            GlossaryTermInput {
+                source_lang: "en".into(),
+                target_lang: "zh".into(),
+                source_term: "Prism".into(),
+                target_term: "棱镜（平台）".into(),
+                category: Some("产品名".into()),
+            },
+        )
+        .await
+        .unwrap();
 
         let terms = svc.list(None).await.unwrap();
         assert_eq!(terms[0].target_term, "棱镜（平台）");
 
         // 不存在的 id
-        assert!(svc.update("no-such-id", GlossaryTermInput {
-            source_lang: "en".into(),
-            target_lang: "zh".into(),
-            source_term: "x".into(),
-            target_term: "y".into(),
-            category: None,
-        }).await.is_err(), "不存在的术语 update 应报错");
+        assert!(
+            svc.update(
+                "no-such-id",
+                GlossaryTermInput {
+                    source_lang: "en".into(),
+                    target_lang: "zh".into(),
+                    source_term: "x".into(),
+                    target_term: "y".into(),
+                    category: None,
+                }
+            )
+            .await
+            .is_err(),
+            "不存在的术语 update 应报错"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -225,7 +241,10 @@ mod tests {
         let terms = svc.list(None).await.unwrap();
         assert_eq!(terms.len(), 2);
         // 表头不会被导入
-        assert!(!terms.iter().any(|t| t.source_term == "source_lang"), "表头不应入库");
+        assert!(
+            !terms.iter().any(|t| t.source_term == "source_lang"),
+            "表头不应入库"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -246,14 +265,22 @@ mod tests {
                 if e.path().extension().map(|x| x == "csv").unwrap_or(false) {
                     let content = tokio::fs::read_to_string(e.path()).await.unwrap();
                     let result = svc.import_builtin_csv(&content).await.unwrap();
-                    assert_eq!(result.failed, 0, "{} 不应有解析失败行", e.file_name().to_string_lossy());
+                    assert_eq!(
+                        result.failed,
+                        0,
+                        "{} 不应有解析失败行",
+                        e.file_name().to_string_lossy()
+                    );
                     imported_total += result.imported;
                     files += 1;
                 }
             }
         }
         assert!(files >= 6, "应至少有 6 个内置词表，实际 {files}");
-        assert!(imported_total > 30_000, "总导入应 > 30000 条，实际 {imported_total}");
+        assert!(
+            imported_total > 30_000,
+            "总导入应 > 30000 条，实际 {imported_total}"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

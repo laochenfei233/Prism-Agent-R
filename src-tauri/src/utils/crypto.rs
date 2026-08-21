@@ -55,7 +55,7 @@ fn load_or_create_key() -> Result<[u8; 32], AppError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(&path, &key)?;
+    std::fs::write(&path, key)?;
     Ok(key)
 }
 

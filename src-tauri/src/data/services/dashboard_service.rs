@@ -1,3 +1,4 @@
+use crate::core::session::SessionLifecycle;
 use crate::data::models::*;
 use crate::data::Database;
 use crate::utils::error::AppError;
@@ -20,8 +21,6 @@ impl DashboardService {
         let mcp_servers = self.load_mcp_status().await?;
         let recent_sessions = self.load_recent_sessions().await?;
         let models = self.load_models().await?;
-        let workflows = self.load_workflows().await?;
-        let task_runs = self.load_task_runs().await?;
 
         Ok(DashboardOverview {
             agents,
@@ -31,8 +30,126 @@ impl DashboardService {
             mcp_servers,
             recent_sessions,
             models,
-            workflows,
-            task_runs,
+        })
+    }
+
+    pub async fn kanban(
+        &self,
+        session_state: &std::sync::Arc<crate::core::session::state::SessionStateManager>,
+    ) -> Result<KanbanData, AppError> {
+        // 1. Load all agents with system_prompt configured
+        let agent_rows = sqlx::query(
+            r#"
+            SELECT
+                a.id,
+                a.name,
+                COALESCE(a.description, '') AS description,
+                a.avatar,
+                a.order_key,
+                m.display_name AS model_name
+            FROM agents a
+            LEFT JOIN models m ON m.id = a.model_id
+            WHERE a.system_prompt IS NOT NULL AND a.system_prompt != ''
+            ORDER BY a.order_key
+            "#,
+        )
+        .fetch_all(&self.db.pool)
+        .await?;
+
+        let mut idle = Vec::new();
+        let mut running = Vec::new();
+        let mut done = Vec::new();
+        let mut failed = Vec::new();
+
+        for row in &agent_rows {
+            let agent_id: String = row.get("id");
+            let agent_name: String = row.get("name");
+            let agent_avatar: Option<String> = row.get("avatar");
+            let model_name: Option<String> = row.get("model_name");
+
+            // 2. For each agent, find their most recent session
+            let session_row = sqlx::query(
+                r#"
+                SELECT
+                    s.id,
+                    COALESCE(s.title, '新会话') AS title,
+                    s.updated_at,
+                    (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count
+                FROM sessions s
+                WHERE s.agent_id = ?
+                ORDER BY s.updated_at DESC
+                LIMIT 1
+                "#,
+            )
+            .bind(&agent_id)
+            .fetch_optional(&self.db.pool)
+            .await?;
+
+            let (session_id, session_title, session_updated_at, message_count): (
+                Option<String>,
+                Option<String>,
+                Option<i64>,
+                i64,
+            ) = match session_row {
+                Some(r) => (
+                    Some(r.get("id")),
+                    Some(r.get("title")),
+                    Some(r.get("updated_at")),
+                    r.get::<i64, _>("message_count"),
+                ),
+                None => (None, None, None, 0),
+            };
+
+            // 3. Query session_state to get SessionLifecycle
+            let lifecycle = match &session_id {
+                Some(sid) => session_state.get_state(sid).await,
+                None => SessionLifecycle::Created,
+            };
+
+            // 4 & 5. Map lifecycle to kanban column
+            let column = match lifecycle {
+                SessionLifecycle::Init
+                | SessionLifecycle::Running
+                | SessionLifecycle::Verifying
+                | SessionLifecycle::Paused => "running",
+                SessionLifecycle::Done => "done",
+                SessionLifecycle::InitFailed => "failed",
+                SessionLifecycle::Created | SessionLifecycle::Ready => {
+                    // Could be genuinely Created/Ready, or not in state manager (app restarted).
+                    // If the session has messages, it was likely completed before restart.
+                    if message_count > 0 {
+                        "done"
+                    } else {
+                        "idle"
+                    }
+                }
+            };
+
+            let card = KanbanCard {
+                agent_id,
+                agent_name,
+                agent_avatar,
+                model_name,
+                session_id,
+                session_title,
+                session_updated_at,
+                lifecycle: format!("{:?}", lifecycle),
+                message_count,
+            };
+
+            match column {
+                "running" => running.push(card),
+                "done" => done.push(card),
+                "failed" => failed.push(card),
+                _ => idle.push(card),
+            }
+        }
+
+        Ok(KanbanData {
+            idle,
+            running,
+            done,
+            failed,
         })
     }
 
@@ -67,7 +184,9 @@ impl DashboardService {
                 model_name: row.get("model_name"),
                 skill_count: row.get::<i64, _>("skill_count") as usize,
                 mcp_count: row.get::<i64, _>("mcp_count") as usize,
-                last_used: row.get::<Option<i64>, _>("last_used").map(|ts| ts.to_string()),
+                last_used: row
+                    .get::<Option<i64>, _>("last_used")
+                    .map(|ts| ts.to_string()),
                 order_key: row.get("order_key"),
             });
         }
@@ -80,10 +199,11 @@ impl DashboardService {
         let week_start = today_start - 6 * 24 * 60 * 60 * 1000;
         let month_start = today_start - 29 * 24 * 60 * 60 * 1000;
 
-        let rows = sqlx::query("SELECT usage FROM messages WHERE usage IS NOT NULL AND created_at >= ?")
-            .bind(month_start)
-            .fetch_all(&self.db.pool)
-            .await?;
+        let rows =
+            sqlx::query("SELECT usage FROM messages WHERE usage IS NOT NULL AND created_at >= ?")
+                .bind(month_start)
+                .fetch_all(&self.db.pool)
+                .await?;
 
         let mut today_tokens: u64 = 0;
         let mut week_tokens: u64 = 0;
@@ -94,8 +214,14 @@ impl DashboardService {
         for row in &rows {
             let usage_str: String = row.get("usage");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&usage_str) {
-                let prompt = val.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-                let completion = val.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let prompt = val
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let completion = val
+                    .get("completion_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
                 let tokens = prompt + completion;
                 let cost = val.get("cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 month_tokens += tokens;
@@ -121,8 +247,14 @@ impl DashboardService {
             let ts: i64 = row.get("created_at");
             let usage_str: String = row.get("usage");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&usage_str) {
-                let tokens = val.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
-                    + val.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let tokens = val
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+                    + val
+                        .get("completion_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                 if ts >= today_start {
                     today_tokens += tokens;
                     today_calls += 1;
@@ -158,7 +290,8 @@ impl DashboardService {
         .await?;
 
         // Aggregate by date
-        let mut daily: std::collections::HashMap<String, (u64, f64)> = std::collections::HashMap::new();
+        let mut daily: std::collections::HashMap<String, (u64, f64)> =
+            std::collections::HashMap::new();
 
         for row in &rows {
             let ts: i64 = row.get("created_at");
@@ -169,8 +302,14 @@ impl DashboardService {
 
             let usage_str: String = row.get("usage");
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&usage_str) {
-                let tokens = val.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
-                    + val.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let tokens = val
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+                    + val
+                        .get("completion_tokens")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                 let cost = val.get("cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let entry = daily.entry(date_key).or_insert((0, 0.0));
                 entry.0 += tokens;
@@ -187,7 +326,11 @@ impl DashboardService {
                 .with_timezone(&chrono::Utc);
             let date_key = dt.format("%Y-%m-%d").to_string();
             let (tokens, cost) = daily.get(&date_key).copied().unwrap_or((0, 0.0));
-            trend.push(UsagePoint { date: date_key, tokens, cost });
+            trend.push(UsagePoint {
+                date: date_key,
+                tokens,
+                cost,
+            });
         }
 
         Ok(trend)
@@ -220,7 +363,11 @@ impl DashboardService {
             .map(|r| McpServerStatus {
                 id: r.id,
                 name: r.name,
-                status: if r.is_active != 0 { "active".into() } else { "inactive".into() },
+                status: if r.is_active != 0 {
+                    "active".into()
+                } else {
+                    "inactive".into()
+                },
                 tools_count: 0,
                 last_error: None,
             })
@@ -282,65 +429,6 @@ impl DashboardService {
                 model_id: row.get("model_id"),
                 display_name: row.get("display_name"),
                 status: row.get("status"),
-            });
-        }
-        Ok(result)
-    }
-
-    async fn load_workflows(&self) -> Result<Vec<WorkflowSummary>, AppError> {
-        let rows = sqlx::query_as::<_, WorkflowRow>(
-            "SELECT id, name, description, definition, created_at, updated_at FROM workflows ORDER BY created_at",
-        )
-        .fetch_all(&self.db.pool)
-        .await?;
-
-        let mut result = Vec::new();
-        for row in rows {
-            let stage_count = serde_json::from_str::<serde_json::Value>(&row.definition)
-                .ok()
-                .and_then(|v| v.get("stages").and_then(|s| s.as_array()).map(|a| a.len()))
-                .unwrap_or(0);
-            result.push(WorkflowSummary {
-                id: row.id,
-                name: row.name,
-                description: row.description.unwrap_or_default(),
-                stage_count,
-                source: "user".into(),
-            });
-        }
-        Ok(result)
-    }
-
-    async fn load_task_runs(&self) -> Result<Vec<TaskRunSummary>, AppError> {
-        let rows = sqlx::query(
-            r#"
-            SELECT
-                wr.id AS run_id,
-                w.name AS workflow_name,
-                wr.status,
-                wr.created_at AS started_at,
-                wr.finished_at,
-                'user' AS source
-            FROM workflow_runs wr
-            JOIN workflows w ON w.id = wr.workflow_id
-            ORDER BY wr.created_at DESC
-            LIMIT 10
-            "#,
-        )
-        .fetch_all(&self.db.pool)
-        .await?;
-
-        let mut result = Vec::new();
-        for row in rows {
-            let started: i64 = row.get("started_at");
-            let finished: Option<i64> = row.get("finished_at");
-            result.push(TaskRunSummary {
-                run_id: row.get("run_id"),
-                workflow_name: row.get("workflow_name"),
-                status: row.get("status"),
-                started_at: started.to_string(),
-                finished_at: finished.map(|v| v.to_string()),
-                source: row.get("source"),
             });
         }
         Ok(result)

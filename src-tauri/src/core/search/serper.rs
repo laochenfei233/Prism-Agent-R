@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use super::{SearchHit, SearchProvider};
+use async_trait::async_trait;
 
 pub struct SerperProvider {
     api_key: String,

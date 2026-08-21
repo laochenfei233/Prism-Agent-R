@@ -52,10 +52,18 @@ impl AudioStreamManager {
         let (tx, rx) = mpsc::channel(CHANNEL_CAP);
 
         // 1. 注册通道
-        self.sources.lock().await.insert(meeting_id.to_string(), tx.clone());
+        self.sources
+            .lock()
+            .await
+            .insert(meeting_id.to_string(), tx.clone());
 
         // 2. flush 缓冲
-        let pending = self.pending.lock().await.remove(meeting_id).unwrap_or_default();
+        let pending = self
+            .pending
+            .lock()
+            .await
+            .remove(meeting_id)
+            .unwrap_or_default();
         for chunk in pending {
             if tx.try_send(chunk).is_err() {
                 break;

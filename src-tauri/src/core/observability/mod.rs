@@ -1,5 +1,5 @@
 pub mod exception;
 pub mod logger;
 
-pub use exception::{ExceptionRecorder, ExceptionType, AgentException, ExceptionQuery};
+pub use exception::{AgentException, ExceptionQuery, ExceptionRecorder, ExceptionType};
 pub use logger::{AgentLogger, LogLevel};

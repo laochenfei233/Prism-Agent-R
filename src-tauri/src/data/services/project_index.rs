@@ -17,16 +17,16 @@ use tauri::Emitter;
 use crate::commands::fs;
 use crate::data::db::Database;
 use crate::data::models::ProjectIndexStatus;
-use crate::data::services::rag_service::RagService;
 use crate::data::rag::store;
+use crate::data::services::rag_service::RagService;
 use crate::utils::error::AppError;
 
 pub const PROJECT_WIKI_ID: &str = "__project__";
 
 /// 索引白名单扩展名（design §10.2.1：md/txt/rs/ts/svelte/json/yaml/toml 等）
 const WHITELIST: &[&str] = &[
-    "md", "txt", "rs", "ts", "tsx", "js", "jsx", "svelte", "json", "yaml", "yml", "toml",
-    "py", "go", "java", "c", "cpp", "h", "hpp", "sql", "css", "html", "vue", "sh", "bash",
+    "md", "txt", "rs", "ts", "tsx", "js", "jsx", "svelte", "json", "yaml", "yml", "toml", "py",
+    "go", "java", "c", "cpp", "h", "hpp", "sql", "css", "html", "vue", "sh", "bash",
 ];
 
 const KEY_ENABLED: &str = "project_index.enabled";
@@ -65,14 +65,21 @@ pub fn start_if_enabled(db: Database, app: tauri::AppHandle) {
 }
 
 /// 切换开关（project_index_toggle）
-pub async fn toggle(db: &Database, app: tauri::AppHandle, enabled: bool) -> Result<ProjectIndexStatus, AppError> {
+pub async fn toggle(
+    db: &Database,
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<ProjectIndexStatus, AppError> {
     set_pref(db, KEY_ENABLED, if enabled { "1" } else { "0" }).await?;
     if enabled {
         // 确保监听循环在跑（已跑则无操作）
         start_if_enabled(db.clone(), app.clone());
     }
     let status = status(db).await?;
-    let _ = app.emit("project_index:status", serde_json::to_value(&status).unwrap_or_default());
+    let _ = app.emit(
+        "project_index:status",
+        serde_json::to_value(&status).unwrap_or_default(),
+    );
     Ok(status)
 }
 
@@ -93,7 +100,9 @@ pub async fn reindex(db: Database, app: tauri::AppHandle) -> Result<ProjectIndex
         },
         None => {
             mgr.processing.store(false, Ordering::SeqCst);
-            return Err(AppError::Validation("未设置工作目录（workspace:set 绑定后生效）".into()));
+            return Err(AppError::Validation(
+                "未设置工作目录（workspace:set 绑定后生效）".into(),
+            ));
         }
     };
     tokio::spawn(full_reindex_task(db.clone(), app.clone(), root));
@@ -104,13 +113,11 @@ pub async fn reindex(db: Database, app: tauri::AppHandle) -> Result<ProjectIndex
 pub async fn status(db: &Database) -> Result<ProjectIndexStatus, AppError> {
     let enabled = pref(db, KEY_ENABLED).await.unwrap_or_else(|| "1".into()) == "1";
     let workdir = workdir_pref(db).await;
-    let indexed: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM rag_documents WHERE wiki_id = ?"
-    )
-    .bind(PROJECT_WIKI_ID)
-    .fetch_one(&db.pool)
-    .await
-    .unwrap_or(0);
+    let indexed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rag_documents WHERE wiki_id = ?")
+        .bind(PROJECT_WIKI_ID)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap_or(0);
     Ok(ProjectIndexStatus {
         enabled,
         workdir,
@@ -199,8 +206,17 @@ async fn process_batch_task(db: Database, app: tauri::AppHandle, root: PathBuf, 
         let full = root.join(rel);
         if full.is_file() && is_whitelisted(rel) {
             let fp = file_fingerprint(&full);
-            if let Some(doc_id) = store::find_document_by_path(&db, PROJECT_WIKI_ID, rel).await.ok().flatten() {
-                if store::fingerprint_of_document(&db, &doc_id).await.ok().flatten() == Some(fp.clone()) {
+            if let Some(doc_id) = store::find_document_by_path(&db, PROJECT_WIKI_ID, rel)
+                .await
+                .ok()
+                .flatten()
+            {
+                if store::fingerprint_of_document(&db, &doc_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    == Some(fp.clone())
+                {
                     continue; // 未变更
                 }
                 let _ = store::delete_document(&db, &doc_id).await; // 变更 → 重新摄取
@@ -248,8 +264,17 @@ async fn full_reindex_task(db: Database, app: tauri::AppHandle, root: PathBuf) {
         );
 
         let fp = file_fingerprint(full);
-        if let Some(doc_id) = store::find_document_by_path(&db, PROJECT_WIKI_ID, rel).await.ok().flatten() {
-            if store::fingerprint_of_document(&db, &doc_id).await.ok().flatten() == Some(fp.clone()) {
+        if let Some(doc_id) = store::find_document_by_path(&db, PROJECT_WIKI_ID, rel)
+            .await
+            .ok()
+            .flatten()
+        {
+            if store::fingerprint_of_document(&db, &doc_id)
+                .await
+                .ok()
+                .flatten()
+                == Some(fp.clone())
+            {
                 indexed.insert(rel.clone());
                 continue;
             }
@@ -318,7 +343,9 @@ fn collect_indexable_files(root: &Path) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
@@ -326,7 +353,9 @@ fn collect_indexable_files(root: &Path) -> Vec<(String, PathBuf)> {
                 continue;
             }
             // 跳过符号链接（防目录环；链接指向区外的文件不纳入索引）
-            let Ok(ftype) = entry.file_type() else { continue };
+            let Ok(ftype) = entry.file_type() else {
+                continue;
+            };
             if ftype.is_symlink() {
                 continue;
             }

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// §19.3.6 指令渐进披露
 ///
@@ -58,8 +58,9 @@ impl InstructionManager {
         if let Ok(entries) = std::fs::read_dir(&ag_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "md") {
-                    let name = path.file_stem()
+                if path.extension().is_some_and(|ext| ext == "md") {
+                    let name = path
+                        .file_stem()
                         .and_then(|s| s.to_str())
                         .unwrap_or("unknown")
                         .to_string();
@@ -68,8 +69,7 @@ impl InstructionManager {
                         continue; // 跳过索引文件
                     }
 
-                    let content = std::fs::read_to_string(&path)
-                        .unwrap_or_default();
+                    let content = std::fs::read_to_string(&path).unwrap_or_default();
 
                     let keywords = extract_keywords(&content);
 
@@ -91,9 +91,13 @@ impl InstructionManager {
     pub fn select_relevant_shards(&self, query: &str, max_shards: usize) -> Vec<&InstructionShard> {
         let query_lower = query.to_lowercase();
 
-        let mut scored: Vec<(&InstructionShard, f32)> = self.shards.iter()
+        let mut scored: Vec<(&InstructionShard, f32)> = self
+            .shards
+            .iter()
             .map(|shard| {
-                let score = shard.keywords.iter()
+                let score = shard
+                    .keywords
+                    .iter()
                     .filter(|kw| query_lower.contains(&kw.to_lowercase()))
                     .count() as f32;
                 (shard, score)
@@ -102,7 +106,11 @@ impl InstructionManager {
             .collect();
 
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        scored.into_iter().take(max_shards).map(|(shard, _)| shard).collect()
+        scored
+            .into_iter()
+            .take(max_shards)
+            .map(|(shard, _)| shard)
+            .collect()
     }
 
     /// 构建注入内容
@@ -110,7 +118,8 @@ impl InstructionManager {
         match self.mode {
             InstructionMode::Single => {
                 // 单文件模式：返回所有分片内容
-                self.shards.iter()
+                self.shards
+                    .iter()
                     .map(|s| s.content.clone())
                     .collect::<Vec<_>>()
                     .join("\n\n---\n\n")
@@ -187,7 +196,6 @@ fn extract_keywords(content: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn test_instruction_mode_serialize() {

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::data::db::Database;
 use crate::utils::error::AppError;
+use serde::{Deserialize, Serialize};
 
 /// §19.3.8 评测用例质量审计
 
@@ -45,7 +45,7 @@ impl CaseAuditor {
     pub async fn audit_case(&self, case_id: &str) -> Result<CaseAuditReport, AppError> {
         // 读取用例
         let case = sqlx::query_as::<_, CaseRow>(
-            "SELECT id, query, expected_answer FROM rag_eval_cases WHERE id = ?"
+            "SELECT id, query, expected_answer FROM rag_eval_cases WHERE id = ?",
         )
         .bind(case_id)
         .fetch_optional(&self.db.pool)
@@ -94,11 +94,10 @@ impl CaseAuditor {
 
     /// 审计所有用例
     pub async fn audit_all(&self) -> Result<Vec<CaseAuditReport>, AppError> {
-        let cases = sqlx::query_as::<_, CaseRow>(
-            "SELECT id, query, expected_answer FROM rag_eval_cases"
-        )
-        .fetch_all(&self.db.pool)
-        .await?;
+        let cases =
+            sqlx::query_as::<_, CaseRow>("SELECT id, query, expected_answer FROM rag_eval_cases")
+                .fetch_all(&self.db.pool)
+                .await?;
 
         let mut reports = Vec::new();
         for case in cases {
@@ -110,7 +109,11 @@ impl CaseAuditor {
     }
 
     /// 更新用例审计结果
-    pub async fn update_verdict(&self, case_id: &str, verdict: &AuditVerdict) -> Result<(), AppError> {
+    pub async fn update_verdict(
+        &self,
+        case_id: &str,
+        verdict: &AuditVerdict,
+    ) -> Result<(), AppError> {
         let verdict_str = serde_json::to_string(verdict).unwrap_or_default();
         sqlx::query("UPDATE rag_eval_cases SET audit_verdict = ? WHERE id = ?")
             .bind(&verdict_str)
@@ -122,11 +125,10 @@ impl CaseAuditor {
 
     /// 获取 broken 用例列表（从汇总中排除）
     pub async fn get_broken_cases(&self) -> Result<Vec<String>, AppError> {
-        let rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT id FROM rag_eval_cases WHERE audit_verdict LIKE '%Broken%'"
-        )
-        .fetch_all(&self.db.pool)
-        .await?;
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT id FROM rag_eval_cases WHERE audit_verdict LIKE '%Broken%'")
+                .fetch_all(&self.db.pool)
+                .await?;
 
         Ok(rows.into_iter().map(|(id,)| id).collect())
     }

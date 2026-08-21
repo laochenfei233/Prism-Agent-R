@@ -14,10 +14,12 @@ pub async fn ocr_recognize(
 ) -> Result<OcrResultDto, AppError> {
     let svc = OcrService::new(state.db.pool.clone());
     // data URL 优先（前端 FileReader 场景）；否则用磁盘路径
-    let input = image_data
-        .or(image_path)
-        .ok_or_else(|| AppError::Validation("缺少图片输入：image_data 或 image_path 至少一个".into()))?;
-    let result = svc.recognize_input(&input, lang.as_deref(), provider.as_deref()).await?;
+    let input = image_data.or(image_path).ok_or_else(|| {
+        AppError::Validation("缺少图片输入：image_data 或 image_path 至少一个".into())
+    })?;
+    let result = svc
+        .recognize_input(&input, lang.as_deref(), provider.as_deref())
+        .await?;
     Ok(OcrResultDto {
         text: result.text,
         lang: result.lang,

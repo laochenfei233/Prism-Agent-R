@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tauri::{Emitter, State};
 use tokio_util::sync::CancellationToken;
 
+use crate::commands::file::read_attachment_text;
 use crate::core::adk::model::GenerationRequest;
 use crate::core::adk::tool::{ToolApprovalResponse, ToolRegistry};
 use crate::core::rig::agent::{McpToolExecutor, RigAgent};
@@ -9,7 +10,6 @@ use crate::core::rig::guardrails::GuardrailPipeline;
 use crate::core::rig::provider::OpenAiProvider;
 use crate::data::models::{MessageDto, ProviderRow};
 use crate::data::services::trace_service::{AgentTrace, TraceService};
-use crate::commands::file::read_attachment_text;
 use crate::data::services::ChatService;
 use crate::utils::error::AppError;
 
@@ -37,11 +37,13 @@ pub async fn chat_send(
     let content = with_attachments(content, attachments).await;
 
     // 1. Save user message
-    let user_msg = svc.save_message(&session_id, "user", &content, None, None, None, None).await?;
+    let user_msg = svc
+        .save_message(&session_id, "user", &content, None, None, None, None)
+        .await?;
 
     // 2. Get session and agent config
     let session_row = sqlx::query_as::<_, crate::data::models::SessionRow>(
-        "SELECT id, agent_id, title, pinned, created_at, updated_at FROM sessions WHERE id = ?"
+        "SELECT id, agent_id, title, pinned, created_at, updated_at FROM sessions WHERE id = ?",
     )
     .bind(&session_id)
     .fetch_optional(&state.db.pool)
@@ -57,13 +59,27 @@ pub async fn chat_send(
     .ok_or_else(|| AppError::AgentNotFound(session_row.agent_id.clone()))?;
 
     // 3. Find model
+    //    Try by agent.model_id (UUID → models.id), then fallback to model_id string (→ models.model_id),
+    //    then fallback to default model.
     let model_row = if let Some(ref mid) = agent_row.model_id {
-        sqlx::query_as::<_, crate::data::models::ModelRow>(
+        // First: try exact match on models.id (UUID)
+        let found = sqlx::query_as::<_, crate::data::models::ModelRow>(
             "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE id = ?"
         )
         .bind(mid)
         .fetch_optional(&state.db.pool)
-        .await?
+        .await?;
+        if found.is_some() {
+            found
+        } else {
+            // Fallback: agent.model_id might be the model_id string (e.g. "gpt-4o") rather than UUID
+            sqlx::query_as::<_, crate::data::models::ModelRow>(
+                "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE model_id = ? LIMIT 1"
+            )
+            .bind(mid)
+            .fetch_optional(&state.db.pool)
+            .await?
+        }
     } else {
         sqlx::query_as::<_, crate::data::models::ModelRow>(
             "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE is_default = 1 LIMIT 1"
@@ -76,12 +92,18 @@ pub async fn chat_send(
         Some(m) => m,
         None => {
             let err_msg = "未配置模型。请在设置中添加 Provider 并设置默认模型。";
-            let msg = svc.save_message(&session_id, "assistant", err_msg, None, None, None, None).await?;
-            app.emit("chat:stream:done", serde_json::json!({
-                "session_id": session_id,
-                "message_id": msg.id,
-                "usage": null,
-            })).ok();
+            let msg = svc
+                .save_message(&session_id, "assistant", err_msg, None, None, None, None)
+                .await?;
+            app.emit(
+                "chat:stream:done",
+                serde_json::json!({
+                    "session_id": session_id,
+                    "message_id": msg.id,
+                    "usage": null,
+                }),
+            )
+            .ok();
             return Ok(msg);
         }
     };
@@ -95,12 +117,12 @@ pub async fn chat_send(
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row.base_url.unwrap_or_else(|| {
-        match provider_row.kind.as_str() {
+    let base_url = provider_row
+        .base_url
+        .unwrap_or_else(|| match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
-        }
-    });
+        });
 
     let api_key = provider_row
         .api_key_enc
@@ -126,14 +148,18 @@ pub async fn chat_send(
         });
     }
 
-    let system_prompt = agent_row.system_prompt.clone().unwrap_or_else(|| {
-        "你是一个有用的 AI 助手。请用中文回答用户的问题。".to_string()
-    });
+    let system_prompt = agent_row
+        .system_prompt
+        .clone()
+        .unwrap_or_else(|| "你是一个有用的 AI 助手。请用中文回答用户的问题。".to_string());
 
     // 6. Create provider and agent
     let provider = Arc::new(OpenAiProvider::new(
         model_row.provider_id.clone(),
-        model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone()),
+        model_row
+            .display_name
+            .clone()
+            .unwrap_or_else(|| model_row.model_id.clone()),
         api_key,
         base_url,
         model_row.model_id.clone(),
@@ -141,43 +167,66 @@ pub async fn chat_send(
 
     let message_id = uuid::Uuid::new_v4().to_string();
     let cancel = CancellationToken::new();
-    state.active_cancels.lock().await.insert(session_id.clone(), cancel.clone());
+    state
+        .active_cancels
+        .lock()
+        .await
+        .insert(session_id.clone(), cancel.clone());
 
     // Stream event forwarding callbacks
     let delta_app = app.clone();
     let delta_sid = session_id.clone();
     let delta_mid = message_id.clone();
     let on_delta = move |delta: &str| {
-        let _ = delta_app.emit("chat:stream:delta", serde_json::json!({
-            "session_id": delta_sid,
-            "message_id": delta_mid,
-            "delta": delta,
-        }));
+        let _ = delta_app.emit(
+            "chat:stream:delta",
+            serde_json::json!({
+                "session_id": delta_sid,
+                "message_id": delta_mid,
+                "delta": delta,
+            }),
+        );
+    };
+
+    let reasoning_app = app.clone();
+    let reasoning_sid = session_id.clone();
+    let reasoning_mid = message_id.clone();
+    let on_reasoning = move |delta: &str| {
+        let _ = reasoning_app.emit(
+            "chat:stream:reasoning",
+            serde_json::json!({
+                "session_id": reasoning_sid,
+                "message_id": reasoning_mid,
+                "delta": delta,
+            }),
+        );
     };
 
     let call_app = app.clone();
     let call_sid = session_id.clone();
     let call_mid = message_id.clone();
     let on_tool_call = move |call: &crate::core::adk::model::ToolCall| {
-        let _ = call_app.emit("chat:stream:tool_call", serde_json::json!({
-            "session_id": call_sid,
-            "message_id": call_mid,
-            "call": {
-                "id": call.id,
-                "name": call.name,
-                "arguments": call.arguments,
-            },
-        }));
+        let _ = call_app.emit(
+            "chat:stream:tool_call",
+            serde_json::json!({
+                "session_id": call_sid,
+                "message_id": call_mid,
+                "call": {
+                    "id": call.id,
+                    "name": call.name,
+                    "arguments": call.arguments,
+                },
+            }),
+        );
     };
 
     // Register MCP tools bound to this agent
     let mut registry = ToolRegistry::new();
-    let mcp_links: Vec<(String,)> = sqlx::query_as(
-        "SELECT mcp_server_id FROM agent_mcp_servers WHERE agent_id = ?"
-    )
-    .bind(&session_row.agent_id)
-    .fetch_all(&state.db.pool)
-    .await?;
+    let mcp_links: Vec<(String,)> =
+        sqlx::query_as("SELECT mcp_server_id FROM agent_mcp_servers WHERE agent_id = ?")
+            .bind(&session_row.agent_id)
+            .fetch_all(&state.db.pool)
+            .await?;
     for (server_id,) in mcp_links {
         for tool in state.mcp_runtime.get_tools(&server_id).await {
             registry.register(Box::new(McpToolExecutor::new(
@@ -194,17 +243,28 @@ pub async fn chat_send(
     {
         let search_config = crate::commands::search::get_search_config(&state.db.pool).await;
         let search_service = std::sync::Arc::new(
-            crate::core::search::service::SearchService::from_config(&search_config)
+            crate::core::search::service::SearchService::from_config(&search_config),
         );
         registry.register(Box::new(
-            crate::core::search::web_search::WebSearchTool::new(search_service)
+            crate::core::search::web_search::WebSearchTool::new(search_service),
         ));
     }
 
     // §10.1.1 对话内 wiki_write 工具（Agent 可将新知识写入知识库）
-    registry.register(Box::new(
-        crate::core::adk::wiki_tool::WikiWriteTool::new(state.db.clone())
-    ));
+    registry.register(Box::new(crate::core::adk::wiki_tool::WikiWriteTool::new(
+        state.db.clone(),
+    )));
+
+    // 文件读写工具（Agent 可在对话中读写本地文件）
+    registry.register(Box::new(crate::core::adk::file_tools::FileReadTool));
+    registry.register(Box::new(crate::core::adk::file_tools::FileWriteTool));
+    registry.register(Box::new(crate::core::adk::file_tools::FileListTool));
+
+    // 任务管理工具（Agent 可自主管理看板任务）
+    registry.register(Box::new(crate::core::adk::task_tools::TaskCreateTool));
+    registry.register(Box::new(crate::core::adk::task_tools::TaskUpdateTool));
+    registry.register(Box::new(crate::core::adk::task_tools::TaskListTool));
+    registry.register(Box::new(crate::core::adk::task_tools::TaskDeleteTool));
 
     // ── 构建 Agent 运行时（护栏 + 路由 + 反思 + 轨迹） ──
     let mut agent = RigAgent::new(provider, system_prompt, registry)
@@ -214,13 +274,15 @@ pub async fn chat_send(
         .with_session_id(session_id.clone())
         .with_cancel_token(cancel.clone())
         .with_on_delta(on_delta)
+        .with_on_reasoning(on_reasoning)
         .with_on_tool_call(on_tool_call)
         .with_mcp_runtime(state.mcp_runtime.clone());
 
     // 护栏：默认启用注入检测 + 长度限制（阈值与开关可从设置页调整）
     {
         use crate::data::settings::prefs;
-        let max_chars = prefs::get_i64(&state.db.pool, "guardrail.max_chars", 100_000).await as usize;
+        let max_chars =
+            prefs::get_i64(&state.db.pool, "guardrail.max_chars", 100_000).await as usize;
         let injection = prefs::get_bool(&state.db.pool, "guardrail.injection_enabled", true).await;
         agent = agent.with_guardrails(GuardrailPipeline::configured(max_chars, injection));
     }
@@ -239,18 +301,16 @@ pub async fn chat_send(
     // 反思循环：设置页开关启用后接线（默认关闭）
     {
         use crate::data::settings::prefs;
-        let reflection_enabled =
-            prefs::get_bool(&state.db.pool, "reflection.enabled", false).await;
+        let reflection_enabled = prefs::get_bool(&state.db.pool, "reflection.enabled", false).await;
         if reflection_enabled {
-            let max_iters =
-                prefs::get_i64(&state.db.pool, "reflection.max_iterations", 3).await.clamp(1, 10) as u32;
-            agent = agent.with_reflection(
-                crate::core::rig::reflection::ReflectionConfig {
-                    enabled: true,
-                    max_iterations: max_iters,
-                    ..Default::default()
-                },
-            );
+            let max_iters = prefs::get_i64(&state.db.pool, "reflection.max_iterations", 3)
+                .await
+                .clamp(1, 10) as u32;
+            agent = agent.with_reflection(crate::core::rig::reflection::ReflectionConfig {
+                enabled: true,
+                max_iterations: max_iters,
+                ..Default::default()
+            });
         }
     }
 
@@ -268,7 +328,10 @@ pub async fn chat_send(
         });
     }
 
-    let request = GenerationRequest { messages, ..Default::default() };
+    let request = GenerationRequest {
+        messages,
+        ..Default::default()
+    };
 
     let session_id_clone = session_id.clone();
     let app_clone = app.clone();
@@ -277,31 +340,40 @@ pub async fn chat_send(
 
     // Spawn task
     tokio::spawn(async move {
-        let _ = app_clone.emit("chat:stream:start", serde_json::json!({
-            "session_id": session_id_clone.clone(),
-            "message_id": message_id.clone(),
-            "model": model_id.clone(),
-        }));
+        let _ = app_clone.emit(
+            "chat:stream:start",
+            serde_json::json!({
+                "session_id": session_id_clone.clone(),
+                "message_id": message_id.clone(),
+                "model": model_id.clone(),
+            }),
+        );
 
         match agent.run(request).await {
             Ok(result) => {
                 // Aborted: do not persist a partial message.
                 if cancel.is_cancelled() {
-                    let _ = app_clone.emit("chat:stream:error", serde_json::json!({
-                        "session_id": session_id_clone,
-                        "message_id": message_id,
-                        "message": "生成已中止",
-                    }));
+                    let _ = app_clone.emit(
+                        "chat:stream:error",
+                        serde_json::json!({
+                            "session_id": session_id_clone,
+                            "message_id": message_id,
+                            "message": "生成已中止",
+                        }),
+                    );
                     return;
                 }
 
                 let now = chrono::Utc::now().timestamp_millis();
-                let usage_str = result.usage.as_ref().map(|u| serde_json::json!({
-                    "prompt_tokens": u.prompt_tokens,
-                    "completion_tokens": u.completion_tokens,
-                    "total_tokens": u.total_tokens,
-                    "cost": 0,
-                }).to_string());
+                let usage_str = result.usage.as_ref().map(|u| {
+                    serde_json::json!({
+                        "prompt_tokens": u.prompt_tokens,
+                        "completion_tokens": u.completion_tokens,
+                        "total_tokens": u.total_tokens,
+                        "cost": 0,
+                    })
+                    .to_string()
+                });
 
                 let _ = sqlx::query(
                     "INSERT INTO messages (id, session_id, role, content, tool_calls, tool_call_id, model_id, usage, created_at) VALUES (?, ?, 'assistant', ?, NULL, NULL, ?, ?, ?)"
@@ -316,7 +388,10 @@ pub async fn chat_send(
                 .await;
 
                 let _ = sqlx::query("UPDATE sessions SET updated_at = ? WHERE id = ?")
-                    .bind(now).bind(&session_id_clone).execute(&pool).await;
+                    .bind(now)
+                    .bind(&session_id_clone)
+                    .execute(&pool)
+                    .await;
 
                 // Cumulative token usage for the session
                 let cum: (i64, i64, i64) = sqlx::query_as(
@@ -327,19 +402,25 @@ pub async fn chat_send(
                 .await
                 .unwrap_or((0, 0, 0));
 
-                let _ = app_clone.emit("usage:updated", serde_json::json!({
-                    "session_id": session_id_clone.clone(),
-                    "prompt_tokens": cum.0,
-                    "completion_tokens": cum.1,
-                    "total_tokens": cum.2,
-                }));
+                let _ = app_clone.emit(
+                    "usage:updated",
+                    serde_json::json!({
+                        "session_id": session_id_clone.clone(),
+                        "prompt_tokens": cum.0,
+                        "completion_tokens": cum.1,
+                        "total_tokens": cum.2,
+                    }),
+                );
 
-                let _ = app_clone.emit("chat:stream:done", serde_json::json!({
-                    "session_id": session_id_clone,
-                    "message_id": message_id,
-                    "usage": result.usage,
-                    "message": result.text,
-                }));
+                let _ = app_clone.emit(
+                    "chat:stream:done",
+                    serde_json::json!({
+                        "session_id": session_id_clone,
+                        "message_id": message_id,
+                        "usage": result.usage,
+                        "message": result.text,
+                    }),
+                );
             }
             Err(e) => {
                 let message = if cancel.is_cancelled() {
@@ -347,11 +428,14 @@ pub async fn chat_send(
                 } else {
                     format!("AI 调用失败: {e}")
                 };
-                let _ = app_clone.emit("chat:stream:error", serde_json::json!({
-                    "session_id": session_id_clone,
-                    "message_id": message_id,
-                    "message": message,
-                }));
+                let _ = app_clone.emit(
+                    "chat:stream:error",
+                    serde_json::json!({
+                        "session_id": session_id_clone,
+                        "message_id": message_id,
+                        "message": message,
+                    }),
+                );
             }
         }
     });

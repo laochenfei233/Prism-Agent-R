@@ -4,8 +4,10 @@ use std::path::{Path, PathBuf};
 use sqlx::Row;
 use tokio::io::AsyncWriteExt;
 
-use crate::core::adk::memory::{MemoryContext, MemoryItem, MemoryScope, MemoryStore, MessageExchange};
 use crate::core::adk::error::AgentError;
+use crate::core::adk::memory::{
+    MemoryContext, MemoryItem, MemoryScope, MemoryStore, MessageExchange,
+};
 use crate::data::Database;
 use crate::utils::error::AppError;
 
@@ -72,10 +74,7 @@ impl MemoryService {
         if fts_query_too_short(&fts_query) {
             return self.search_files(query).await;
         }
-        let fts_hits = match self.search_fts(&fts_query, query).await {
-            Ok(hits) => hits,
-            Err(_) => Vec::new(),
-        };
+        let fts_hits = self.search_fts(&fts_query, query).await.unwrap_or_default();
         if fts_hits.is_empty() {
             return self.search_files(query).await;
         }
@@ -83,7 +82,11 @@ impl MemoryService {
     }
 
     /// FTS5 全文搜索（BM25 排序）
-    async fn search_fts(&self, fts_query: &str, raw_query: &str) -> Result<Vec<MemorySearchHit>, AppError> {
+    async fn search_fts(
+        &self,
+        fts_query: &str,
+        raw_query: &str,
+    ) -> Result<Vec<MemorySearchHit>, AppError> {
         let rows = sqlx::query(
             r#"
             SELECT body, scope, path, bm25(memory_fts) AS rank
@@ -369,13 +372,19 @@ impl MemoryStore for MemoryService {
         query: &str,
         _scope: Option<MemoryScope>,
     ) -> Result<Vec<MemoryItem>, AgentError> {
-        let hits = self.search(query).await.map_err(|e| AgentError::Internal(e.to_string()))?;
-        Ok(hits.into_iter().map(|h| MemoryItem {
-            path: h.path,
-            body: h.snippet,
-            scope: MemoryScope::Global,
-            memory_type: "memory".to_string(),
-        }).collect())
+        let hits = self
+            .search(query)
+            .await
+            .map_err(|e| AgentError::Internal(e.to_string()))?;
+        Ok(hits
+            .into_iter()
+            .map(|h| MemoryItem {
+                path: h.path,
+                body: h.snippet,
+                scope: MemoryScope::Global,
+                memory_type: "memory".to_string(),
+            })
+            .collect())
     }
 }
 
@@ -416,8 +425,26 @@ fn sanitize_fts_query(query: &str) -> Option<String> {
     for c in query.chars() {
         if matches!(
             c,
-            '"' | '*' | '^' | '(' | ')' | '{' | '}' | '[' | ']'
-                | '-' | '+' | ':' | '~' | '!' | '|' | '&' | '<' | '>' | '=' | '/' | '\\'
+            '"' | '*'
+                | '^'
+                | '('
+                | ')'
+                | '{'
+                | '}'
+                | '['
+                | ']'
+                | '-'
+                | '+'
+                | ':'
+                | '~'
+                | '!'
+                | '|'
+                | '&'
+                | '<'
+                | '>'
+                | '='
+                | '/'
+                | '\\'
         ) {
             cleaned.push(' ');
         } else {

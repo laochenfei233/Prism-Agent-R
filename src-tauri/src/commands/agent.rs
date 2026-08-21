@@ -1,5 +1,5 @@
-use std::path::Path;
 use sqlx::Row;
+use std::path::Path;
 use tauri::State;
 
 use crate::data::models::*;
@@ -14,7 +14,10 @@ pub async fn agent_list(state: State<'_, crate::AppState>) -> Result<Vec<AgentDt
 }
 
 #[tauri::command]
-pub async fn agent_get(state: State<'_, crate::AppState>, id: String) -> Result<AgentDto, AppError> {
+pub async fn agent_get(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<AgentDto, AppError> {
     let svc = AgentService::new(state.db.pool.clone());
     svc.get(&id).await
 }
@@ -33,7 +36,8 @@ pub async fn agent_create(
         description.as_deref(),
         system_prompt.as_deref(),
         model_id.as_deref(),
-    ).await
+    )
+    .await
 }
 
 #[tauri::command]
@@ -52,7 +56,8 @@ pub async fn agent_update(
         description.as_deref(),
         system_prompt.as_deref(),
         model_id.as_deref(),
-    ).await
+    )
+    .await
 }
 
 #[tauri::command]
@@ -77,15 +82,14 @@ pub async fn context_agent(
     let instructions = scan_instructions(&workspace.current_dir);
     let mcp = load_mcp_status(&state).await?;
     let lsp = detect_lsp_servers(&workspace.current_dir);
-    let tree = load_dir_tree(&workspace.current_dir, 1)
-        .unwrap_or_else(|_| DirTree {
-            name: ".".into(),
-            path: workspace.current_dir.clone(),
-            is_dir: true,
-            children: Some(Vec::new()),
-            language: None,
-            line_count: None,
-        });
+    let tree = load_dir_tree(&workspace.current_dir, 1).unwrap_or_else(|_| DirTree {
+        name: ".".into(),
+        path: workspace.current_dir.clone(),
+        is_dir: true,
+        children: Some(Vec::new()),
+        language: None,
+        line_count: None,
+    });
 
     Ok(AgentContext {
         agent,
@@ -114,7 +118,7 @@ pub async fn session_inject_file(
     // Store injected file path in agent configuration via a simple JSON update
     // We append to a JSON array in the session's related agent config
     let existing: Option<String> = sqlx::query_scalar(
-        "SELECT configuration FROM agents WHERE id = (SELECT agent_id FROM sessions WHERE id = ?)"
+        "SELECT configuration FROM agents WHERE id = (SELECT agent_id FROM sessions WHERE id = ?)",
     )
     .bind(&session_id)
     .fetch_optional(&state.db.pool)
@@ -190,9 +194,7 @@ async fn load_session_usage(
         "#
     );
 
-    let result = sqlx::query(&query)
-        .fetch_one(&state.db.pool)
-        .await;
+    let result = sqlx::query(&query).fetch_one(&state.db.pool).await;
 
     match result {
         Ok(row) => SessionUsage {
@@ -227,20 +229,21 @@ async fn load_workspace(state: &State<'_, crate::AppState>) -> WorkspaceInfo {
     }
 
     // 回退：读取第一个 agent 的配置 workdir
-    let result: Option<String> = sqlx::query_scalar(
-        "SELECT configuration FROM agents ORDER BY order_key LIMIT 1"
-    )
-    .fetch_optional(&state.db.pool)
-    .await
-    .ok()
-    .flatten();
+    let result: Option<String> =
+        sqlx::query_scalar("SELECT configuration FROM agents ORDER BY order_key LIMIT 1")
+            .fetch_optional(&state.db.pool)
+            .await
+            .ok()
+            .flatten();
 
     let current_dir = result
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
         .and_then(|v| v.get("workdir").and_then(|w| w.as_str()).map(String::from))
-        .unwrap_or_else(|| std::env::current_dir()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|_| ".".into()));
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| ".".into())
+        });
 
     WorkspaceInfo {
         current_dir,
@@ -249,7 +252,9 @@ async fn load_workspace(state: &State<'_, crate::AppState>) -> WorkspaceInfo {
     }
 }
 
-async fn load_mcp_status(state: &State<'_, crate::AppState>) -> Result<Vec<McpServerStatus>, AppError> {
+async fn load_mcp_status(
+    state: &State<'_, crate::AppState>,
+) -> Result<Vec<McpServerStatus>, AppError> {
     let rows = sqlx::query_as::<_, McpServerRow>(
         "SELECT id, name, type, command, args, env, base_url, headers, is_active, timeout_ms, created_at, updated_at FROM mcp_servers ORDER BY created_at",
     )
@@ -261,7 +266,11 @@ async fn load_mcp_status(state: &State<'_, crate::AppState>) -> Result<Vec<McpSe
         .map(|r| McpServerStatus {
             id: r.id,
             name: r.name,
-            status: if r.is_active != 0 { "active".into() } else { "inactive".into() },
+            status: if r.is_active != 0 {
+                "active".into()
+            } else {
+                "inactive".into()
+            },
             tools_count: 0,
             last_error: None,
         })
@@ -379,9 +388,19 @@ fn load_dir_tree(workdir: &str, depth: u8) -> Result<DirTree, AppError> {
         });
     }
 
-    let entries = std::fs::read_dir(dir).map_err(|e| AppError::Internal(format!("Failed to read dir: {e}")))?;
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| AppError::Internal(format!("Failed to read dir: {e}")))?;
 
-    let ignore = [".git", "node_modules", "target", ".next", "dist", "build", "__pycache__", ".venv"];
+    let ignore = [
+        ".git",
+        "node_modules",
+        "target",
+        ".next",
+        "dist",
+        "build",
+        "__pycache__",
+        ".venv",
+    ];
 
     let mut children: Vec<DirTree> = entries
         .filter_map(|entry| entry.ok())

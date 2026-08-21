@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::data::services::memory_service::{MemoryService, MemorySearchHit, MemoryDump};
+use crate::data::services::memory_service::{MemoryDump, MemorySearchHit, MemoryService};
 use crate::utils::error::AppError;
 
 // ── 记忆命令 ──────────────────────────────────────────────

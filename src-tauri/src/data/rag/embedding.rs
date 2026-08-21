@@ -105,7 +105,10 @@ impl OpenAiEmbedder {
             "input": texts,
         });
 
-        let mut req = self.client.post(&url).header("Content-Type", "application/json");
+        let mut req = self
+            .client
+            .post(&url)
+            .header("Content-Type", "application/json");
         if !self.api_key.is_empty() {
             req = req.header("Authorization", format!("Bearer {}", self.api_key));
         }
@@ -119,7 +122,9 @@ impl OpenAiEmbedder {
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
-            return Err(AppError::Internal(format!("Embedding HTTP {status}: {text}")));
+            return Err(AppError::Internal(format!(
+                "Embedding HTTP {status}: {text}"
+            )));
         }
 
         let data: OpenAiEmbeddingResponse = resp
@@ -143,7 +148,8 @@ impl OpenAiEmbedder {
 impl Embedder for OpenAiEmbedder {
     async fn embed(&self, text: &str) -> Result<Vec<f32>, AppError> {
         let mut out = self.embed_inner(&[text.to_string()]).await?;
-        out.pop().ok_or_else(|| AppError::Internal("Empty embedding response".into()))
+        out.pop()
+            .ok_or_else(|| AppError::Internal("Empty embedding response".into()))
     }
 
     async fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, AppError> {

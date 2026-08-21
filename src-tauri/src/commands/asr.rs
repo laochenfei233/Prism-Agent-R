@@ -3,9 +3,7 @@ use std::sync::Arc;
 use tauri::{Emitter, State};
 
 use crate::data::models::*;
-use crate::data::services::asr::{
-    AsrBackendConfig, AsrEventSink, AsrModelManager, AsrSegment,
-};
+use crate::data::services::asr::{AsrBackendConfig, AsrEventSink, AsrModelManager, AsrSegment};
 use crate::data::services::meeting::AudioStreamManager;
 use crate::data::services::meeting_service::MeetingService;
 use crate::utils::error::AppError;
@@ -15,20 +13,53 @@ use crate::utils::paths;
 type SharedAudioStreams = Arc<AudioStreamManager>;
 
 #[tauri::command]
-pub async fn asr_list_configs(state: State<'_, crate::AppState>) -> Result<Vec<AsrConfigDto>, AppError> {
+pub async fn asr_list_configs(
+    state: State<'_, crate::AppState>,
+) -> Result<Vec<AsrConfigDto>, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
-    Ok(svc.list_asr_configs().await?.into_iter().map(|c| AsrConfigDto { id: c.id, name: c.name, kind: c.kind, base_url: c.base_url, model: c.model, lang: c.lang, is_default: c.is_default, model_path: c.model_path, extra: c.extra }).collect())
+    Ok(svc
+        .list_asr_configs()
+        .await?
+        .into_iter()
+        .map(|c| AsrConfigDto {
+            id: c.id,
+            name: c.name,
+            kind: c.kind,
+            base_url: c.base_url,
+            model: c.model,
+            lang: c.lang,
+            is_default: c.is_default,
+            model_path: c.model_path,
+            extra: c.extra,
+        })
+        .collect())
 }
 
 #[tauri::command]
-pub async fn asr_save_config(state: State<'_, crate::AppState>, config: AsrConfigInput) -> Result<AsrConfigDto, AppError> {
+pub async fn asr_save_config(
+    state: State<'_, crate::AppState>,
+    config: AsrConfigInput,
+) -> Result<AsrConfigDto, AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     let c = svc.save_asr_config(config).await?;
-    Ok(AsrConfigDto { id: c.id, name: c.name, kind: c.kind, base_url: c.base_url, model: c.model, lang: c.lang, is_default: c.is_default, model_path: c.model_path, extra: c.extra })
+    Ok(AsrConfigDto {
+        id: c.id,
+        name: c.name,
+        kind: c.kind,
+        base_url: c.base_url,
+        model: c.model,
+        lang: c.lang,
+        is_default: c.is_default,
+        model_path: c.model_path,
+        extra: c.extra,
+    })
 }
 
 #[tauri::command]
-pub async fn asr_delete_config(state: State<'_, crate::AppState>, id: String) -> Result<(), AppError> {
+pub async fn asr_delete_config(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<(), AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     svc.delete_asr_config(&id).await
 }
@@ -40,7 +71,7 @@ pub async fn asr_backends() -> Result<Vec<AsrBackendInfoDto>, AppError> {
     let mut out: Vec<AsrBackendInfoDto> = registered_backends()
         .into_iter()
         .map(|kind| {
-            let k = crate::data::services::asr::AsrKind::from_str(&kind);
+            let k = crate::data::services::asr::AsrKind::parse(&kind);
             AsrBackendInfoDto {
                 kind: kind.clone(),
                 name: k.display_name().to_string(),
@@ -50,9 +81,18 @@ pub async fn asr_backends() -> Result<Vec<AsrBackendInfoDto>, AppError> {
         })
         .collect();
     // 未注册到枚举的新后端也能透出（kind_raw 保留原名）
-    for kind in ["DashScopeFunasr", "MiMoHttp", "SherpaOnnx", "LocalFunasrWs", "WhisperApi", "Vosk", "AzureSpeech", "Custom"] {
+    for kind in [
+        "DashScopeFunasr",
+        "MiMoHttp",
+        "SherpaOnnx",
+        "LocalFunasrWs",
+        "WhisperApi",
+        "Vosk",
+        "AzureSpeech",
+        "Custom",
+    ] {
         if !out.iter().any(|b| b.kind == kind) {
-            let k = crate::data::services::asr::AsrKind::from_str(kind);
+            let k = crate::data::services::asr::AsrKind::parse(kind);
             out.push(AsrBackendInfoDto {
                 kind: kind.into(),
                 name: k.display_name().into(),
@@ -82,35 +122,70 @@ fn backend_desc(kind: &str) -> String {
 #[tauri::command]
 pub async fn asr_model_catalog() -> Result<Vec<AsrModelInfoDto>, AppError> {
     let mgr = AsrModelManager::new(paths::app_data_dir().join("asr_models"));
-    Ok(mgr.catalog().into_iter().map(|m| AsrModelInfoDto {
-        id: m.id, name: m.name, backend: m.backend, size_mb: m.size_mb,
-        lang: m.lang, url: m.url, requires_vad: m.requires_vad, user_placed: m.user_placed,
-    }).collect())
+    Ok(mgr
+        .catalog()
+        .into_iter()
+        .map(|m| AsrModelInfoDto {
+            id: m.id,
+            name: m.name,
+            backend: m.backend,
+            category: match m.category {
+                crate::data::services::asr::AsrModelCategory::Online => "online".into(),
+                crate::data::services::asr::AsrModelCategory::Local => "local".into(),
+            },
+            size_mb: m.size_mb,
+            lang: m.lang,
+            url: m.url,
+            requires_vad: m.requires_vad,
+            user_placed: m.user_placed,
+            default_model_id: m.default_model_id,
+            requires_api_key: m.requires_api_key,
+        })
+        .collect())
 }
 
 #[tauri::command]
 pub async fn asr_model_installed() -> Result<Vec<InstalledAsrModelDto>, AppError> {
     let mgr = AsrModelManager::new(paths::app_data_dir().join("asr_models"));
-    Ok(mgr.installed().into_iter().map(|m| InstalledAsrModelDto {
-        id: m.id, path: m.path, size_mb: m.size_mb, backend: m.backend, lang: m.lang,
-    }).collect())
+    Ok(mgr
+        .installed()
+        .into_iter()
+        .map(|m| InstalledAsrModelDto {
+            id: m.id,
+            path: m.path,
+            size_mb: m.size_mb,
+            backend: m.backend,
+            lang: m.lang,
+        })
+        .collect())
 }
 
 #[tauri::command]
-pub async fn asr_model_download(app: tauri::AppHandle, model_id: String) -> Result<serde_json::Value, AppError> {
+pub async fn asr_model_download(
+    app: tauri::AppHandle,
+    model_id: String,
+) -> Result<serde_json::Value, AppError> {
     let mgr = AsrModelManager::new(paths::app_data_dir().join("asr_models"));
     let progress_app = app.clone();
     let model_id_clone = model_id.clone();
     let path = mgr
-        .download(&model_id, Some(Box::new(move |frac, msg| {
-            let _ = progress_app.emit("asr:model-download-progress", serde_json::json!({
-                "model_id": model_id_clone,
-                "progress": frac,
-                "message": msg,
-            }));
-        })))
+        .download(
+            &model_id,
+            Some(Box::new(move |frac, msg| {
+                let _ = progress_app.emit(
+                    "asr:model-download-progress",
+                    serde_json::json!({
+                        "model_id": model_id_clone,
+                        "progress": frac,
+                        "message": msg,
+                    }),
+                );
+            })),
+        )
         .await?;
-    Ok(serde_json::json!({ "model_id": model_id, "path": path.to_string_lossy(), "status": "downloaded" }))
+    Ok(
+        serde_json::json!({ "model_id": model_id, "path": path.to_string_lossy(), "status": "downloaded" }),
+    )
 }
 
 #[tauri::command]
@@ -122,9 +197,7 @@ pub async fn asr_model_remove(model_id: String) -> Result<(), AppError> {
 // ── ASR 连通性测试 ────────────────────────────────────────
 
 #[tauri::command]
-pub async fn asr_test(
-    config: AsrConfigInput,
-) -> Result<serde_json::Value, AppError> {
+pub async fn asr_test(config: AsrConfigInput) -> Result<serde_json::Value, AppError> {
     let backend_cfg = AsrBackendConfig::from_input(
         &config.kind,
         config.base_url,
@@ -137,8 +210,12 @@ pub async fn asr_test(
     let backend = crate::data::services::asr::create_asr_backend(&backend_cfg);
     let started = std::time::Instant::now();
     match backend.health_check().await {
-        Ok(()) => Ok(serde_json::json!({ "ok": true, "latency_ms": started.elapsed().as_millis() as u64, "error": null })),
-        Err(e) => Ok(serde_json::json!({ "ok": false, "latency_ms": started.elapsed().as_millis() as u64, "error": e.to_string() })),
+        Ok(()) => Ok(
+            serde_json::json!({ "ok": true, "latency_ms": started.elapsed().as_millis() as u64, "error": null }),
+        ),
+        Err(e) => Ok(
+            serde_json::json!({ "ok": false, "latency_ms": started.elapsed().as_millis() as u64, "error": e.to_string() }),
+        ),
     }
 }
 
@@ -160,17 +237,20 @@ pub async fn meeting_start_recording(
     } else {
         let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
         let configs = svc.list_asr_configs().await?;
-        configs.into_iter().find(|c| c.is_default).map(|c| AsrConfigInput {
-            name: c.name,
-            kind: c.kind,
-            base_url: c.base_url,
-            api_key: None,
-            model: c.model,
-            lang: c.lang,
-            is_default: true,
-            model_path: c.model_path,
-            extra: c.extra,
-        })
+        configs
+            .into_iter()
+            .find(|c| c.is_default)
+            .map(|c| AsrConfigInput {
+                name: c.name,
+                kind: c.kind,
+                base_url: c.base_url,
+                api_key: None,
+                model: c.model,
+                lang: c.lang,
+                is_default: true,
+                model_path: c.model_path,
+                extra: c.extra,
+            })
     };
 
     let Some(cfg) = cfg else {
@@ -189,7 +269,10 @@ pub async fn meeting_start_recording(
         cfg.extra.clone(),
     );
     let mut backend = crate::data::services::asr::create_asr_backend(&backend_cfg);
-    backend.health_check().await.map_err(crate::utils::error::AppError::from)?;
+    backend
+        .health_check()
+        .await
+        .map_err(crate::utils::error::AppError::from)?;
 
     // 先建 stream（ASR 消费端）——时序规避核心
     let rx = streams.create_stream(&id).await;
@@ -208,20 +291,28 @@ pub async fn meeting_start_recording(
             let app = app_handle.clone();
             let meeting_id = meeting_id.clone();
             tokio::spawn(async move {
-                let _ = svc.update_transcript(&meeting_id, &[TranscriptSegment {
-                    index: seg.index as i32,
-                    text: seg.text.clone(),
-                    is_final: seg.is_final,
-                    translated: None,
-                    speaker_id: seg.speaker_id,
-                }]).await;
-                let _ = app.emit("meeting:transcript", serde_json::json!({
-                    "meeting_id": meeting_id,
-                    "index": seg.index,
-                    "text": seg.text,
-                    "is_final": seg.is_final,
-                    "speaker_id": seg.speaker_id,
-                }));
+                let _ = svc
+                    .update_transcript(
+                        &meeting_id,
+                        &[TranscriptSegment {
+                            index: seg.index as i32,
+                            text: seg.text.clone(),
+                            is_final: seg.is_final,
+                            translated: None,
+                            speaker_id: seg.speaker_id,
+                        }],
+                    )
+                    .await;
+                let _ = app.emit(
+                    "meeting:transcript",
+                    serde_json::json!({
+                        "meeting_id": meeting_id,
+                        "index": seg.index,
+                        "text": seg.text,
+                        "is_final": seg.is_final,
+                        "speaker_id": seg.speaker_id,
+                    }),
+                );
             });
         },
         |status: String| {
@@ -233,7 +324,10 @@ pub async fn meeting_start_recording(
     let audio = Box::pin(futures::stream::unfold(rx, |mut rx| async move {
         rx.recv().await.map(|chunk| (chunk, rx))
     }));
-    let _handle = backend.start(audio, events).await.map_err(crate::utils::error::AppError::from)?;
+    let _handle = backend
+        .start(audio, events)
+        .await
+        .map_err(crate::utils::error::AppError::from)?;
     // 会话句柄由前端 stop 时取消（简化：每次 start 覆盖）
 
     Ok(())
@@ -281,10 +375,13 @@ pub async fn meeting_stop_recording(
         .await?;
     // 状态机：recording/paused → ready（停止即定稿）
     svc.set_status(&id, "ready").await?;
-    let _ = app.emit("meeting:status", serde_json::json!({
-        "meeting_id": id,
-        "status": "ready",
-    }));
+    let _ = app.emit(
+        "meeting:status",
+        serde_json::json!({
+            "meeting_id": id,
+            "status": "ready",
+        }),
+    );
     Ok(serde_json::json!({ "transcript": transcript }))
 }
 
@@ -297,10 +394,13 @@ pub async fn meeting_pause_recording(
 ) -> Result<(), AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     svc.pause(&id).await?;
-    let _ = app.emit("meeting:status", serde_json::json!({
-        "meeting_id": id,
-        "status": "paused",
-    }));
+    let _ = app.emit(
+        "meeting:status",
+        serde_json::json!({
+            "meeting_id": id,
+            "status": "paused",
+        }),
+    );
     Ok(())
 }
 
@@ -313,10 +413,13 @@ pub async fn meeting_resume_recording(
 ) -> Result<(), AppError> {
     let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
     svc.resume(&id).await?;
-    let _ = app.emit("meeting:status", serde_json::json!({
-        "meeting_id": id,
-        "status": "recording",
-    }));
+    let _ = app.emit(
+        "meeting:status",
+        serde_json::json!({
+            "meeting_id": id,
+            "status": "recording",
+        }),
+    );
     Ok(())
 }
 
@@ -336,10 +439,13 @@ pub async fn meeting_cancel_recording(
         .bind(&id)
         .execute(&state.db.pool)
         .await?;
-    let _ = app.emit("meeting:status", serde_json::json!({
-        "meeting_id": id,
-        "status": "cancelled",
-    }));
+    let _ = app.emit(
+        "meeting:status",
+        serde_json::json!({
+            "meeting_id": id,
+            "status": "cancelled",
+        }),
+    );
     Ok(())
 }
 
@@ -354,11 +460,17 @@ pub struct AsrModelInfoDto {
     pub id: String,
     pub name: String,
     pub backend: String,
+    /// 模型类别：online（在线 API）或 local（本地离线）
+    pub category: String,
     pub size_mb: u64,
     pub lang: Vec<String>,
     pub url: String,
     pub requires_vad: bool,
     pub user_placed: bool,
+    /// 在线模型：默认模型 ID
+    pub default_model_id: Option<String>,
+    /// 在线模型：是否需要 API Key
+    pub requires_api_key: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

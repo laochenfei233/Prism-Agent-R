@@ -1,328 +1,281 @@
 <script lang="ts">
-	interface Block {
-		type: 'text' | 'code';
-		html: string;
-		code?: string;
-		lang?: string;
-	}
+  import { onMount } from 'svelte';
 
-	let {
-		content = '',
-		streaming = false
-	}: { content?: string; streaming?: boolean } = $props();
+  interface Props {
+    content?: string;
+    streaming?: boolean;
+  }
 
-	let copiedIndex = $state<number | null>(null);
+  let { content = '', streaming = false }: Props = $props();
 
-	function escapeHtml(s: string): string {
-		return s
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;');
-	}
+  let md: import('markdown-it').MarkdownIt | null = null;
 
-	function inlineMarkdown(src: string): string {
-		const parts = src.split(/`([^`]+)`/g);
-		return parts
-			.map((part, i) => {
-				if (i % 2 === 1) return `<code class="inline-code">${escapeHtml(part)}</code>`;
-				let s = escapeHtml(part);
-				s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-				s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-				s = s.replace(
-					/\[([^\]]+)\]\(([^)\s]+)\)/g,
-					'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
-				);
-				return s;
-			})
-			.join('');
-	}
+  onMount(async () => {
+    const MarkdownIt = (await import('markdown-it')).default;
+    const { createHighlighter } = await import('shiki');
 
-	function renderTextLines(lines: string[]): string {
-		let html = '';
-		let i = 0;
-		while (i < lines.length) {
-			const line = lines[i];
+    const highlighter = await createHighlighter({
+      themes: ['github-light', 'github-dark'],
+      langs: [
+        'javascript',
+        'typescript',
+        'python',
+        'rust',
+        'go',
+        'java',
+        'html',
+        'css',
+        'json',
+        'yaml',
+        'bash',
+        'sql',
+        'markdown',
+        'svelte',
+        'vue',
+        'jsx',
+        'tsx',
+        'c',
+        'cpp',
+        'ruby',
+        'php',
+        'swift',
+        'kotlin',
+        'shell',
+        'dockerfile',
+        'toml',
+      ],
+    });
 
-			const heading = line.match(/^(#{1,4})\s+(.*)$/);
-			if (heading) {
-				const level = heading[1].length;
-				html += `<h${level}>${inlineMarkdown(heading[2])}</h${level}>`;
-				i++;
-				continue;
-			}
+    const parser: import('markdown-it').MarkdownIt = new MarkdownIt({
+      html: false,
+      linkify: true,
+      breaks: true,
+      highlight: (str: string, lang: string) => {
+        if (lang && highlighter.getLanguage(lang)) {
+          try {
+            return highlighter.codeToHtml(str, {
+              lang,
+              theme: document.documentElement.classList.contains('dark')
+                ? 'github-dark'
+                : 'github-light',
+            });
+          } catch {
+            // ignore highlight failure, fall back to escaped HTML
+          }
+        }
+        return `<pre class="shiki"><code>${parser.utils.escapeHtml(str)}</code></pre>`;
+      },
+    });
+    md = parser;
 
-			if (line.startsWith('>')) {
-				const quotes: string[] = [];
-				while (i < lines.length && lines[i].startsWith('>')) {
-					quotes.push(inlineMarkdown(lines[i].replace(/^>\s?/, '')));
-					i++;
-				}
-				html += `<blockquote>${quotes.join('<br>')}</blockquote>`;
-				continue;
-			}
+    // Add task list support
+    parser.core.ruler.after('inline', 'task-lists', (state) => {
+      const tokens = state.tokens;
+      for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i].type !== 'inline') continue;
+        const content = tokens[i].content;
+        if (/^\[[ x]\]\s/.test(content)) {
+          const checked = content.startsWith('[x]');
+          const text = content.replace(/^\[[ x]\]\s/, '');
+          const checkbox = new state.Token('html_inline', '', 0);
+          checkbox.content = `<input type="checkbox" disabled ${checked ? 'checked' : ''}> `;
+          tokens[i].content = text;
+          tokens[i].children = [checkbox, ...(tokens[i].children ?? [])];
+        }
+      }
+    });
+  });
 
-			const ul = line.match(/^[-*+]\s+(.*)$/);
-			if (ul) {
-				const items: string[] = [];
-				while (i < lines.length) {
-					const m = lines[i].match(/^[-*+]\s+(.*)$/);
-					if (!m) break;
-					items.push(`<li>${inlineMarkdown(m[1])}</li>`);
-					i++;
-				}
-				html += `<ul>${items.join('')}</ul>`;
-				continue;
-			}
+  function renderMarkdown(src: string): string {
+    if (!md) return escapeHtml(src);
 
-			const ol = line.match(/^\d+[.)]\s+(.*)$/);
-			if (ol) {
-				const items: string[] = [];
-				while (i < lines.length) {
-					const m = lines[i].match(/^\d+[.)]\s+(.*)$/);
-					if (!m) break;
-					items.push(`<li>${inlineMarkdown(m[1])}</li>`);
-					i++;
-				}
-				html += `<ol>${items.join('')}</ol>`;
-				continue;
-			}
+    // In streaming mode, auto-close unclosed code fences
+    let text = src.replace(/\r\n/g, '\n');
+    if (streaming) {
+      const fenceCount = (text.match(/^```/gm) || []).length;
+      if (fenceCount % 2 === 1) text += '\n```';
+    }
 
-			const para: string[] = [];
-			while (
-				i < lines.length &&
-				lines[i].trim() !== '' &&
-				!/^(#{1,4})\s|^>|^[-*+]\s|^\d+[.)]\s/.test(lines[i])
-			) {
-				para.push(lines[i]);
-				i++;
-			}
-			if (para.length > 0) html += `<p>${inlineMarkdown(para.join(' '))}</p>`;
-		}
-		return html;
-	}
+    return md.render(text);
+  }
 
-	function parseMarkdown(src: string): Block[] {
-		// In streaming mode an odd fence count means the closing fence hasn't
-		// arrived yet: pseudo-close it so the completed part still renders as a
-		// code block instead of swallowing the rest of the stream as raw text.
-		let text = src.replace(/\r\n/g, '\n');
-		if (streaming) {
-			const fenceCount = text
-				.split('\n')
-				.filter((line) => /^```([\w+-]*)\s*$/.test(line)).length;
-			if (fenceCount % 2 === 1) text += '\n```';
-		}
-		const lines = text.split('\n');
-		const blocks: Block[] = [];
-		let i = 0;
-		while (i < lines.length) {
-			const fence = lines[i].match(/^```([\w+-]*)\s*$/);
-			if (fence) {
-				const lang = fence[1] || 'text';
-				const codeLines: string[] = [];
-				i++;
-				while (i < lines.length && !/^```\s*$/.test(lines[i])) {
-					codeLines.push(lines[i]);
-					i++;
-				}
-				i++; // skip closing fence
-				blocks.push({ type: 'code', html: '', code: codeLines.join('\n'), lang });
-				continue;
-			}
+  function escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 
-			const textLines: string[] = [];
-			while (i < lines.length) {
-				// A complete fence starts a new code block; a partial one (e.g.
-				// "```pyt" cut mid-stream) falls through as plain text so the
-				// renderer never spins on it.
-				if (/^```([\w+-]*)\s*$/.test(lines[i])) break;
-				if (lines[i].trim() === '') {
-					if (textLines.length > 0) break;
-					i++;
-					continue;
-				}
-				textLines.push(lines[i]);
-				i++;
-			}
-			if (textLines.length > 0) blocks.push({ type: 'text', html: renderTextLines(textLines) });
-		}
-		return blocks;
-	}
+  const renderedHtml = $derived(renderMarkdown(content));
 
-	const blocks = $derived(parseMarkdown(content));
+  async function copyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+  }
 
-	function codeLines(code: string): string[] {
-		return code.split('\n');
-	}
-
-	async function copyCode(index: number, code: string) {
-		try {
-			await navigator.clipboard.writeText(code);
-		} catch {
-			// fallback for webviews without clipboard permission
-			const ta = document.createElement('textarea');
-			ta.value = code;
-			ta.style.position = 'fixed';
-			ta.style.opacity = '0';
-			document.body.appendChild(ta);
-			ta.select();
-			document.execCommand('copy');
-			document.body.removeChild(ta);
-		}
-		copiedIndex = index;
-		setTimeout(() => {
-			if (copiedIndex === index) copiedIndex = null;
-		}, 1500);
-	}
+  function handleCopy(e: Event) {
+    const btn = (e.target as HTMLElement).closest('.copy-btn');
+    if (!btn) return;
+    const code = btn.getAttribute('data-code');
+    if (code) copyCode(decodeURIComponent(code));
+  }
 </script>
 
-<div class="markdown-viewer">
-	{#if !(streaming && content.trim() === '')}
-		{#each blocks as block, i}
-		{#if block.type === 'code'}
-			<div class="code-block">
-				<div class="code-header">
-					<span class="code-lang">{block.lang}</span>
-					<button class="copy-btn" onclick={() => copyCode(i, block.code ?? '')}>
-						{copiedIndex === i ? '已复制' : '复制'}
-					</button>
-				</div>
-				<pre class="code-body"><code>{#each codeLines(block.code ?? '') as line, li}<span class="code-line"><span class="line-num">{li + 1}</span><span class="line-content">{line}</span></span>{/each}</code></pre>
-			</div>
-		{:else}
-			{@html block.html}
-		{/if}
-		{/each}
-	{/if}
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="markdown-viewer" onclick={handleCopy}>
+  {#if !(streaming && content.trim() === '')}
+    {@html renderedHtml}
+  {/if}
 </div>
 
 <style>
-	.markdown-viewer {
-		font-size: var(--text-subheadline);
-		line-height: 1.6;
-		color: var(--color-fg);
-		word-break: break-word;
-		min-width: 0;
-	}
+  .markdown-viewer {
+    font-size: var(--text-subheadline);
+    line-height: 1.7;
+    color: var(--color-fg);
+    word-break: break-word;
+    min-width: 0;
+  }
 
-	.markdown-viewer :global(p) {
-		margin: 0 0 0.6em;
-	}
-	.markdown-viewer :global(p:last-child) {
-		margin-bottom: 0;
-	}
+  .markdown-viewer :global(p) {
+    margin: 0 0 0.6em;
+  }
+  .markdown-viewer :global(p:last-child) {
+    margin-bottom: 0;
+  }
 
-	.markdown-viewer :global(h1),
-	.markdown-viewer :global(h2),
-	.markdown-viewer :global(h3),
-	.markdown-viewer :global(h4) {
-		margin: 0.8em 0 0.4em;
-		font-weight: var(--font-weight-semibold);
-		color: var(--color-fg);
-	}
-	.markdown-viewer :global(h1) { font-size: 1.35em; }
-	.markdown-viewer :global(h2) { font-size: 1.2em; }
-	.markdown-viewer :global(h3) { font-size: 1.1em; }
-	.markdown-viewer :global(h4) { font-size: 1em; }
+  .markdown-viewer :global(h1),
+  .markdown-viewer :global(h2),
+  .markdown-viewer :global(h3),
+  .markdown-viewer :global(h4),
+  .markdown-viewer :global(h5),
+  .markdown-viewer :global(h6) {
+    margin: 1em 0 0.5em;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-fg);
+  }
+  .markdown-viewer :global(h1) {
+    font-size: 1.4em;
+  }
+  .markdown-viewer :global(h2) {
+    font-size: 1.25em;
+  }
+  .markdown-viewer :global(h3) {
+    font-size: 1.15em;
+  }
+  .markdown-viewer :global(h4) {
+    font-size: 1.05em;
+  }
 
-	.markdown-viewer :global(ul),
-	.markdown-viewer :global(ol) {
-		margin: 0.4em 0;
-		padding-left: 1.4em;
-	}
-	.markdown-viewer :global(li) {
-		margin: 0.2em 0;
-	}
+  .markdown-viewer :global(ul),
+  .markdown-viewer :global(ol) {
+    margin: 0.4em 0;
+    padding-left: 1.6em;
+  }
+  .markdown-viewer :global(li) {
+    margin: 0.2em 0;
+  }
+  .markdown-viewer :global(li > input[type='checkbox']) {
+    margin-right: 0.4em;
+  }
 
-	.markdown-viewer :global(a) {
-		color: var(--color-accent);
-		text-decoration: none;
-	}
-	.markdown-viewer :global(a:hover) {
-		text-decoration: underline;
-	}
+  .markdown-viewer :global(a) {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .markdown-viewer :global(a:hover) {
+    text-decoration: underline;
+  }
 
-	.markdown-viewer :global(blockquote) {
-		margin: 0.5em 0;
-		padding: 0.3em 0.8em;
-		border-left: 3px solid var(--color-accent);
-		background: var(--color-bg-secondary);
-		border-radius: var(--radius-sm);
-		color: var(--color-fg-secondary);
-	}
+  .markdown-viewer :global(blockquote) {
+    margin: 0.5em 0;
+    padding: 0.4em 1em;
+    border-left: 3px solid var(--color-accent);
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--color-fg-secondary);
+  }
 
-	.markdown-viewer :global(code.inline-code) {
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-separator);
-		border-radius: 4px;
-		padding: 0.1em 0.35em;
-		font-family: var(--font-mono);
-		font-size: 0.9em;
-	}
+  .markdown-viewer :global(table) {
+    border-collapse: collapse;
+    margin: 0.6em 0;
+    width: 100%;
+    overflow-x: auto;
+  }
+  .markdown-viewer :global(th),
+  .markdown-viewer :global(td) {
+    border: 1px solid var(--color-separator);
+    padding: 6px 12px;
+    text-align: left;
+    font-size: var(--text-caption1);
+  }
+  .markdown-viewer :global(th) {
+    background: var(--color-bg-hover);
+    font-weight: var(--font-weight-semibold);
+  }
+  .markdown-viewer :global(tr:nth-child(even)) {
+    background: var(--color-bg-secondary);
+  }
 
-	.code-block {
-		margin: 0.6em 0;
-		border: 1px solid var(--color-separator);
-		border-radius: var(--radius-md);
-		overflow: hidden;
-		background: var(--color-bg-secondary);
-	}
+  .markdown-viewer :global(hr) {
+    border: none;
+    border-top: 1px solid var(--color-separator);
+    margin: 1em 0;
+  }
 
-	.code-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 6px 12px;
-		background: var(--color-bg-hover);
-		border-bottom: 1px solid var(--color-separator);
-	}
+  .markdown-viewer :global(del) {
+    color: var(--color-fg-tertiary);
+  }
 
-	.code-lang {
-		font-size: var(--text-caption1);
-		font-family: var(--font-mono);
-		color: var(--color-fg-tertiary);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
+  .markdown-viewer :global(code.inline-code) {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-separator);
+    border-radius: 4px;
+    padding: 0.15em 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
 
-	.copy-btn {
-		border: none;
-		background: transparent;
-		color: var(--color-fg-secondary);
-		font-size: var(--text-caption1);
-		cursor: pointer;
-		padding: 2px 8px;
-		border-radius: 4px;
-	}
-	.copy-btn:hover {
-		background: var(--color-bg-hover);
-		color: var(--color-fg);
-	}
+  .markdown-viewer :global(pre.shiki) {
+    margin: 0.6em 0;
+    border: 1px solid var(--color-separator);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--color-bg-secondary) !important;
+  }
 
-	.code-body {
-		margin: 0;
-		padding: 10px 12px;
-		overflow-x: auto;
-	}
+  .markdown-viewer :global(pre.shiki code) {
+    display: block;
+    padding: 12px 16px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: var(--text-footnote);
+    line-height: 1.5;
+  }
 
-	.code-line {
-		display: block;
-	}
+  .markdown-viewer :global(pre.shiki code .line) {
+    display: inline-block;
+    width: 100%;
+  }
 
-	.line-num {
-		display: inline-block;
-		width: 2.2em;
-		text-align: right;
-		margin-right: 1em;
-		color: var(--color-fg-tertiary);
-		user-select: none;
-	}
+  .markdown-viewer :global(img) {
+    max-width: 100%;
+    border-radius: var(--radius-sm);
+  }
 
-	.line-content {
-		white-space: pre;
-		font-family: var(--font-mono);
-		font-size: var(--text-footnote);
-		color: var(--color-fg);
-	}
+  .markdown-viewer :global(.task-list-item) {
+    list-style: none;
+    margin-left: -1.6em;
+  }
 </style>

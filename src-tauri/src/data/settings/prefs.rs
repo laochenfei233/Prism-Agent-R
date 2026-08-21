@@ -97,7 +97,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             assert_eq!(get_str(&db.pool, "nonexistent", "d").await, "d");
-            assert_eq!(get_bool(&db.pool, "nonexistent", true).await, true);
+            assert!(get_bool(&db.pool, "nonexistent", true).await);
             assert_eq!(get_i64(&db.pool, "nonexistent", 42).await, 42);
             assert_eq!(get_f64(&db.pool, "nonexistent", 1.5).await, 1.5);
         });
@@ -111,7 +111,7 @@ mod tests {
             set(&db.pool, "rag.chunk_size", "1200").await.unwrap();
             assert_eq!(get_i64(&db.pool, "rag.chunk_size", 1000).await, 1200);
             set(&db.pool, "reflection.enabled", "true").await.unwrap();
-            assert_eq!(get_bool(&db.pool, "reflection.enabled", false).await, true);
+            assert!(get_bool(&db.pool, "reflection.enabled", false).await);
             remove(&db.pool, "rag.chunk_size").await.unwrap();
             assert_eq!(get_i64(&db.pool, "rag.chunk_size", 1000).await, 1000);
         });

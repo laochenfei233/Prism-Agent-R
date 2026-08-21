@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::data::models::{WikiRow, WikiPage, WikiPageHit};
+use crate::data::models::{WikiPage, WikiPageHit, WikiRow};
 use crate::data::Database;
 use crate::utils::error::AppError;
 use crate::utils::paths::wiki_dir;
@@ -83,10 +83,7 @@ impl WikiService {
     pub async fn read_page(&self, wiki_id: &str, path: &str) -> Result<String, AppError> {
         validate_page_path(path)?;
 
-        let file_path = wiki_dir()
-            .join(wiki_id)
-            .join("wiki")
-            .join(path);
+        let file_path = wiki_dir().join(wiki_id).join("wiki").join(path);
 
         // 安全校验：确保路径在 wiki 目录下
         let wiki_base = wiki_dir().join(wiki_id).join("wiki");
@@ -111,10 +108,7 @@ impl WikiService {
     ) -> Result<(), AppError> {
         validate_page_path(path)?;
 
-        let file_path = wiki_dir()
-            .join(wiki_id)
-            .join("wiki")
-            .join(path);
+        let file_path = wiki_dir().join(wiki_id).join("wiki").join(path);
 
         // 安全校验：确保路径在 wiki 目录下
         let wiki_base = wiki_dir().join(wiki_id).join("wiki");
@@ -165,10 +159,7 @@ impl WikiService {
         let mut hits = Vec::new();
 
         for page in pages {
-            let file_path = wiki_dir()
-                .join(wiki_id)
-                .join("wiki")
-                .join(&page.path);
+            let file_path = wiki_dir().join(wiki_id).join("wiki").join(&page.path);
 
             let content = tokio::fs::read_to_string(&file_path).await?;
             if let Some(pos) = content.find(query) {
@@ -193,8 +184,8 @@ impl WikiService {
         info: &str,
         preview: bool,
     ) -> Result<serde_json::Value, AppError> {
-        use crate::data::models::WikiWritePlan;
         use crate::core::adk::model::{ChatMessage, ChatRole, MessageContent, ModelProvider};
+        use crate::data::models::WikiWritePlan;
 
         // 1. 组装上下文（SCHEMA + index 前 200 行 + 页面清单摘要 + 新信息）
         let wiki_root = wiki_dir().join(wiki_id).join("wiki");
@@ -235,21 +226,35 @@ impl WikiService {
             let resp = provider
                 .generate(crate::core::adk::model::GenerationRequest {
                     messages: vec![
-                        ChatMessage { role: ChatRole::System, content: MessageContent::Text(system.into()), name: None },
-                        ChatMessage { role: ChatRole::User, content: MessageContent::Text(prompt), name: None },
+                        ChatMessage {
+                            role: ChatRole::System,
+                            content: MessageContent::Text(system.into()),
+                            name: None,
+                        },
+                        ChatMessage {
+                            role: ChatRole::User,
+                            content: MessageContent::Text(prompt),
+                            name: None,
+                        },
                     ],
                     temperature: Some(0.2),
                     ..Default::default()
                 })
                 .await
                 .map_err(|e| AppError::LlmProvider(e.to_string()))?;
-            match extract_json(&resp.text).and_then(|v| serde_json::from_value::<WikiWritePlan>(v).ok()) {
-                Some(p) => { plan = Some(p); break; }
+            match extract_json(&resp.text)
+                .and_then(|v| serde_json::from_value::<WikiWritePlan>(v).ok())
+            {
+                Some(p) => {
+                    plan = Some(p);
+                    break;
+                }
                 None => last_err = truncate_md(&resp.text, 200),
             }
         }
 
-        let plan = plan.ok_or_else(|| AppError::LlmProvider(format!("无法解析 Wiki 写入计划: {last_err}")))?;
+        let plan = plan
+            .ok_or_else(|| AppError::LlmProvider(format!("无法解析 Wiki 写入计划: {last_err}")))?;
 
         // 2. 校验操作数上限（防 LLM 失控）
         if plan.operations.len() > 10 {
@@ -267,7 +272,11 @@ impl WikiService {
     }
 
     /// 执行 WikiWritePlan（§10.1.1 执行流程：逐操作落盘 + log.md 追加）
-    pub async fn apply_plan(&self, wiki_id: &str, plan: &crate::data::models::WikiWritePlan) -> Result<crate::data::models::WikiWriteResult, AppError> {
+    pub async fn apply_plan(
+        &self,
+        wiki_id: &str,
+        plan: &crate::data::models::WikiWritePlan,
+    ) -> Result<crate::data::models::WikiWriteResult, AppError> {
         let wiki_root = wiki_dir().join(wiki_id).join("wiki");
         let result = self.apply_plan_at(&wiki_root, plan).await?;
 
@@ -319,7 +328,11 @@ impl WikiService {
     /// apply_plan 纯文件操作核心（可注入任意 wiki_root 以便测试）：
     /// 事务式（§10.1.1）——先全部预检，再逐操作执行并记录 undo 日志；
     /// 任一失败 → 逆序回滚已执行操作，返回错误；全部成功 → 追加 log.md。
-    async fn apply_plan_at(&self, wiki_root: &std::path::Path, plan: &crate::data::models::WikiWritePlan) -> Result<crate::data::models::WikiWriteResult, AppError> {
+    async fn apply_plan_at(
+        &self,
+        wiki_root: &std::path::Path,
+        plan: &crate::data::models::WikiWritePlan,
+    ) -> Result<crate::data::models::WikiWriteResult, AppError> {
         use crate::data::models::WikiOp;
 
         let trash_dir = wiki_root.parent().unwrap_or(wiki_root).join(".trash");
@@ -333,7 +346,9 @@ impl WikiService {
         // ── 阶段 1：全量预检（任何 op 非法 → 整体拒绝，不落盘） ──
         for op in &plan.operations {
             match op {
-                WikiOp::CreatePage { path, .. } | WikiOp::UpdatePage { path, .. } | WikiOp::DeletePage { path, .. } => {
+                WikiOp::CreatePage { path, .. }
+                | WikiOp::UpdatePage { path, .. }
+                | WikiOp::DeletePage { path, .. } => {
                     validate_page_path(path)?;
                     let target = wiki_root.join(path);
                     ensure_within(&target, wiki_root)?;
@@ -345,9 +360,9 @@ impl WikiService {
         // ── 阶段 2：逐操作执行，记录 undo（失败时逆序回滚） ──
         // undo 条目：(kind, from, to, backup)
         enum Undo {
-            DeleteCreated(std::path::PathBuf),        // 回滚 CreatePage：删除新建文件
-            RestoreBackup(std::path::PathBuf),        // 回滚 UpdatePage：用 .bak 还原
-            RemoveBackup(std::path::PathBuf),         // 回滚 UpdatePage：清除 .bak
+            DeleteCreated(std::path::PathBuf), // 回滚 CreatePage：删除新建文件
+            RestoreBackup(std::path::PathBuf), // 回滚 UpdatePage：用 .bak 还原
+            RemoveBackup(std::path::PathBuf),  // 回滚 UpdatePage：清除 .bak
             MoveBack(std::path::PathBuf, std::path::PathBuf), // 回滚 DeletePage：从 .trash 移回
             RestoreFile(std::path::PathBuf, Vec<u8>), // 回滚 UpdateIndex/log：还原原文件
         }
@@ -356,7 +371,11 @@ impl WikiService {
         let exec = async {
             for op in &plan.operations {
                 match op {
-                    WikiOp::CreatePage { path, title, content } => {
+                    WikiOp::CreatePage {
+                        path,
+                        title,
+                        content,
+                    } => {
                         let target = wiki_root.join(path);
                         if let Some(parent) = target.parent() {
                             tokio::fs::create_dir_all(parent).await?;
@@ -368,7 +387,11 @@ impl WikiService {
                         index_entries.push(format!("- [{title}]({path})"));
                         applied += 1;
                     }
-                    WikiOp::UpdatePage { path, content, summary } => {
+                    WikiOp::UpdatePage {
+                        path,
+                        content,
+                        summary,
+                    } => {
                         let target = wiki_root.join(path);
                         if target.exists() {
                             // 备份 .bak
@@ -392,7 +415,9 @@ impl WikiService {
                             let dest = trash_dir.join(name);
                             tokio::fs::rename(&target, &dest).await?;
                             undo.push(Undo::MoveBack(dest, target));
-                            ops_log.push_str(&format!("- DeletePage: {path} (移至 .trash，原因: {reason})\n"));
+                            ops_log.push_str(&format!(
+                                "- DeletePage: {path} (移至 .trash，原因: {reason})\n"
+                            ));
                             applied += 1;
                         }
                     }
@@ -417,7 +442,10 @@ impl WikiService {
                 if !existing.ends_with('\n') {
                     existing.push('\n');
                 }
-                existing.push_str(&format!("\n## 更新 {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M")));
+                existing.push_str(&format!(
+                    "\n## 更新 {}\n",
+                    chrono::Utc::now().format("%Y-%m-%d %H:%M")
+                ));
                 for e in &index_entries {
                     existing.push_str(e);
                     existing.push('\n');
@@ -452,14 +480,22 @@ impl WikiService {
             // ── 阶段 3：回滚（逆序） ──
             for u in undo.iter().rev() {
                 match u {
-                    Undo::DeleteCreated(p) => { let _ = tokio::fs::remove_file(p).await; }
+                    Undo::DeleteCreated(p) => {
+                        let _ = tokio::fs::remove_file(p).await;
+                    }
                     Undo::RestoreBackup(p) => {
                         let bak = format!("{}.bak", p.display());
                         let _ = tokio::fs::rename(&bak, p).await;
                     }
-                    Undo::RemoveBackup(bak) => { let _ = tokio::fs::remove_file(bak).await; }
-                    Undo::MoveBack(from, to) => { let _ = tokio::fs::rename(from, to).await; }
-                    Undo::RestoreFile(p, bytes) => { let _ = tokio::fs::write(p, bytes).await; }
+                    Undo::RemoveBackup(bak) => {
+                        let _ = tokio::fs::remove_file(bak).await;
+                    }
+                    Undo::MoveBack(from, to) => {
+                        let _ = tokio::fs::rename(from, to).await;
+                    }
+                    Undo::RestoreFile(p, bytes) => {
+                        let _ = tokio::fs::write(p, bytes).await;
+                    }
                 }
             }
             return Err(e);
@@ -488,11 +524,7 @@ fn validate_page_path(path: &str) -> Result<(), AppError> {
 }
 
 /// 递归收集所有 .md 文件
-async fn collect_pages(
-    root: &Path,
-    base: &Path,
-    out: &mut Vec<WikiPage>,
-) -> Result<(), AppError> {
+async fn collect_pages(root: &Path, base: &Path, out: &mut Vec<WikiPage>) -> Result<(), AppError> {
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let mut entries = tokio::fs::read_dir(&dir).await?;
@@ -527,7 +559,9 @@ async fn collect_pages(
 // ── AI 写入辅助 ───────────────────────────────────────────
 
 /// 解析默认模型构建 provider（Wiki AI 功能复用）
-async fn resolve_wiki_model(db: &Database) -> Result<(crate::core::rig::provider::OpenAiProvider, String), AppError> {
+async fn resolve_wiki_model(
+    db: &Database,
+) -> Result<(crate::core::rig::provider::OpenAiProvider, String), AppError> {
     use crate::data::models::{ModelRow, ProviderRow};
     let model_row = sqlx::query_as::<_, ModelRow>(
         "SELECT id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at FROM models WHERE is_default = 1 LIMIT 1"
@@ -544,18 +578,21 @@ async fn resolve_wiki_model(db: &Database) -> Result<(crate::core::rig::provider
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row.base_url.unwrap_or_else(|| {
-        match provider_row.kind.as_str() {
+    let base_url = provider_row
+        .base_url
+        .unwrap_or_else(|| match provider_row.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
-        }
-    });
+        });
     let api_key = provider_row
         .api_key_enc
         .as_deref()
         .map(crate::commands::settings::decrypt_provider_key)
         .unwrap_or_default();
-    let display = model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone());
+    let display = model_row
+        .display_name
+        .clone()
+        .unwrap_or_else(|| model_row.model_id.clone());
     let provider = crate::core::rig::provider::OpenAiProvider::new(
         model_row.provider_id.clone(),
         display.clone(),
@@ -643,8 +680,15 @@ mod tests {
         tokio::fs::create_dir_all(&wiki_root).await.unwrap();
 
         // 预建一个待更新页面
-        tokio::fs::create_dir_all(wiki_root.join("concepts")).await.unwrap();
-        tokio::fs::write(wiki_root.join("concepts/kubernetes.md"), "# Kubernetes\n旧内容\n").await.unwrap();
+        tokio::fs::create_dir_all(wiki_root.join("concepts"))
+            .await
+            .unwrap();
+        tokio::fs::write(
+            wiki_root.join("concepts/kubernetes.md"),
+            "# Kubernetes\n旧内容\n",
+        )
+        .await
+        .unwrap();
 
         let plan = crate::data::models::WikiWritePlan {
             operations: vec![
@@ -667,7 +711,9 @@ mod tests {
         assert!(err.is_err(), "非法路径必须被拒绝");
 
         // 预检失败 → UpdatePage 不得执行，旧内容保留
-        let content = tokio::fs::read_to_string(wiki_root.join("concepts/kubernetes.md")).await.unwrap();
+        let content = tokio::fs::read_to_string(wiki_root.join("concepts/kubernetes.md"))
+            .await
+            .unwrap();
         assert!(content.contains("旧内容"), "回滚后应保留原内容: {content}");
         assert!(!content.contains("新内容"), "非法计划不得部分应用");
 
@@ -691,7 +737,9 @@ mod tests {
                     title: "Kubernetes".into(),
                     content: "K8s 介绍".into(),
                 },
-                crate::data::models::WikiOp::Noop { reason: "重复".into() },
+                crate::data::models::WikiOp::Noop {
+                    reason: "重复".into(),
+                },
             ],
         };
 
@@ -700,10 +748,17 @@ mod tests {
         assert_eq!(result.applied, 1);
         assert_eq!(result.noop, 1);
 
-        let page = tokio::fs::read_to_string(wiki_root.join("concepts/kubernetes.md")).await.unwrap();
+        let page = tokio::fs::read_to_string(wiki_root.join("concepts/kubernetes.md"))
+            .await
+            .unwrap();
         assert!(page.contains("K8s 介绍"));
-        let log = tokio::fs::read_to_string(wiki_root.join("log.md")).await.unwrap();
-        assert!(log.contains("CreatePage: concepts/kubernetes.md"), "log.md 需含变更记录");
+        let log = tokio::fs::read_to_string(wiki_root.join("log.md"))
+            .await
+            .unwrap();
+        assert!(
+            log.contains("CreatePage: concepts/kubernetes.md"),
+            "log.md 需含变更记录"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -714,14 +769,20 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("prism_wiki_restore_{}", uuid::Uuid::new_v4()));
         let wiki_root = dir.join("wiki");
         let trash = dir.join(".trash");
-        tokio::fs::create_dir_all(wiki_root.join("concepts")).await.unwrap();
+        tokio::fs::create_dir_all(wiki_root.join("concepts"))
+            .await
+            .unwrap();
         tokio::fs::create_dir_all(&trash).await.unwrap();
-        tokio::fs::write(&trash.join("kubernetes.md"), "# Kubernetes\n内容\n").await.unwrap();
+        tokio::fs::write(&trash.join("kubernetes.md"), "# Kubernetes\n内容\n")
+            .await
+            .unwrap();
 
         let svc = WikiService::new(crate::data::Database::new(&dir).await.unwrap());
         // 注意：服务内 wiki_dir() 是全局路径，restore_trash 不接 base_dir。
         // 此处只验证路径校验与「不存在时报错」路径（文件系统操作走全局目录，测试不落盘）。
-        let err = svc.restore_trash("wk-not-exist", "concepts/kubernetes.md").await;
+        let err = svc
+            .restore_trash("wk-not-exist", "concepts/kubernetes.md")
+            .await;
         assert!(err.is_err(), "不存在的 wiki 恢复应报错（源文件不在回收站）");
 
         let _ = std::fs::remove_dir_all(&dir);

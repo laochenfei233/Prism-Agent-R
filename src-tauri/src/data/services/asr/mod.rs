@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use backends::{builtin_register, create_asr_backend};
-pub use model_manager::{AsrModelInfo, AsrModelManager, InstalledAsrModel};
+pub use model_manager::{AsrModelCategory, AsrModelInfo, AsrModelManager, InstalledAsrModel};
 
 // ── ASR 错误 ──────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ impl AsrKind {
     }
 
     /// 宽松解析：已知枚举命中枚举，未知一律 Custom（不 panic、不拒绝）
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             "DashScopeFunasr" => AsrKind::DashScopeFunasr,
             "MiMoHttp" => AsrKind::MiMoHttp,
@@ -130,20 +130,23 @@ impl AsrKind {
 /// 后端工厂：由注册名 + 配置构建具体后端
 pub type BackendFactory = fn(&AsrBackendConfig) -> Box<dyn AsrBackend>;
 
-static BACKEND_REGISTRY: OnceLock<std::sync::RwLock<HashMap<String, BackendFactory>>> = OnceLock::new();
+static BACKEND_REGISTRY: OnceLock<std::sync::RwLock<HashMap<String, BackendFactory>>> =
+    OnceLock::new();
 
 fn registry() -> &'static std::sync::RwLock<HashMap<String, BackendFactory>> {
     BACKEND_REGISTRY.get_or_init(|| {
-        let m = std::sync::RwLock::new(HashMap::new());
         // 内置注册（在 backends.rs 的 builtin_register 中填充）
-        m
+        std::sync::RwLock::new(HashMap::new())
     })
 }
 
 /// 注册一个后端（幂等：同名覆盖）。示例：
 /// `register_backend("MyGroqAsr", |cfg| Box::new(MyBackend::new(cfg)));`
 pub fn register_backend(name: &str, factory: BackendFactory) {
-    registry().write().unwrap().insert(name.to_string(), factory);
+    registry()
+        .write()
+        .unwrap()
+        .insert(name.to_string(), factory);
 }
 
 /// 查询已注册的后端名（供 UI 展示可用后端）
@@ -226,7 +229,9 @@ pub struct AsrSessionHandle {
 
 impl AsrSessionHandle {
     pub fn new() -> Self {
-        Self { cancel: tokio_util::sync::CancellationToken::new() }
+        Self {
+            cancel: tokio_util::sync::CancellationToken::new(),
+        }
     }
 
     pub fn cancel(&self) {
@@ -272,7 +277,7 @@ impl AsrBackendConfig {
         extra: Option<serde_json::Value>,
     ) -> Self {
         Self {
-            kind: AsrKind::from_str(kind),
+            kind: AsrKind::parse(kind),
             kind_raw: kind.to_string(),
             base_url,
             api_key,

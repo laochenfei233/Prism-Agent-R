@@ -12,7 +12,8 @@ pub async fn trace_list(
     tool_failed: Option<bool>,
 ) -> Result<Vec<AgentTrace>, AppError> {
     let svc = TraceService::new(state.db.clone());
-    svc.list_traces_with_filter(&session_id, limit, min_grade, tool_failed).await
+    svc.list_traces_with_filter(&session_id, limit, min_grade, tool_failed)
+        .await
 }
 
 /// §17.3 单条轨迹评分回写

@@ -4,20 +4,40 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::error::AppError;
 
+/// 下载进度回调：上报 0.0~1.0 进度与阶段描述
+pub type DownloadProgressCallback = Box<dyn Fn(f32, &str) + Send + Sync>;
+
 // ── 模型信息 ──────────────────────────────────────────────
+
+/// 模型类别：在线模型（API 链接）vs 本地模型（下载后离线运行）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AsrModelCategory {
+    /// 在线模型：通过 API 调用，无需下载，需配置 API Key 和地址
+    Online,
+    /// 本地模型：下载后离线运行，需要本地路径
+    Local,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AsrModelInfo {
     pub id: String,
     pub name: String,
     pub backend: String,
+    /// 模型类别：online（在线 API）或 local（本地离线）
+    pub category: AsrModelCategory,
     pub size_mb: u64,
     pub lang: Vec<String>,
+    /// 在线模型：API 地址模板；本地模型：下载 URL
     pub url: String,
     pub sha256: String,
     pub requires_vad: bool,
     /// 是否用户自放置的模型（磁盘扫描发现，非内置清单）
     pub user_placed: bool,
+    /// 在线模型：默认模型 ID（如 whisper-1）
+    pub default_model_id: Option<String>,
+    /// 在线模型：是否需要 API Key
+    pub requires_api_key: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,60 +53,277 @@ pub struct InstalledAsrModel {
 /// URL 为可下载的 tar.bz2 直链（sherpa-onnx 官方 releases）
 pub fn builtin_catalog() -> Vec<AsrModelInfo> {
     vec![
+        // ═══════════════════════════════════════════════════════
+        // 在线模型（API 调用，无需下载）
+        // ═══════════════════════════════════════════════════════
+        AsrModelInfo {
+            id: "online-whisper-api".into(),
+            name: "OpenAI Whisper API".into(),
+            backend: "WhisperApi".into(),
+            category: AsrModelCategory::Online,
+            size_mb: 0,
+            lang: vec!["zh".into(), "en".into(), "ja".into(), "ko".into()],
+            url: "https://api.openai.com/v1/audio/transcriptions".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: Some("whisper-1".into()),
+            requires_api_key: true,
+        },
+        AsrModelInfo {
+            id: "online-dashscope-funasr".into(),
+            name: "阿里云 DashScope FunASR".into(),
+            backend: "DashScopeFunasr".into(),
+            category: AsrModelCategory::Online,
+            size_mb: 0,
+            lang: vec!["zh".into(), "en".into()],
+            url: "wss://dashscope.aliyuncs.com/api-ws/v1/inference".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: Some("paraformer-v2".into()),
+            requires_api_key: true,
+        },
+        AsrModelInfo {
+            id: "online-mimo-http".into(),
+            name: "MiMo HTTP 语音识别".into(),
+            backend: "MiMoHttp".into(),
+            category: AsrModelCategory::Online,
+            size_mb: 0,
+            lang: vec!["zh".into(), "en".into()],
+            url: "https://api.xiaomimimo.com/v1/audio/transcriptions".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: Some("mimo-asr".into()),
+            requires_api_key: true,
+        },
+        AsrModelInfo {
+            id: "online-azure-speech".into(),
+            name: "Azure Speech Services".into(),
+            backend: "AzureSpeech".into(),
+            category: AsrModelCategory::Online,
+            size_mb: 0,
+            lang: vec!["zh".into(), "en".into(), "ja".into(), "ko".into()],
+            url: "https://{region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: true,
+        },
+        AsrModelInfo {
+            id: "online-custom-api".into(),
+            name: "自定义 ASR API".into(),
+            backend: "Custom".into(),
+            category: AsrModelCategory::Online,
+            size_mb: 0,
+            lang: vec!["zh".into()],
+            url: "".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: true,
+        },
+        // ═══════════════════════════════════════════════════════
+        // 本地模型（下载后离线运行）
+        // ═══════════════════════════════════════════════════════
         AsrModelInfo {
             id: "sherpa-sensevoice-small".into(),
             name: "SenseVoice-Small (中文流式)".into(),
             backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
             size_mb: 228,
             lang: vec!["zh".into(), "en".into(), "ja".into(), "ko".into(), "yue".into()],
             url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2".into(),
             sha256: "".into(),
             requires_vad: false,
             user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
         },
         AsrModelInfo {
             id: "sherpa-paraformer-large".into(),
             name: "Paraformer-Large (中文)".into(),
             backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
             size_mb: 230,
             lang: vec!["zh".into()],
             url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-2023-09-14.tar.bz2".into(),
             sha256: "".into(),
             requires_vad: true,
             user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "sherpa-paraformer-zh-en".into(),
+            name: "Paraformer 中英混合".into(),
+            backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 245,
+            lang: vec!["zh".into(), "en".into()],
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-en-2023-09-14.tar.bz2".into(),
+            sha256: "".into(),
+            requires_vad: true,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
         },
         AsrModelInfo {
             id: "sherpa-whisper-tiny".into(),
             name: "Whisper tiny (中英蒸馏)".into(),
             backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
             size_mb: 80,
             lang: vec!["zh".into(), "en".into()],
             url: "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny-zh-en".into(),
             sha256: "".into(),
             requires_vad: false,
             user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "sherpa-whisper-base".into(),
+            name: "Whisper base (多语言)".into(),
+            backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 150,
+            lang: vec!["zh".into(), "en".into(), "ja".into(), "ko".into()],
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "sherpa-whisper-small".into(),
+            name: "Whisper small (多语言)".into(),
+            backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 460,
+            lang: vec!["zh".into(), "en".into(), "ja".into(), "ko".into()],
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "sherpa-whisper-medium".into(),
+            name: "Whisper medium (多语言)".into(),
+            backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 1500,
+            lang: vec!["zh".into(), "en".into(), "ja".into(), "ko".into()],
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium.tar.bz2".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "sherpa-paraformer-zh-hf".into(),
+            name: "Paraformer 中文 (HuggingFace)".into(),
+            backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 390,
+            lang: vec!["zh".into()],
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-paraformer-zh-hf.tar.bz2".into(),
+            sha256: "".into(),
+            requires_vad: true,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "funasr-punc-transformer".into(),
+            name: "FunASR 标点恢复模型".into(),
+            backend: "SherpaOnnx".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 120,
+            lang: vec!["zh".into()],
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-punc-ct-pnc-zh-en.tar.bz2".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
         },
         AsrModelInfo {
             id: "vosk-cn-small".into(),
             name: "Vosk 中文小模型".into(),
             backend: "Vosk".into(),
+            category: AsrModelCategory::Local,
             size_mb: 42,
             lang: vec!["zh".into()],
             url: "https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip".into(),
             sha256: "".into(),
             requires_vad: false,
             user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
         },
         AsrModelInfo {
             id: "vosk-en-small".into(),
             name: "Vosk 英文小模型".into(),
             backend: "Vosk".into(),
+            category: AsrModelCategory::Local,
             size_mb: 40,
             lang: vec!["en".into()],
             url: "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip".into(),
             sha256: "".into(),
             requires_vad: false,
             user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "vosk-cn-big".into(),
+            name: "Vosk 中文大模型".into(),
+            backend: "Vosk".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 1800,
+            lang: vec!["zh".into()],
+            url: "https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "vosk-en-big".into(),
+            name: "Vosk 英文大模型".into(),
+            backend: "Vosk".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 1800,
+            lang: vec!["en".into()],
+            url: "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
+        },
+        AsrModelInfo {
+            id: "vosk-ja-small".into(),
+            name: "Vosk 日文小模型".into(),
+            backend: "Vosk".into(),
+            category: AsrModelCategory::Local,
+            size_mb: 38,
+            lang: vec!["ja".into()],
+            url: "https://alphacephei.com/vosk/models/vosk-model-small-ja-0.22.zip".into(),
+            sha256: "".into(),
+            requires_vad: false,
+            user_placed: false,
+            default_model_id: None,
+            requires_api_key: false,
         },
     ]
 }
@@ -125,12 +362,15 @@ impl AsrModelManager {
                         id: id.clone(),
                         name: id,
                         backend: backend.clone(),
+                        category: AsrModelCategory::Local,
                         size_mb: dir_size_mb(&path),
                         lang: default_langs(&backend),
                         url: String::new(),
                         sha256: String::new(),
                         requires_vad: false,
                         user_placed: true,
+                        default_model_id: None,
+                        requires_api_key: false,
                     });
                 }
             }
@@ -151,7 +391,9 @@ impl AsrModelManager {
                     continue;
                 }
                 let id = entry.file_name().to_string_lossy().to_string();
-                let Some(backend) = detect_backend(&path) else { continue };
+                let Some(backend) = detect_backend(&path) else {
+                    continue;
+                };
                 out.push(InstalledAsrModel {
                     id,
                     path: path.to_string_lossy().to_string(),
@@ -174,7 +416,7 @@ impl AsrModelManager {
     pub async fn download(
         &self,
         model_id: &str,
-        progress: Option<Box<dyn Fn(f32, &str) + Send + Sync>>,
+        progress: Option<DownloadProgressCallback>,
     ) -> Result<PathBuf, AppError> {
         let info = builtin_catalog()
             .into_iter()
@@ -206,13 +448,20 @@ impl AsrModelManager {
             .await
             .map_err(|e| AppError::Internal(format!("模型下载失败: {e}")))?;
         if !resp.status().is_success() {
-            return Err(AppError::Internal(format!("模型下载 HTTP {}", resp.status())));
+            return Err(AppError::Internal(format!(
+                "模型下载 HTTP {}",
+                resp.status()
+            )));
         }
         let total = resp.content_length().unwrap_or(0);
         let mut downloaded: u64 = 0;
         let mut file = tokio::fs::File::create(&tmp_path).await?;
         use tokio::io::AsyncWriteExt;
-        while let Some(chunk) = resp.chunk().await.map_err(|e| AppError::Internal(e.to_string()))? {
+        while let Some(chunk) = resp
+            .chunk()
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+        {
             downloaded += chunk.len() as u64;
             file.write_all(&chunk).await?;
             if total > 0 {
@@ -232,7 +481,9 @@ impl AsrModelManager {
             let actual = format!("{:x}", hasher.finalize());
             if actual != info.sha256 {
                 let _ = tokio::fs::remove_file(&tmp_path).await;
-                return Err(AppError::Validation(format!("模型校验和不匹配（下载可能损坏），请重试")));
+                return Err(AppError::Validation(
+                    "模型校验和不匹配（下载可能损坏），请重试".to_string(),
+                ));
             }
         }
 
@@ -251,7 +502,9 @@ impl AsrModelManager {
         let _ = tokio::fs::remove_dir_all(&extract_tmp).await;
 
         if detect_backend(&target).is_none() {
-            return Err(AppError::Validation("解压后未找到模型文件，可能下载了错误包".into()));
+            return Err(AppError::Validation(
+                "解压后未找到模型文件，可能下载了错误包".into(),
+            ));
         }
 
         report(1.0, "完成");
@@ -278,8 +531,15 @@ fn extract_tar_bz2(archive: &Path, dest: &Path) -> Result<(), AppError> {
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?.into_owned();
-        if path.is_absolute() || path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-            return Err(AppError::Validation(format!("压缩包内含不安全路径: {}", path.display())));
+        if path.is_absolute()
+            || path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(AppError::Validation(format!(
+                "压缩包内含不安全路径: {}",
+                path.display()
+            )));
         }
         entry.unpack(dest.join(&path))?;
     }
@@ -310,13 +570,17 @@ async fn move_extracted(src: &Path, dest: &Path) -> Result<(), AppError> {
             v
         };
         for p in inner_entries {
-            let name = p.file_name().ok_or_else(|| AppError::Internal("文件名无效".into()))?;
-            tokio::fs::rename(&p, dest.join(&name)).await?;
+            let name = p
+                .file_name()
+                .ok_or_else(|| AppError::Internal("文件名无效".into()))?;
+            tokio::fs::rename(&p, dest.join(name)).await?;
         }
     } else {
         for p in entries {
-            let name = p.file_name().ok_or_else(|| AppError::Internal("文件名无效".into()))?;
-            tokio::fs::rename(&p, dest.join(&name)).await?;
+            let name = p
+                .file_name()
+                .ok_or_else(|| AppError::Internal("文件名无效".into()))?;
+            tokio::fs::rename(&p, dest.join(name)).await?;
         }
     }
     Ok(())
@@ -326,7 +590,12 @@ async fn move_extracted(src: &Path, dest: &Path) -> Result<(), AppError> {
 
 /// 识别模型目录属于哪个后端（支持解压后的子目录结构）
 fn detect_backend(dir: &Path) -> Option<String> {
-    let sherpa = ["model.int8.onnx", "model.onnx", "model_quant.onnx", "tokens.txt"];
+    let sherpa = [
+        "model.int8.onnx",
+        "model.onnx",
+        "model_quant.onnx",
+        "tokens.txt",
+    ];
     let vosk = ["conf/model.conf", "am/final.mdl"];
     if walk_has(dir, &sherpa, 3) {
         Some("SherpaOnnx".into())
@@ -341,7 +610,9 @@ fn walk_has(dir: &Path, candidates: &[&str], depth: usize) -> bool {
     if depth == 0 {
         return false;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return false };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
     for entry in entries.flatten() {
         let p = entry.path();
         if p.is_dir() {
@@ -384,5 +655,5 @@ fn dir_size_mb(path: &Path) -> u64 {
             }
         }
     }
-    (total + 1_048_575) / 1_048_576 // MB（向上取整）
+    total.div_ceil(1_048_576) // MB（向上取整）
 }

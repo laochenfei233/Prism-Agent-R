@@ -2,8 +2,6 @@ use crate::data::models::AgentDto;
 use crate::data::Database;
 use crate::utils::error::AppError;
 
-
-
 // ── Prompt Builder ────────────────────────────────────────
 
 pub struct PromptBuilder {
@@ -50,14 +48,16 @@ impl PromptBuilder {
 
     async fn load_skill_content(&self, skill_id: &str) -> Result<Option<String>, AppError> {
         let row = sqlx::query_scalar::<_, String>(
-            "SELECT folder_name FROM skills WHERE id = ? AND is_enabled = 1"
+            "SELECT folder_name FROM skills WHERE id = ? AND is_enabled = 1",
         )
         .bind(skill_id)
         .fetch_optional(&self.db.pool)
         .await?;
 
         if let Some(folder_name) = row {
-            let skill_path = crate::utils::paths::skill_dir().join(&folder_name).join("SKILL.md");
+            let skill_path = crate::utils::paths::skill_dir()
+                .join(&folder_name)
+                .join("SKILL.md");
             if skill_path.exists() {
                 let content = tokio::fs::read_to_string(&skill_path).await?;
                 return Ok(Some(content));
@@ -79,7 +79,9 @@ impl PromptBuilder {
     }
 
     async fn load_global_memory(&self) -> Result<Option<String>, AppError> {
-        let memory_path = crate::utils::paths::memory_dir().join("global").join("MEMORY.md");
+        let memory_path = crate::utils::paths::memory_dir()
+            .join("global")
+            .join("MEMORY.md");
         if memory_path.exists() {
             let content = tokio::fs::read_to_string(&memory_path).await?;
             return Ok(Some(content));

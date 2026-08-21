@@ -20,22 +20,26 @@ pub async fn search_config(
 ) -> Result<SearchConfigResult, AppError> {
     let pool = &state.db.pool;
 
-    let provider: String = sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.provider'")
-        .fetch_optional(pool)
-        .await?
-        .unwrap_or_else(|| "noop".to_string());
+    let provider: String =
+        sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.provider'")
+            .fetch_optional(pool)
+            .await?
+            .unwrap_or_else(|| "noop".to_string());
 
-    let api_key_enc: Option<String> = sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.api_key'")
-        .fetch_optional(pool)
-        .await?;
+    let api_key_enc: Option<String> =
+        sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.api_key'")
+            .fetch_optional(pool)
+            .await?;
 
-    let searxng_url: Option<String> = sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.searxng_url'")
-        .fetch_optional(pool)
-        .await?;
+    let searxng_url: Option<String> =
+        sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.searxng_url'")
+            .fetch_optional(pool)
+            .await?;
 
-    let fallback: Option<String> = sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.fallback_provider'")
-        .fetch_optional(pool)
-        .await?;
+    let fallback: Option<String> =
+        sqlx::query_scalar("SELECT value FROM preferences WHERE key = 'search.fallback_provider'")
+            .fetch_optional(pool)
+            .await?;
 
     Ok(SearchConfigResult {
         provider,
@@ -80,7 +84,8 @@ pub async fn search_config_save(
     if let Some(fb) = fallback_provider {
         if fb.is_empty() {
             sqlx::query("DELETE FROM preferences WHERE key = 'search.fallback_provider'")
-                .execute(pool).await?;
+                .execute(pool)
+                .await?;
         } else {
             sqlx::query("INSERT OR REPLACE INTO preferences (key, value, updated_at) VALUES ('search.fallback_provider', ?, ?)")
                 .bind(&fb).bind(now).execute(pool).await?;
@@ -103,9 +108,7 @@ pub struct SearchTestResult {
 
 /// 测试搜索连接
 #[tauri::command]
-pub async fn search_test(
-    state: State<'_, crate::AppState>,
-) -> Result<SearchTestResult, AppError> {
+pub async fn search_test(state: State<'_, crate::AppState>) -> Result<SearchTestResult, AppError> {
     use crate::core::search::service::SearchService;
 
     let pool = &state.db.pool;
@@ -153,7 +156,9 @@ pub async fn search_test(
 use crate::core::search::noop::NoopSearchProvider;
 
 /// 从 preferences 表加载搜索配置到 HashMap
-async fn load_search_config(pool: &sqlx::SqlitePool) -> Result<std::collections::HashMap<String, String>, AppError> {
+async fn load_search_config(
+    pool: &sqlx::SqlitePool,
+) -> Result<std::collections::HashMap<String, String>, AppError> {
     let mut config = std::collections::HashMap::new();
 
     let keys = [
@@ -164,10 +169,11 @@ async fn load_search_config(pool: &sqlx::SqlitePool) -> Result<std::collections:
     ];
 
     for key in &keys {
-        if let Some(val) = sqlx::query_scalar::<_, String>("SELECT value FROM preferences WHERE key = ?")
-            .bind(key)
-            .fetch_optional(pool)
-            .await?
+        if let Some(val) =
+            sqlx::query_scalar::<_, String>("SELECT value FROM preferences WHERE key = ?")
+                .bind(key)
+                .fetch_optional(pool)
+                .await?
         {
             // api_key 需要解密
             let value = if *key == "search.api_key" {
@@ -183,6 +189,8 @@ async fn load_search_config(pool: &sqlx::SqlitePool) -> Result<std::collections:
 }
 
 /// 获取搜索配置的 HashMap（供 SearchService 使用）
-pub async fn get_search_config(pool: &sqlx::SqlitePool) -> std::collections::HashMap<String, String> {
+pub async fn get_search_config(
+    pool: &sqlx::SqlitePool,
+) -> std::collections::HashMap<String, String> {
     load_search_config(pool).await.unwrap_or_default()
 }

@@ -95,7 +95,7 @@ pub async fn insert_chunks(
     doc_id: &str,
     wiki_id: &str,
     chunks: &[(String, Option<Vec<u8>>)], // (content, optional embedding bytes)
-    contexts: Option<&[String]>,         // 每 chunk 的上下文说明（§10.2.2，可与 chunks 等长）
+    contexts: Option<&[String]>,          // 每 chunk 的上下文说明（§10.2.2，可与 chunks 等长）
     page_meta: Option<&[(Option<i32>, Option<i32>)]>, // 每 chunk 的页码范围（§10.2.4 引用定位）
 ) -> Result<usize, AppError> {
     let now = chrono::Utc::now().timestamp();
@@ -104,7 +104,10 @@ pub async fn insert_chunks(
     for (i, (content, embedding)) in chunks.iter().enumerate() {
         let chunk_id = uuid::Uuid::new_v4().to_string();
         let context = contexts.and_then(|c| c.get(i));
-        let (page_start, page_end) = page_meta.and_then(|m| m.get(i)).copied().unwrap_or((None, None));
+        let (page_start, page_end) = page_meta
+            .and_then(|m| m.get(i))
+            .copied()
+            .unwrap_or((None, None));
         sqlx::query(
             r#"INSERT INTO rag_chunks (id, document_id, wiki_id, "index", content, embedding, context, page_start, page_end, block_type, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'text', ?10)"#,
         )
@@ -123,14 +126,12 @@ pub async fn insert_chunks(
     }
 
     // Update chunk_count on the document
-    sqlx::query(
-        "UPDATE rag_documents SET chunk_count = ?1, updated_at = ?2 WHERE id = ?3",
-    )
-    .bind(chunks.len() as i32)
-    .bind(now)
-    .bind(doc_id)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("UPDATE rag_documents SET chunk_count = ?1, updated_at = ?2 WHERE id = ?3")
+        .bind(chunks.len() as i32)
+        .bind(now)
+        .bind(doc_id)
+        .execute(&mut *tx)
+        .await?;
 
     tx.commit().await?;
     Ok(chunks.len())
@@ -160,10 +161,7 @@ pub async fn delete_document(db: &Database, doc_id: &str) -> Result<(), AppError
 }
 
 /// List all documents for a wiki.
-pub async fn list_documents(
-    db: &Database,
-    wiki_id: &str,
-) -> Result<Vec<RagDocumentRow>, AppError> {
+pub async fn list_documents(db: &Database, wiki_id: &str) -> Result<Vec<RagDocumentRow>, AppError> {
     let rows = sqlx::query_as::<_, RagDocumentRow>(
         "SELECT id, wiki_id, name, mime_type, size, chunk_count, status, error_msg, file_path, fingerprint, created_at, updated_at FROM rag_documents WHERE wiki_id = ?1 ORDER BY created_at DESC",
     )
@@ -179,12 +177,13 @@ pub async fn find_document_by_path(
     wiki_id: &str,
     file_path: &str,
 ) -> Result<Option<String>, AppError> {
-    let id: Option<String> =
-        sqlx::query_scalar("SELECT id FROM rag_documents WHERE wiki_id = ?1 AND file_path = ?2 LIMIT 1")
-            .bind(wiki_id)
-            .bind(file_path)
-            .fetch_optional(&db.pool)
-            .await?;
+    let id: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM rag_documents WHERE wiki_id = ?1 AND file_path = ?2 LIMIT 1",
+    )
+    .bind(wiki_id)
+    .bind(file_path)
+    .fetch_optional(&db.pool)
+    .await?;
     Ok(id)
 }
 
@@ -207,9 +206,10 @@ pub async fn fingerprint_of_document(
     db: &Database,
     doc_id: &str,
 ) -> Result<Option<String>, AppError> {
-    let fp: Option<String> = sqlx::query_scalar("SELECT fingerprint FROM rag_documents WHERE id = ?1")
-        .bind(doc_id)
-        .fetch_optional(&db.pool)
-        .await?;
+    let fp: Option<String> =
+        sqlx::query_scalar("SELECT fingerprint FROM rag_documents WHERE id = ?1")
+            .bind(doc_id)
+            .fetch_optional(&db.pool)
+            .await?;
     Ok(fp)
 }

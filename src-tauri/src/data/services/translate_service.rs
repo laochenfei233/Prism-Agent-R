@@ -5,7 +5,9 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 use tokio::sync::Semaphore;
 
-use crate::core::adk::model::{ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider};
+use crate::core::adk::model::{
+    ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider,
+};
 use crate::core::rig::provider::OpenAiProvider;
 use crate::data::models::{
     DetectResult, GlossaryTermRow, TranslateHistoryDto, TranslateHistoryResult, TranslateResult,
@@ -25,7 +27,10 @@ pub struct TranslateService {
 
 impl TranslateService {
     /// 传入共享缓存（AppState 持有），保证跨 IPC 调用缓存生效
-    pub fn new(pool: SqlitePool, cache: Arc<tokio::sync::Mutex<HashMap<String, (String, i64)>>>) -> Self {
+    pub fn new(
+        pool: SqlitePool,
+        cache: Arc<tokio::sync::Mutex<HashMap<String, (String, i64)>>>,
+    ) -> Self {
         Self { pool, cache }
     }
 
@@ -85,7 +90,8 @@ impl TranslateService {
         let cleaned = strip_artifacts(&resp.text);
 
         // 5. 写历史 + 缓存
-        self.insert_history(text, &source_lang, target, &cleaned, &display).await?;
+        self.insert_history(text, &source_lang, target, &cleaned, &display)
+            .await?;
         if text.chars().count() <= 500 {
             self.cache_put(&cache_key, cleaned.clone(), now).await;
         }
@@ -131,7 +137,10 @@ impl TranslateService {
             let source = source.map(String::from);
             let target = target.to_string();
             handles.push(tokio::spawn(async move {
-                let _permit = sem.acquire().await.map_err(|_| AppError::Internal("信号量错误".into()))?;
+                let _permit = sem
+                    .acquire()
+                    .await
+                    .map_err(|_| AppError::Internal("信号量错误".into()))?;
                 let svc = TranslateService::new(pool, cache);
                 svc.translate(&t, source.as_deref(), &target, None).await
             }));
@@ -228,9 +237,11 @@ impl TranslateService {
 
     /// 当前翻译模型配置（preferences: translate.model_id）
     pub async fn model_config(&self) -> Result<Option<String>, AppError> {
-        let row = sqlx::query_scalar::<_, String>("SELECT value FROM preferences WHERE key = 'translate.model_id'")
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query_scalar::<_, String>(
+            "SELECT value FROM preferences WHERE key = 'translate.model_id'",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row)
     }
 
@@ -244,7 +255,8 @@ impl TranslateService {
             }
             None => {
                 sqlx::query("DELETE FROM preferences WHERE key = 'translate.model_id'")
-                    .execute(&self.pool).await?;
+                    .execute(&self.pool)
+                    .await?;
             }
         }
         Ok(())
@@ -258,9 +270,10 @@ impl TranslateService {
         limit: i64,
         offset: i64,
     ) -> Result<(Vec<crate::data::models::TranslateHistoryRow>, i64), AppError> {
-        let (rows, total): (Vec<crate::data::models::TranslateHistoryRow>, i64) =
-            if let Some(q) = query {
-                let rows = sqlx::query_as::<_, crate::data::models::TranslateHistoryRow>(
+        let (rows, total): (Vec<crate::data::models::TranslateHistoryRow>, i64) = if let Some(q) =
+            query
+        {
+            let rows = sqlx::query_as::<_, crate::data::models::TranslateHistoryRow>(
                     "SELECT th.id, th.source_text, th.source_lang, th.target_lang, th.translated, th.created_at
                      FROM translate_history th
                      JOIN translate_fts fts ON th.rowid = fts.rowid
@@ -272,32 +285,30 @@ impl TranslateService {
                 .bind(offset)
                 .fetch_all(&self.pool)
                 .await?;
-                // total 必须是 MATCH 命中的行数，而非整表计数（回归：搜索时 total 虚高）
-                let count_row: (i64,) =
-                    sqlx::query_as(
-                        "SELECT COUNT(*) FROM translate_history th
+            // total 必须是 MATCH 命中的行数，而非整表计数（回归：搜索时 total 虚高）
+            let count_row: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM translate_history th
                          JOIN translate_fts fts ON th.rowid = fts.rowid
-                         WHERE translate_fts MATCH ?"
-                    )
-                    .bind(q)
-                    .fetch_one(&self.pool)
-                    .await?;
-                (rows, count_row.0)
-            } else {
-                let rows = sqlx::query_as::<_, crate::data::models::TranslateHistoryRow>(
-                    "SELECT id, source_text, source_lang, target_lang, translated, created_at
+                         WHERE translate_fts MATCH ?",
+            )
+            .bind(q)
+            .fetch_one(&self.pool)
+            .await?;
+            (rows, count_row.0)
+        } else {
+            let rows = sqlx::query_as::<_, crate::data::models::TranslateHistoryRow>(
+                "SELECT id, source_text, source_lang, target_lang, translated, created_at
                      FROM translate_history ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                )
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
+            )
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?;
+            let count_row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM translate_history")
+                .fetch_one(&self.pool)
                 .await?;
-                let count_row: (i64,) =
-                    sqlx::query_as("SELECT COUNT(*) FROM translate_history")
-                        .fetch_one(&self.pool)
-                        .await?;
-                (rows, count_row.0)
-            };
+            (rows, count_row.0)
+        };
         Ok((rows, total))
     }
 
@@ -328,7 +339,11 @@ impl TranslateService {
     }
 
     /// 术语表注入：将启用的术语拼成约束说明
-    async fn glossary_prompt(&self, source_lang: &str, target_lang: &str) -> Result<String, AppError> {
+    async fn glossary_prompt(
+        &self,
+        source_lang: &str,
+        target_lang: &str,
+    ) -> Result<String, AppError> {
         let terms = self.glossary_for_pair(source_lang, target_lang).await?;
         if terms.is_empty() {
             return Ok(String::new());
@@ -337,7 +352,10 @@ impl TranslateService {
         for t in terms {
             lines.push(format!("{} → {}", t.source_term, t.target_term));
         }
-        Ok(format!("必须使用以下术语翻译（术语表）：\n{}\n", lines.join(";\n")))
+        Ok(format!(
+            "必须使用以下术语翻译（术语表）：\n{}\n",
+            lines.join(";\n")
+        ))
     }
 
     /// 模型解析：显式 model_id > preferences 翻译专用 > 默认模型
@@ -367,8 +385,9 @@ impl TranslateService {
             .await?
         };
 
-        let model_row = model_row
-            .ok_or_else(|| AppError::LlmProvider("未配置模型。请在设置中添加 Provider 并设置默认模型。".into()))?;
+        let model_row = model_row.ok_or_else(|| {
+            AppError::LlmProvider("未配置模型。请在设置中添加 Provider 并设置默认模型。".into())
+        })?;
 
         let provider_row = sqlx::query_as::<_, crate::data::models::ProviderRow>(
             "SELECT id, name, kind, base_url, api_key_enc, is_enabled, created_at, updated_at FROM providers WHERE id = ?"
@@ -378,18 +397,21 @@ impl TranslateService {
         .await?
         .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-        let base_url = provider_row.base_url.unwrap_or_else(|| {
-            match provider_row.kind.as_str() {
+        let base_url = provider_row
+            .base_url
+            .unwrap_or_else(|| match provider_row.kind.as_str() {
                 "ollama" => "http://localhost:11434/v1".to_string(),
                 _ => "https://api.openai.com/v1".to_string(),
-            }
-        });
+            });
         let api_key = provider_row
             .api_key_enc
             .as_deref()
             .map(crate::commands::settings::decrypt_provider_key)
             .unwrap_or_default();
-        let display = model_row.display_name.clone().unwrap_or_else(|| model_row.model_id.clone());
+        let display = model_row
+            .display_name
+            .clone()
+            .unwrap_or_else(|| model_row.model_id.clone());
 
         let provider = OpenAiProvider::new(
             model_row.provider_id.clone(),
@@ -404,7 +426,12 @@ impl TranslateService {
 
 // ── 提示词与输出清洗 ──────────────────────────────────────
 
-fn build_translate_prompt(text: &str, source_lang: &str, target_lang: &str, glossary: &str) -> String {
+fn build_translate_prompt(
+    text: &str,
+    source_lang: &str,
+    target_lang: &str,
+    glossary: &str,
+) -> String {
     format!(
         "Translate the following text from {source_lang} to {target_lang}.\n\
          {glossary}\
@@ -441,7 +468,11 @@ pub fn strip_artifacts(text: &str) -> String {
             ('"', '"') | ('\'', '\'') | ('“', '”') | ('‘', '’') | ('「', '」')
         );
         if is_pair {
-            out = chars[1..chars.len() - 1].iter().collect::<String>().trim().to_string();
+            out = chars[1..chars.len() - 1]
+                .iter()
+                .collect::<String>()
+                .trim()
+                .to_string();
         }
     }
 
@@ -468,12 +499,21 @@ fn split_markdown_blocks(content: &str) -> Vec<MdBlock> {
     let mut code_buf = String::new();
     let mut text_buf = String::new();
 
-    let flush = |blocks: &mut Vec<MdBlock>, in_code: &mut bool, code_buf: &mut String, text_buf: &mut String| {
+    let flush = |blocks: &mut Vec<MdBlock>,
+                 in_code: &mut bool,
+                 code_buf: &mut String,
+                 text_buf: &mut String| {
         if !code_buf.is_empty() {
-            blocks.push(MdBlock { kind: BlockKind::Code, text: std::mem::take(code_buf) });
+            blocks.push(MdBlock {
+                kind: BlockKind::Code,
+                text: std::mem::take(code_buf),
+            });
         }
         if !text_buf.is_empty() {
-            blocks.push(MdBlock { kind: BlockKind::Text, text: std::mem::take(text_buf) });
+            blocks.push(MdBlock {
+                kind: BlockKind::Text,
+                text: std::mem::take(text_buf),
+            });
         }
         *in_code = false;
     };
@@ -488,7 +528,10 @@ fn split_markdown_blocks(content: &str) -> Vec<MdBlock> {
             } else {
                 // 代码块开始前先 flush 文本
                 if !text_buf.is_empty() {
-                    blocks.push(MdBlock { kind: BlockKind::Text, text: std::mem::take(&mut text_buf) });
+                    blocks.push(MdBlock {
+                        kind: BlockKind::Text,
+                        text: std::mem::take(&mut text_buf),
+                    });
                 }
                 in_code = true;
                 code_buf.push_str(line);
@@ -507,7 +550,10 @@ fn split_markdown_blocks(content: &str) -> Vec<MdBlock> {
             let level_usize = level as usize;
             if level <= 6 && trimmed.chars().nth(level_usize) == Some(' ') {
                 if !text_buf.is_empty() {
-                    blocks.push(MdBlock { kind: BlockKind::Text, text: std::mem::take(&mut text_buf) });
+                    blocks.push(MdBlock {
+                        kind: BlockKind::Text,
+                        text: std::mem::take(&mut text_buf),
+                    });
                 }
                 blocks.push(MdBlock {
                     kind: BlockKind::Heading { level },
@@ -532,10 +578,7 @@ fn detect_language_simple(text: &str) -> (String, f32) {
     }
 
     let cjk_count = text.chars().filter(|c| is_cjk(*c)).count() as f32;
-    let latin_count = text
-        .chars()
-        .filter(|c| c.is_ascii_alphabetic())
-        .count() as f32;
+    let latin_count = text.chars().filter(|c| c.is_ascii_alphabetic()).count() as f32;
 
     let cjk_ratio = cjk_count / total;
     let latin_ratio = latin_count / total;
@@ -575,7 +618,9 @@ mod tests {
     fn split_blocks_code_and_heading() {
         let md = "# Title\n\ntext here\n\n```rust\nfn main() {}\n```\n\nmore text";
         let blocks = split_markdown_blocks(md);
-        assert!(blocks.iter().any(|b| matches!(b.kind, BlockKind::Heading { level: 1 })));
+        assert!(blocks
+            .iter()
+            .any(|b| matches!(b.kind, BlockKind::Heading { level: 1 })));
         assert!(blocks.iter().any(|b| matches!(b.kind, BlockKind::Code)));
         assert!(blocks.iter().any(|b| matches!(b.kind, BlockKind::Text)));
     }
@@ -620,7 +665,13 @@ mod tests {
         let now = chrono::Utc::now().timestamp_millis();
 
         // 2 条历史：1 条含 "kubernetes"，1 条不含
-        for (i, (src, trans)) in [("hello kubernetes world", "你好 kubernetes 世界"), ("apple pie", "苹果派")].iter().enumerate() {
+        for (i, (src, trans)) in [
+            ("hello kubernetes world", "你好 kubernetes 世界"),
+            ("apple pie", "苹果派"),
+        ]
+        .iter()
+        .enumerate()
+        {
             let id = uuid::Uuid::new_v4().to_string();
             sqlx::query(
                 "INSERT INTO translate_history (id, source_text, source_lang, target_lang, translated, created_at) VALUES (?1, ?2, 'en', 'zh', ?3, ?4)"
@@ -629,7 +680,10 @@ mod tests {
             .execute(&db.pool).await.unwrap();
         }
 
-        let result = svc.history(Some("kubernetes"), Some(10), Some(0)).await.unwrap();
+        let result = svc
+            .history(Some("kubernetes"), Some(10), Some(0))
+            .await
+            .unwrap();
         assert_eq!(result.items.len(), 1, "只应命中 1 条");
         assert_eq!(result.total, 1, "total 必须是命中数而非整表计数");
 

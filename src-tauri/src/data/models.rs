@@ -199,26 +199,6 @@ pub struct SkillDto {
     pub is_enabled: bool,
 }
 
-// ── Workflow ──────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct WorkflowRow {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub definition: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowDto {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub definition: serde_json::Value,
-}
-
 // ── Sidebar types ──
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -354,25 +334,6 @@ pub struct ModelStatus {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct WorkflowSummary {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub stage_count: usize,
-    pub source: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct TaskRunSummary {
-    pub run_id: String,
-    pub workflow_name: String,
-    pub status: String,
-    pub started_at: String,
-    pub finished_at: Option<String>,
-    pub source: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct AgentSummary {
     pub id: String,
     pub name: String,
@@ -394,8 +355,27 @@ pub struct DashboardOverview {
     pub mcp_servers: Vec<McpServerStatus>,
     pub recent_sessions: Vec<SessionSummary>,
     pub models: Vec<ModelStatus>,
-    pub workflows: Vec<WorkflowSummary>,
-    pub task_runs: Vec<TaskRunSummary>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct KanbanCard {
+    pub agent_id: String,
+    pub agent_name: String,
+    pub agent_avatar: Option<String>,
+    pub model_name: Option<String>,
+    pub session_id: Option<String>,
+    pub session_title: Option<String>,
+    pub session_updated_at: Option<i64>,
+    pub lifecycle: String,
+    pub message_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct KanbanData {
+    pub idle: Vec<KanbanCard>,
+    pub running: Vec<KanbanCard>,
+    pub done: Vec<KanbanCard>,
+    pub failed: Vec<KanbanCard>,
 }
 
 // ── RAG ───────────────────────────────────────────────────
@@ -717,9 +697,17 @@ pub struct WikiWritePlan {
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum WikiOp {
     /// 新建页面（path 相对 wiki/ 根）
-    CreatePage { path: String, title: String, content: String },
+    CreatePage {
+        path: String,
+        title: String,
+        content: String,
+    },
     /// 更新现有页面（content 为全文替换）
-    UpdatePage { path: String, content: String, summary: String },
+    UpdatePage {
+        path: String,
+        content: String,
+        summary: String,
+    },
     /// 删除页面（软删除到 .trash/）
     DeletePage { path: String, reason: String },
     /// 追加 index.md 条目

@@ -218,7 +218,8 @@ mod tests {
 
     #[test]
     fn test_item_lifecycle() {
-        let mut item = SessionItem::new(ItemKind::UserMessage, serde_json::json!({"text": "hello"}));
+        let mut item =
+            SessionItem::new(ItemKind::UserMessage, serde_json::json!({"text": "hello"}));
         assert_eq!(item.status, ItemStatus::Started);
 
         item.mark_delta(serde_json::json!({"delta": "world"}));
@@ -233,7 +234,10 @@ mod tests {
         let mut turn = SessionTurn::new();
         assert_eq!(turn.status, TurnStatus::Running);
 
-        turn.add_item(SessionItem::new(ItemKind::UserMessage, serde_json::json!({})));
+        turn.add_item(SessionItem::new(
+            ItemKind::UserMessage,
+            serde_json::json!({}),
+        ));
         assert_eq!(turn.items.len(), 1);
 
         turn.await_approval();

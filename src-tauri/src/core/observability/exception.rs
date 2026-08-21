@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use crate::data::Database;
 use crate::utils::error::AppError;
+use serde::{Deserialize, Serialize};
+use sqlx::Row;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExceptionType {
@@ -53,7 +53,9 @@ impl ExceptionType {
             Self::ModelError { error } => format!("模型错误: {error}"),
             Self::Timeout { duration_secs } => format!("执行超时: {duration_secs}s"),
             Self::ContextOverflow { current, limit } => format!("上下文溢出: {current}/{limit}"),
-            Self::RateLimitExceeded { retry_after } => format!("频率限制, retry_after={:?}", retry_after),
+            Self::RateLimitExceeded { retry_after } => {
+                format!("频率限制, retry_after={:?}", retry_after)
+            }
             Self::PermissionDenied { resource } => format!("权限拒绝: {resource}"),
             Self::ValidationError { field, message } => format!("校验失败 [{field}]: {message}"),
         }
@@ -91,14 +93,19 @@ pub struct ExceptionQuery {
     pub limit: Option<i64>,
 }
 
+pub type ExceptionHook = Box<dyn Fn(&AgentException) + Send + Sync>;
+
 pub struct ExceptionRecorder {
     db: Database,
-    on_exception: Option<Box<dyn Fn(&AgentException) + Send + Sync>>,
+    on_exception: Option<ExceptionHook>,
 }
 
 impl ExceptionRecorder {
     pub fn new(db: Database) -> Self {
-        Self { db, on_exception: None }
+        Self {
+            db,
+            on_exception: None,
+        }
     }
 
     pub fn on_exception<F>(mut self, f: F) -> Self

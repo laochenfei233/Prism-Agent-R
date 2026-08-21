@@ -29,15 +29,23 @@ impl ModelService {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows.into_iter().map(|r| ProviderDto {
-            id: r.id,
-            name: r.name,
-            kind: r.kind,
-            base_url: r.base_url,
-            is_enabled: r.is_enabled != 0,
-            has_key: r.api_key_enc.as_deref().map(str::trim).filter(|s| !s.is_empty()).is_some(),
-            avatar: r.avatar,
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| ProviderDto {
+                id: r.id,
+                name: r.name,
+                kind: r.kind,
+                base_url: r.base_url,
+                is_enabled: r.is_enabled != 0,
+                has_key: r
+                    .api_key_enc
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .is_some(),
+                avatar: r.avatar,
+            })
+            .collect())
     }
 
     pub async fn get_default_model(&self) -> Result<Option<ModelDto>, AppError> {
@@ -61,10 +69,11 @@ impl ModelService {
 
     /// 将该模型所在 provider 下全部模型置为非默认，再将目标模型设为默认（事务）
     pub async fn set_default(&self, id: &str) -> Result<(), AppError> {
-        let provider_id: Option<String> = sqlx::query_scalar("SELECT provider_id FROM models WHERE id = ?")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let provider_id: Option<String> =
+            sqlx::query_scalar("SELECT provider_id FROM models WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
         let Some(provider_id) = provider_id else {
             return Err(AppError::Internal(format!("模型不存在: {id}")));
         };
@@ -80,6 +89,20 @@ impl ModelService {
             .await?;
         tx.commit().await?;
         Ok(())
+    }
+}
+
+impl From<ModelRow> for ModelDto {
+    fn from(r: ModelRow) -> Self {
+        Self {
+            id: r.id,
+            provider_id: r.provider_id,
+            model_id: r.model_id,
+            display_name: r.display_name,
+            kind: r.kind,
+            max_tokens: r.max_tokens,
+            is_default: r.is_default != 0,
+        }
     }
 }
 
@@ -106,7 +129,12 @@ mod tests {
         .unwrap();
     }
 
-    async fn insert_model(pool: &sqlx::SqlitePool, provider_id: &str, model_id: &str, is_default: bool) -> String {
+    async fn insert_model(
+        pool: &sqlx::SqlitePool,
+        provider_id: &str,
+        model_id: &str,
+        is_default: bool,
+    ) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         sqlx::query(
             "INSERT INTO models (id, provider_id, model_id, display_name, kind, max_tokens, is_default, created_at) VALUES (?, ?, ?, ?, 'chat', 8192, ?, ?)"
@@ -169,19 +197,5 @@ mod tests {
         let models = svc.list_models().await.unwrap();
         assert!(!models.iter().any(|m| m.id == id));
         let _ = std::fs::remove_dir_all(&dir);
-    }
-}
-
-impl From<ModelRow> for ModelDto {
-    fn from(r: ModelRow) -> Self {
-        Self {
-            id: r.id,
-            provider_id: r.provider_id,
-            model_id: r.model_id,
-            display_name: r.display_name,
-            kind: r.kind,
-            max_tokens: r.max_tokens,
-            is_default: r.is_default != 0,
-        }
     }
 }
