@@ -4,125 +4,127 @@
 @import './lib/design-system/styles/utilities.css';
 
 :root {
-	font-family: var(--font-sans);
-	color: var(--color-fg);
-	background: var(--color-bg);
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
+  font-family: var(--font-sans);
+  color: var(--color-fg);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-	margin: 0;
-	min-height: 100vh;
+  margin: 0;
+  min-height: 100vh;
 }
 
-*, *::before, *::after {
-	box-sizing: border-box;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 ::selection {
-	background: var(--color-accent);
-	color: #fff;
+  background: var(--color-accent);
+  color: #fff;
 }
 
 *:focus-visible {
-	outline: 2px solid var(--color-focus-ring);
-	outline-offset: 2px;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 /* 触屏/鼠标输入下不显示焦点环，仅键盘导航显示 */
 @media (hover: none) and (pointer: coarse) {
-	:focus-visible {
-		outline: none;
-	}
+  :focus-visible {
+    outline: none;
+  }
 }
 
 ::-webkit-scrollbar {
-	width: 6px;
-	height: 6px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-	background: transparent;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-	background: var(--color-separator);
-	border-radius: 3px;
+  background: var(--color-separator);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: var(--color-border-strong);
+  background: var(--color-border-strong);
 }
 
 /* ══ §11A 无障碍（Accessibility） ═══════════════════════════ */
 
 /* Apple Design: reduced motion ≠ 无反馈，而是更温和的等价替代 */
 @media (prefers-reduced-motion: reduce) {
-	/* 用 opacity cross-fade 替代 slide/spring */
-	.sheet {
-		transition: opacity 200ms ease;
-		transform: none !important;
-	}
-	.modal {
-		animation: none;
-		opacity: 1;
-	}
-	/* 禁用弹性/回弹 */
-	* {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
-		scroll-behavior: auto !important;
-	}
+  /* 用 opacity cross-fade 替代 slide/spring */
+  .sheet {
+    transition: opacity 200ms ease;
+    transform: none !important;
+  }
+  .modal {
+    animation: none;
+    opacity: 1;
+  }
+  /* 禁用弹性/回弹 */
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Apple Design: reduced transparency — 材质变实心 */
 @media (prefers-reduced-transparency: reduce) {
-	.toolbar,
-	.sidebar,
-	.sheet {
-		background: var(--color-bg) !important;
-		backdrop-filter: none !important;
-		-webkit-backdrop-filter: none !important;
-	}
-	.glass {
-		background: var(--color-bg-secondary) !important;
-		backdrop-filter: none !important;
-		-webkit-backdrop-filter: none !important;
-	}
+  .toolbar,
+  .sidebar,
+  .sheet {
+    background: var(--color-bg) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .glass {
+    background: var(--color-bg-secondary) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
 }
 
 /* Apple Design: high contrast — 实心背景 + 明确边框 */
 @media (prefers-contrast: more) {
-	.list-item,
-	.card,
-	.input,
-	textarea,
-	select,
-	.btn-ghost {
-		border: 1px solid var(--color-label, var(--color-fg)) !important;
-	}
-	body {
-		background: var(--color-bg);
-	}
-	:root {
-		--color-separator: var(--color-fg-secondary);
-		--color-border-strong: var(--color-fg);
-	}
+  .list-item,
+  .card,
+  .input,
+  textarea,
+  select,
+  .btn-ghost {
+    border: 1px solid var(--color-label, var(--color-fg)) !important;
+  }
+  body {
+    background: var(--color-bg);
+  }
+  :root {
+    --color-separator: var(--color-fg-secondary);
+    --color-border-strong: var(--color-fg);
+  }
 }
 
 /* 触屏目标最小 44×44pt（iOS 18 标准） */
 @media (pointer: coarse) {
-	button,
-	.icon-btn,
-	.icon-btn-sm,
-	.tab-btn,
-	.list-item,
-	a.nav-link {
-		min-height: 44px;
-		min-width: 44px;
-	}
+  button,
+  .icon-btn,
+  .icon-btn-sm,
+  .tab-btn,
+  .list-item,
+  a.nav-link {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* 键盘焦点环兜底：组件内 outline:none 不得覆盖键盘可达性
@@ -133,6 +135,6 @@ textarea:focus-visible,
 button:focus-visible,
 a:focus-visible,
 [tabindex]:focus-visible {
-	outline: 2px solid var(--color-focus-ring) !important;
-	outline-offset: 2px;
+  outline: 2px solid var(--color-focus-ring) !important;
+  outline-offset: 2px;
 }

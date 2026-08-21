@@ -1,6 +1,7 @@
 <script lang="ts">
-	let { size = 24 }: { size?: number } = $props();
-	let svg = $derived(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" fill="none" viewBox="9 9 102 102" >
+  let { size = 24 }: { size?: number } = $props();
+  let svg =
+    $derived(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" fill="none" viewBox="9 9 102 102" >
       <g clip-path="url(#mistral-i-mistrallight__a)">
         <path fill="#FA500F" d="M89.6379 65.8985H77.7793V77.7222H89.6379V65.8985Z" />
         <path fill="#E10500" d="M101.501 77.718H65.9297V89.5421H101.501V77.718Z" />
@@ -26,6 +27,5 @@
       </defs>
     </svg>`);
 </script>
-
 
 {@html svg}

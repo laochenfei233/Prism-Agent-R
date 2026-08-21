@@ -1,22 +1,22 @@
 <!doctype html>
 <html lang="zh-CN">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
-		<title>Prism Agent</title>
-		<script>
-			// 首帧前应用主题，避免暗色模式闪白（FOUC）
-			try {
-				var saved = localStorage.getItem('prism-theme');
-				var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-				if (dark) document.documentElement.classList.add('dark');
-				document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-			} catch (e) {}
-		</script>
-		%sveltekit.head%
-	</head>
-	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
-	</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <title>Prism Agent</title>
+    <script>
+      // 首帧前应用主题，避免暗色模式闪白（FOUC）
+      try {
+        var saved = localStorage.getItem('prism-theme');
+        var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        if (dark) document.documentElement.classList.add('dark');
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (e) {}
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
 </html>
