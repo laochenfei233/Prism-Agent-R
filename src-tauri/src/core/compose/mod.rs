@@ -97,16 +97,16 @@ pub struct ComposeEngine {
 
 impl Default for ComposeEngine {
     fn default() -> Self {
-        Self::new()
+        Self {
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+            cancels: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 }
 
 impl ComposeEngine {
     pub fn new() -> Self {
-        Self {
-            sessions: Arc::new(Mutex::new(HashMap::new())),
-            cancels: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self::default()
     }
 
     /// Start a new compose session. Returns the initial session state.

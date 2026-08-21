@@ -682,8 +682,8 @@ fn estimate_prompt_len(request: &GenerationRequest) -> usize {
 /// Rough char-based token estimate (~4 chars/token) when the provider
 /// reports no usage in the stream.
 fn estimate_usage(prompt_chars: usize, completion_chars: usize) -> Usage {
-    let prompt_tokens = (prompt_chars as u64).div_ceil(4);
-    let completion_tokens = (completion_chars as u64).div_ceil(4);
+    let prompt_tokens = prompt_chars.div_ceil(4) as u64;
+    let completion_tokens = completion_chars.div_ceil(4) as u64;
     Usage {
         prompt_tokens,
         completion_tokens,
