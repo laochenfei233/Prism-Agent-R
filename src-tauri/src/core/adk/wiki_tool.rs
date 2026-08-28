@@ -63,3 +63,70 @@ impl ToolExecutor for WikiWriteTool {
         }
     }
 }
+
+// ── 对话内工具：wiki_search ──────────────────────────────
+/// Agent 在对话中调用 → WikiService::search_pages 查询已有知识
+pub struct WikiSearchTool {
+    db: Database,
+}
+
+impl WikiSearchTool {
+    pub fn new(db: Database) -> Self {
+        Self { db }
+    }
+}
+
+#[async_trait]
+impl ToolExecutor for WikiSearchTool {
+    fn name(&self) -> &str {
+        "wiki_search"
+    }
+
+    fn description(&self) -> &str {
+        "搜索知识库页面内容，返回匹配页面的路径、标题与内容摘要。参数：wiki_id（知识库 ID）、query（搜索关键词）。"
+    }
+
+    fn schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "wiki_id": { "type": "string", "description": "知识库 ID" },
+                "query": { "type": "string", "description": "搜索关键词" }
+            },
+            "required": ["wiki_id", "query"]
+        })
+    }
+
+    async fn execute(&self, args: serde_json::Value) -> Result<ToolOutput, AgentError> {
+        let wiki_id = args["wiki_id"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidArgs("wiki_search: 缺少 wiki_id".into()))?;
+        let query = args["query"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidArgs("wiki_search: 缺少 query".into()))?;
+        if query.trim().is_empty() {
+            return Ok(ToolOutput::text("query 为空，未执行搜索。".into()));
+        }
+
+        let svc = crate::data::services::wiki_service::WikiService::new(self.db.clone());
+        match svc.search_pages(wiki_id, query).await {
+            Ok(hits) => {
+                if hits.is_empty() {
+                    return Ok(ToolOutput::text(format!(
+                        "知识库 {wiki_id} 中未找到与「{query}」相关的页面"
+                    )));
+                }
+                let lines: Vec<String> = hits
+                    .into_iter()
+                    .map(|h| format!("- {}（标题: {}）\n  {}", h.path, h.title, h.snippet))
+                    .collect();
+                Ok(ToolOutput::text(format!(
+                    "找到 {} 个相关页面:\n{}",
+                    lines.len(),
+                    lines.join("\n")
+                )))
+            }
+            Err(e) => Ok(ToolOutput::text(format!("Wiki 搜索失败：{e}"))),
+        }
+    }
+}

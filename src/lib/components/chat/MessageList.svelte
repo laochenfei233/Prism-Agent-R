@@ -1,18 +1,22 @@
 <script lang="ts">
   import type { MessageDto } from '$lib/api';
+  import type { StreamingToolCall } from '$lib/stores/chat.svelte';
   import MessageBubble from './MessageBubble.svelte';
   import MarkdownViewer from './MarkdownViewer.svelte';
+  import ToolCallCard from './ToolCallCard.svelte';
 
   let {
     messages = [],
     streaming = false,
     streamingText = '',
     streamingReasoningText = '',
+    streamingToolCalls = [],
   }: {
     messages: MessageDto[];
     streaming?: boolean;
     streamingText?: string;
     streamingReasoningText?: string;
+    streamingToolCalls?: StreamingToolCall[];
   } = $props();
 
   let listEl = $state<HTMLElement | null>(null);
@@ -28,6 +32,7 @@
     void messages.length;
     void streamingText;
     void streamingReasoningText;
+    void streamingToolCalls.length;
     const el = listEl;
     if (el && stick) el.scrollTop = el.scrollHeight;
   });
@@ -70,6 +75,13 @@
           {/if}
           {#if !streamingText && !streamingReasoningText}
             <span class="cursor">|</span>
+          {/if}
+          {#if streamingToolCalls.length > 0}
+            <div class="stream-tool-calls">
+              {#each streamingToolCalls as call (call.id)}
+                <ToolCallCard call={call} />
+              {/each}
+            </div>
           {/if}
         </div>
       </div>
@@ -140,6 +152,13 @@
 
   .thinking-section {
     margin-bottom: 8px;
+  }
+
+  .stream-tool-calls {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
   @keyframes blink {

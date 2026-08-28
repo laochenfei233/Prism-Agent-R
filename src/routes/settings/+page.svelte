@@ -258,6 +258,7 @@
       'o4-mini',
       'text-embedding-3-small',
     ],
+    'responses-api': ['gpt-4o', 'o3', 'o4-mini', 'deepseek-v4-flash'],
     ollama: ['llama3.1', 'qwen2.5', 'deepseek-r1', 'gemma2', 'mistral', 'nomic-embed-text'],
     anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-haiku-4-5'],
     google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-embedding-001'],
@@ -282,13 +283,14 @@
   // 供应商预设库（Cherry Studio 风格：选中自动填充名称/Base URL）
   const PROVIDER_PRESETS = [
     { kind: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
-    { kind: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com' },
+    { kind: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1' },
     {
       kind: 'google',
       name: 'Google Gemini',
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     },
     { kind: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com' },
+    { kind: 'responses-api', name: 'Responses API', baseUrl: 'https://api.openai.com/v1' },
     { kind: 'zhipu', name: '智谱', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
     { kind: 'moonshot', name: 'Moonshot AI', baseUrl: 'https://api.moonshot.cn' },
     {

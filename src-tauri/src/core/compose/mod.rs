@@ -14,7 +14,6 @@ use tokio_util::sync::CancellationToken;
 use crate::core::adk::model::{
     ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider,
 };
-use crate::core::rig::provider::OpenAiProvider;
 use crate::data::models::ProviderRow;
 use crate::utils::error::AppError;
 
@@ -43,6 +42,8 @@ pub enum ComposeStatus {
     Verifying,
     Reviewing,
     Completed,
+    /// 用户主动暂停：携带暂停前的阶段名（如 "Brainstorming"）
+    Paused(String),
     Failed(String),
 }
 
@@ -199,9 +200,9 @@ impl ComposeEngine {
             }
         }
 
-        // Store the status to resume from later
+        // 记录暂停前的阶段，resume 时据此恢复
         let paused_status = session.status.clone();
-        session.status = ComposeStatus::Failed(format!("Paused at: {paused_status:?}"));
+        session.status = ComposeStatus::Paused(format!("{paused_status:?}"));
         session.updated_at = chrono::Utc::now().timestamp_millis();
 
         // Cancel the background task
@@ -226,7 +227,7 @@ impl ComposeEngine {
                 .ok_or_else(|| AppError::Internal(format!("Session not found: {session_id}")))?;
 
             match &session.status {
-                ComposeStatus::Failed(msg) if msg.starts_with("Paused at:") => {
+                ComposeStatus::Paused(_) => {
                     // Restore status
                     session.status = ComposeStatus::Brainstorming;
                     session.updated_at = chrono::Utc::now().timestamp_millis();
@@ -358,12 +359,14 @@ async fn create_provider(
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row
-        .base_url
-        .unwrap_or_else(|| match provider_row.kind.as_str() {
-            "ollama" => "http://localhost:11434/v1".to_string(),
-            _ => "https://api.openai.com/v1".to_string(),
-        });
+    let base_url =
+        provider_row
+            .base_url
+            .clone()
+            .unwrap_or_else(|| match provider_row.kind.as_str() {
+                "ollama" => "http://localhost:11434/v1".to_string(),
+                _ => "https://api.openai.com/v1".to_string(),
+            });
 
     let api_key = provider_row
         .api_key_enc
@@ -371,16 +374,12 @@ async fn create_provider(
         .map(crate::commands::settings::decrypt_provider_key)
         .unwrap_or_default();
 
-    Ok(Arc::new(OpenAiProvider::new(
-        model_row.provider_id.clone(),
-        model_row
-            .display_name
-            .clone()
-            .unwrap_or_else(|| model_row.model_id.clone()),
+    Ok(crate::core::rig::provider::build_provider(
+        &provider_row,
+        &model_row,
         api_key,
         base_url,
-        model_row.model_id.clone(),
-    )))
+    ))
 }
 
 async fn llm_generate(

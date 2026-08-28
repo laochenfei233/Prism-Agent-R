@@ -48,12 +48,13 @@ pub enum ToolApprovalResponse {
 
 pub fn assess_risk(tool_name: &str, _args: &serde_json::Value) -> RiskLevel {
     match tool_name {
-        "read_file" | "list_dir" | "glob" | "grep" | "lsp:diagnostics" | "web_search" => {
-            RiskLevel::Low
-        }
-        "write_file" | "edit_file" => RiskLevel::Medium,
-        "delete_file" | "run_command" | "http_request" => RiskLevel::High,
-        "rm_rf" | "database_drop" | "send_message" => RiskLevel::Critical,
+        // 只读 / 搜索类：自动放行
+        "file_read" | "file_list" | "glob" | "grep" | "web_search" | "wiki_search"
+        | "memory_search" | "task_list" => RiskLevel::Low,
+        // 写入已知目录 / 会话内操作：静默记录
+        "file_write" | "edit_file" | "wiki_write" | "memory_save" | "task_create"
+        | "task_update" | "task_delete" => RiskLevel::Medium,
+        // 未知或未注册工具：默认需要审批
         _ => RiskLevel::High,
     }
 }
@@ -138,6 +139,13 @@ impl ToolRegistry {
 
     pub fn register(&mut self, tool: Box<dyn ToolExecutor>) {
         self.tools.push(tool);
+    }
+
+    /// 按名称移除已注册工具（用于 disabled_tools 过滤）。返回是否发生移除。
+    pub fn remove(&mut self, name: &str) -> bool {
+        let before = self.tools.len();
+        self.tools.retain(|t| t.name() != name);
+        self.tools.len() != before
     }
 
     pub fn get(&self, name: &str) -> Option<&dyn ToolExecutor> {

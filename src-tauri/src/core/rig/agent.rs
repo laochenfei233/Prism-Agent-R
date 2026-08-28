@@ -8,6 +8,7 @@ use tauri::Emitter;
 use tokio_util::sync::CancellationToken;
 
 use crate::core::adk::error::AgentError;
+use crate::core::adk::memory::{MemoryStore, MessageExchange};
 use crate::core::adk::model::{
     ChatMessage, ChatRole, GenerationRequest, MessageContent, ModelProvider, StreamEvent, ToolCall,
     ToolOutput, Usage,
@@ -17,6 +18,7 @@ use crate::core::adk::tool::{
     assess_risk, RiskLevel, ToolApprovalRequest, ToolApprovalResponse, ToolApprovalStore,
     ToolExecutor, ToolRegistry,
 };
+use crate::core::rig::compaction::Compactor;
 use crate::core::rig::compaction::{estimate_tokens, pressure_level, soft_trim};
 use crate::core::rig::guardrails::{FilterResult, GuardrailPipeline};
 use crate::core::rig::reflection::{run_reflection_loop, ReflectionConfig};
@@ -29,6 +31,18 @@ use crate::mcp::McpRuntime;
 pub type DeltaCallback = Arc<dyn Fn(&str) + Send + Sync>;
 /// Streamed tool-call callback.
 pub type ToolCallCallback = Arc<dyn Fn(&ToolCall) + Send + Sync>;
+/// Tool execution-result callback (call_id, tool_name, output).
+pub type ToolResultCallback = Arc<dyn Fn(&str, &str, &ToolOutput) + Send + Sync>;
+
+/// 已启用技能的路由条目 + 内容（用于 build_router 索引与按轮注入）
+#[derive(Debug, Clone)]
+pub struct AgentSkill {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub content: String,
+    pub keywords: Vec<String>,
+}
 
 pub struct RigAgent {
     pub model_provider: Arc<dyn ModelProvider>,
@@ -51,6 +65,14 @@ pub struct RigAgent {
     pub on_reasoning: Option<DeltaCallback>,
     /// Invoked for every streamed tool call.
     pub on_tool_call: Option<ToolCallCallback>,
+    /// Invoked after each tool execution (call_id, tool name, output).
+    pub on_tool_result: Option<ToolResultCallback>,
+    /// 记忆系统：运行前注入上下文，完成后自动记录。
+    pub memory: Option<Arc<dyn MemoryStore>>,
+    /// 长会话摘要压缩器（超过阈值时压缩历史）。
+    pub compaction: Option<Compactor>,
+    /// 已启用技能（用于路由索引 + 按轮动态注入）。
+    pub skills: Vec<AgentSkill>,
     /// Optional MCP runtime; enables MCP tool fallback when a tool is not in the registry.
     pub mcp_runtime: Option<Arc<McpRuntime>>,
     /// L1 input guardrails (prompt injection / length limits).
@@ -92,6 +114,10 @@ impl RigAgent {
             on_delta: None,
             on_reasoning: None,
             on_tool_call: None,
+            on_tool_result: None,
+            memory: None,
+            compaction: None,
+            skills: Vec::new(),
             mcp_runtime: None,
             guardrails: None,
             router: None,
@@ -133,6 +159,29 @@ impl RigAgent {
 
     pub fn with_on_tool_call(mut self, cb: impl Fn(&ToolCall) + Send + Sync + 'static) -> Self {
         self.on_tool_call = Some(Arc::new(cb));
+        self
+    }
+
+    pub fn with_on_tool_result(
+        mut self,
+        cb: impl Fn(&str, &str, &ToolOutput) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_tool_result = Some(Arc::new(cb));
+        self
+    }
+
+    pub fn with_memory(mut self, memory: Arc<dyn MemoryStore>) -> Self {
+        self.memory = Some(memory);
+        self
+    }
+
+    pub fn with_compaction(mut self, compactor: Compactor) -> Self {
+        self.compaction = Some(compactor);
+        self
+    }
+
+    pub fn with_skills(mut self, skills: Vec<AgentSkill>) -> Self {
+        self.skills = skills;
         self
     }
 
@@ -205,6 +254,25 @@ impl RigAgent {
             }
         }
 
+        // ── 记忆上下文注入（全局/项目记忆 → 追加到 system prompt） ──
+        let mut system_prompt = self.system_prompt.clone();
+        if let Some(memory) = &self.memory {
+            let session_id = self.session_id.clone().unwrap_or_default();
+            let agent_id = self.agent_id.clone().unwrap_or_default();
+            match memory.build_context(&session_id, &agent_id).await {
+                Ok(ctx) => {
+                    if !ctx.summary.trim().is_empty() {
+                        system_prompt.push_str(&format!("\n\n---\n# 记忆上下文\n{}", ctx.summary));
+                    }
+                    for item in &ctx.items {
+                        system_prompt
+                            .push_str(&format!("\n\n[记忆: {}]\n{}", item.path, item.body));
+                    }
+                }
+                Err(e) => tracing::warn!("memory context build failed: {e}"),
+            }
+        }
+
         for _ in 0..self.max_iterations {
             if self.is_cancelled() {
                 return Err(AgentError::Internal("生成已中止".into()));
@@ -212,14 +280,43 @@ impl RigAgent {
 
             let iter_started = Instant::now();
 
-            // Build full request with system prompt
-            let mut req = current.clone();
-            if !self.system_prompt.is_empty() {
-                req.system = Some(self.system_prompt.clone());
+            // ── 长会话压缩（超过触发阈值时先用摘要替换历史） ──
+            if let Some(compactor) = &self.compaction {
+                let history_json = serde_json::to_string(&current.messages).unwrap_or_default();
+                let current_tokens = estimate_tokens(&history_json) + system_prompt.len() / 4;
+                if compactor.needs_compaction(current_tokens) && current.messages.len() > 6 {
+                    match compactor
+                        .compact(self.model_provider.as_ref(), &current.messages)
+                        .await
+                    {
+                        Ok(compacted) => {
+                            tracing::info!(
+                                "session {}: compacted {} messages -> {}",
+                                self.session_id.as_deref().unwrap_or("-"),
+                                current.messages.len(),
+                                compacted.len()
+                            );
+                            current.messages = compacted;
+                        }
+                        Err(e) => tracing::warn!("compaction failed: {e}"),
+                    }
+                }
             }
 
-            // ── 工具路由注入（只暴露 top-N 相关工具） ──
-            req.tools = self.routed_tool_specs(&current);
+            // Build full request with system prompt
+            let mut req = current.clone();
+            if !system_prompt.is_empty() {
+                req.system = Some(system_prompt.clone());
+            }
+
+            // ── 工具路由注入（只暴露 top-N 相关工具 + 命中技能动态注入） ──
+            let (tool_specs, skill_section) =
+                self.routed_tool_specs(&current, req.system.as_deref().unwrap_or(""));
+            req.tools = tool_specs;
+            if !skill_section.is_empty() {
+                let base = req.system.clone().unwrap_or_default();
+                req.system = Some(format!("{base}\n{skill_section}"));
+            }
 
             // Generate
             let mut handle = self.model_provider.stream(req).await?;
@@ -318,6 +415,22 @@ impl RigAgent {
                     final_text.clone()
                 };
 
+                // ── 记忆记录（完成后将本轮 user/assistant 交换追加到会话记忆） ──
+                if let (Some(memory), Some(session_id)) = (&self.memory, &self.session_id) {
+                    let exchange = MessageExchange {
+                        user_message: last_user_text(&current),
+                        assistant_message: text.clone(),
+                    };
+                    let agent_id = self.agent_id.clone().unwrap_or_default();
+                    let sid = session_id.clone();
+                    let mem = memory.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = mem.record(&sid, &agent_id, exchange).await {
+                            tracing::warn!("memory record failed: {e}");
+                        }
+                    });
+                }
+
                 let usage = total_usage
                     .clone()
                     .or_else(|| Some(estimate_usage(prompt_len, total_text_len)));
@@ -356,6 +469,10 @@ impl RigAgent {
                 let started = Instant::now();
                 let output = self.execute_tool(call).await;
                 let latency = started.elapsed().as_millis() as u64;
+                // ── 工具结果事件（供前端 ToolCallCard 展示） ──
+                if let Some(cb) = &self.on_tool_result {
+                    cb(&call.id, &call.name, &output);
+                }
                 steps.push(TraceStep {
                     step_index: steps.len() as u32,
                     kind: "tool_call".into(),
@@ -412,35 +529,65 @@ impl RigAgent {
         Err(AgentError::MaxIterations)
     }
 
-    /// Router-filtered tool specs: top-N by BM25 over the latest user message.
-    /// Falls back to all specs when no router is configured or nothing matched.
+    /// Router-filtered tool specs + 命中技能内容注入。
+    ///
+    /// 返回 (工具 specs, 本轮需追加到 system prompt 的技能内容)。
+    /// 无 router 时返回全部工具；未匹配任何工具时回退全部工具。
+    /// 已在基础 system prompt 中注入过的技能（含 `<!-- skill:<id> -->` 标记）跳过，避免重复。
     fn routed_tool_specs(
         &self,
         request: &GenerationRequest,
-    ) -> Vec<crate::core::adk::model::ToolSpec> {
+        system_prompt: &str,
+    ) -> (Vec<crate::core::adk::model::ToolSpec>, String) {
         let Some(router) = &self.router else {
-            return self.tools.specs();
+            return (self.tools.specs(), String::new());
         };
         let query = last_user_text(request);
         let top_k = 8usize;
-        let RouteResult { tools, .. } = router.route(&query, 3, top_k);
+        let RouteResult { skills, tools, .. } = router.route(&query, 3, top_k);
         let names: HashSet<String> = tools.iter().map(|t| t.id.clone()).collect();
         let filtered = self.tools.specs_filtered(&names);
-        if filtered.is_empty() {
+        let specs = if filtered.is_empty() {
             self.tools.specs()
         } else {
             filtered
+        };
+
+        // ── 命中技能动态注入 ──
+        let mut skill_section = String::new();
+        for skill in &skills {
+            let marker = format!("<!-- skill:{} -->", skill.id);
+            if system_prompt.contains(&marker) {
+                continue;
+            }
+            if let Some(agent_skill) = self.skills.iter().find(|s| s.id == skill.id) {
+                skill_section.push_str(&format!(
+                    "\n---\n# Skill: {}\n{}\n<!-- skill:{} -->",
+                    agent_skill.name, agent_skill.content, agent_skill.id
+                ));
+            }
         }
+        (specs, skill_section)
     }
 
-    /// Build a router index from the current tool registry (call after registering tools).
+    /// Build a router index from the current tool registry + enabled skills
+    /// (call after registering tools & skills).
     pub fn build_router(&self, _top_k_tools: usize) -> ToolRouter {
         let mut router = ToolRouter::new();
-        let items: Vec<RouteItem> = self
-            .tools
-            .tool_names()
-            .into_iter()
-            .map(|name| RouteItem {
+        let mut items: Vec<RouteItem> = self
+            .skills
+            .iter()
+            .map(|s| RouteItem {
+                id: s.id.clone(),
+                kind: RouteKind::Skill,
+                name: s.name.clone(),
+                description: s.description.clone(),
+                keywords: s.keywords.clone(),
+                server_id: None,
+            })
+            .collect();
+        items.extend(self.tools.tool_names().into_iter().map(|name| {
+            RouteItem {
                 id: name.clone(),
                 kind: RouteKind::McpTool,
                 name: name.clone(),
@@ -451,8 +598,8 @@ impl RigAgent {
                     .unwrap_or_default(),
                 keywords: keywordize(&name),
                 server_id: None,
-            })
-            .collect();
+            }
+        }));
         router.refresh(items);
         router
     }
@@ -538,9 +685,7 @@ impl RigAgent {
                         .call_tool(&server_id, &call.name, call.arguments.clone())
                         .await
                     {
-                        Ok(result) => {
-                            ToolOutput::text(serde_json::to_string(&result).unwrap_or_default())
-                        }
+                        Ok(result) => mcp_result_text(result),
                         Err(e) => ToolOutput::error(format!("MCP tool error: {e}")),
                     },
                     None => ToolOutput::error(format!("Unknown tool: {}", call.name)),
@@ -598,9 +743,19 @@ impl ToolExecutor for McpToolExecutor {
             .call_tool(&self.server_id, &self.tool_name, args)
             .await
             .map_err(|e| AgentError::Tool(format!("MCP tool error: {e}")))?;
-        Ok(ToolOutput::text(
-            serde_json::to_string(&result).unwrap_or_default(),
-        ))
+        Ok(mcp_result_text(result))
+    }
+}
+
+/// 提取 MCP 调用结果中的纯文本（`{"text": "..."}`），
+/// 替代直接序列化整个结果 JSON，避免纯文本 provider 收到包装结构。
+fn mcp_result_text(result: serde_json::Value) -> ToolOutput {
+    match result.get("text").and_then(|t| t.as_str()) {
+        Some(text) if !text.trim().is_empty() => ToolOutput::text(text.to_string()),
+        _ => ToolOutput::text(format!(
+            "[MCP 返回非文本内容，已降级为 JSON]\n{}",
+            serde_json::to_string_pretty(&result).unwrap_or_default()
+        )),
     }
 }
 

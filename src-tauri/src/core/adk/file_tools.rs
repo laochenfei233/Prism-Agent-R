@@ -177,6 +177,89 @@ impl ToolExecutor for FileWriteTool {
     }
 }
 
+// ── File Edit Tool（精准行级编辑） ────────────────────────
+
+pub struct FileEditTool;
+
+#[async_trait]
+impl ToolExecutor for FileEditTool {
+    fn name(&self) -> &str {
+        "edit_file"
+    }
+
+    fn description(&self) -> &str {
+        "对本地文件做精准编辑：将文件中出现的 old_string 精确替换为 new_string（默认只替换第一处）。参数：path（文件路径）、old_string（原始文本，须在文件中出现）、new_string（替换后的新文本）、replace_all（可选，是否替换全部出现处）。"
+    }
+
+    fn schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "文件路径" },
+                "old_string": { "type": "string", "description": "要替换的原始文本" },
+                "new_string": { "type": "string", "description": "替换后的新文本" },
+                "replace_all": { "type": "boolean", "default": false, "description": "替换全部出现处（默认仅第一处）" }
+            },
+            "required": ["path", "old_string", "new_string"]
+        })
+    }
+
+    async fn execute(&self, args: serde_json::Value) -> Result<ToolOutput, AgentError> {
+        let path = args["path"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidArgs("edit_file: 缺少 path".into()))?;
+        let old_string = args["old_string"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidArgs("edit_file: 缺少 old_string".into()))?;
+        let new_string = args["new_string"]
+            .as_str()
+            .ok_or_else(|| AgentError::InvalidArgs("edit_file: 缺少 new_string".into()))?;
+        let replace_all = args["replace_all"].as_bool().unwrap_or(false);
+
+        let path = Path::new(path);
+        if !path.exists() {
+            return Ok(ToolOutput::error(format!("文件不存在: {}", path.display())));
+        }
+        if !path.is_file() {
+            return Ok(ToolOutput::error(format!("不是文件: {}", path.display())));
+        }
+        if old_string.is_empty() {
+            return Ok(ToolOutput::error("old_string 不能为空".to_string()));
+        }
+
+        let content = tokio::fs::read_to_string(path).await?;
+        let occurrences = content.matches(old_string).count();
+        if occurrences == 0 {
+            return Ok(ToolOutput::error(format!(
+                "old_string 在文件中未找到，请先 file_read 确认内容后再编辑。路径: {}",
+                path.display()
+            )));
+        }
+        if occurrences > 1 && !replace_all {
+            return Ok(ToolOutput::error(format!(
+                "old_string 在文件中出现 {} 次，请提供更长的唯一片段，或设置 replace_all=true。",
+                occurrences
+            )));
+        }
+
+        let updated = if replace_all {
+            content.replace(old_string, new_string)
+        } else {
+            content.replacen(old_string, new_string, 1)
+        };
+
+        match tokio::fs::write(path, &updated).await {
+            Ok(()) => Ok(ToolOutput::text(format!(
+                "已更新 {}（替换 {} 处，变更 {} 字符）",
+                path.display(),
+                occurrences,
+                updated.len() as i64 - content.len() as i64
+            ))),
+            Err(e) => Ok(ToolOutput::error(format!("写入失败: {e}"))),
+        }
+    }
+}
+
 // ── File List Tool ────────────────────────────────────────
 
 pub struct FileListTool;

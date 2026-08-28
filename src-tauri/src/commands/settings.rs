@@ -336,6 +336,8 @@ pub async fn model_fetch_available(
         .base_url
         .unwrap_or_else(|| match provider.kind.as_str() {
             "ollama" => "http://localhost:11434/v1".to_string(),
+            "responses-api" => "https://api.openai.com/v1".to_string(),
+            "anthropic" => "https://api.anthropic.com/v1".to_string(),
             _ => "https://api.openai.com/v1".to_string(),
         });
 

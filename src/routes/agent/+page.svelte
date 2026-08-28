@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '$lib/api/client';
-  import { agentApi, type SessionDto } from '$lib/api';
+  import { agentApi, sessionLifecycleApi, type SessionDto } from '$lib/api';
   import { agentStore } from '$lib/stores/agents.svelte';
   import { chatStore } from '$lib/stores/chat.svelte';
 
@@ -13,6 +13,7 @@
   let newAgentName = $state('');
   let showNewAgent = $state(false);
   let models = $state<ModelOption[]>([]);
+  let initStatus = $state<'idle' | 'initializing' | 'ok' | 'degraded' | 'failed'>('idle');
 
   $effect(() => {
     agentStore.loadAgents();
@@ -54,9 +55,31 @@
     }
   }
 
-  function handleSelectSession(session: SessionDto) {
+  async function handleSelectSession(session: SessionDto) {
     agentStore.selectSession(session);
     chatStore.loadHistory(session.id);
+    // 切换会话时初始化会话生命周期（§17.1）：Provider / 记忆 / MCP 探测
+    initStatus = 'initializing';
+    try {
+      const report = await sessionLifecycleApi.init(session.id);
+      initStatus =
+        report.provider_ok && report.memory_ok && report.mcp_ok
+          ? 'ok'
+          : 'degraded';
+      if (initStatus === 'degraded') {
+        const problems = [
+          !report.provider_ok && (report.provider_error ?? 'Provider 不可用'),
+          !report.memory_ok && (report.memory_error ?? '记忆不可用'),
+          !report.mcp_ok && (report.mcp_error ?? 'MCP 不可用'),
+        ]
+          .filter(Boolean)
+          .join('；');
+        console.warn(`会话初始化降级: ${problems}`);
+      }
+    } catch (e) {
+      console.error('会话初始化失败:', e);
+      initStatus = 'failed';
+    }
   }
 
   async function handleSend(content: string, attachments?: string[]) {
@@ -209,6 +232,15 @@
       <div class="header-info">
         <h2>{agentStore.currentAgent?.name || 'Agent'}</h2>
         <span class="session-name">{agentStore.currentSession?.title || '选择或新建会话'}</span>
+        {#if initStatus === 'initializing'}
+          <span class="init-badge init-running">初始化中…</span>
+        {:else if initStatus === 'degraded'}
+          <span class="init-badge init-degraded" title="部分组件初始化失败，详见控制台">部分降级</span>
+        {:else if initStatus === 'failed'}
+          <span class="init-badge init-failed">初始化失败</span>
+        {:else if initStatus === 'ok'}
+          <span class="init-badge init-ok">就绪</span>
+        {/if}
       </div>
       <div class="header-spacer"></div>
       <ModelSelector
@@ -224,6 +256,7 @@
         streaming={chatStore.streaming}
         streamingText={chatStore.streamingText}
         streamingReasoningText={chatStore.streamingReasoningText}
+        streamingToolCalls={chatStore.streamingToolCalls}
       />
       <Composer
         disabled={chatStore.isGenerating}
@@ -456,6 +489,30 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .init-badge {
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 18px;
+    white-space: nowrap;
+    border: 1px solid var(--color-separator);
+    color: var(--color-fg-secondary);
+    background: var(--color-bg-secondary);
+  }
+  .init-badge.init-running {
+    color: var(--color-accent);
+  }
+  .init-badge.init-ok {
+    color: var(--color-green);
+  }
+  .init-badge.init-degraded {
+    color: var(--color-orange, #d97706);
+  }
+  .init-badge.init-failed {
+    color: var(--color-red);
   }
   .header-spacer {
     flex: 1;

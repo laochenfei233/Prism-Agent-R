@@ -26,6 +26,7 @@
     mimo: Mimo,
     ollama: Ollama,
     deepseek: Deepseek,
+    'responses-api': Openai,
     zhipu: Zhipu,
     moonshot: Moonshot,
     doubao: Doubao,

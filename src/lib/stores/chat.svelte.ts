@@ -1,11 +1,20 @@
 import { chatApi, streamEvents, type MessageDto } from '$lib/api';
 import { invoke } from '$lib/api/client';
 
+export interface StreamingToolCall {
+  id: string;
+  name: string;
+  argumentsText: string;
+  status: 'running' | 'done' | 'error';
+  output?: string;
+}
+
 class ChatStore {
   messages = $state<MessageDto[]>([]);
   streaming = $state(false);
   streamingText = $state('');
   streamingReasoningText = $state('');
+  streamingToolCalls = $state<StreamingToolCall[]>([]);
   isGenerating = $state(false);
   private unsubs: (() => void)[] = [];
   // Throttle: deltas accumulate here and flush to streamingText at most once
@@ -74,6 +83,7 @@ class ChatStore {
     this.streaming = true;
     this.streamingText = '';
     this.streamingReasoningText = '';
+    this.streamingToolCalls = [];
 
     // Subscribe to stream events
     this.cleanup();
@@ -88,11 +98,35 @@ class ChatStore {
         this.scheduleFlush();
       }),
       streamEvents.onToolCall(sessionId, (call) => {
-        console.log('Tool call:', call);
+        const argsText =
+          typeof call.arguments === 'string'
+            ? call.arguments
+            : JSON.stringify(call.arguments ?? {}, null, 2);
+        this.streamingToolCalls = [
+          ...this.streamingToolCalls,
+          {
+            id: call.id,
+            name: call.name,
+            argumentsText: argsText,
+            status: 'running',
+          },
+        ];
+      }),
+      streamEvents.onToolResult(sessionId, (result) => {
+        this.streamingToolCalls = this.streamingToolCalls.map((c) =>
+          c.id === result.call_id
+            ? {
+                ...c,
+                status: result.is_error ? 'error' : 'done',
+                output: result.output,
+              }
+            : c,
+        );
       }),
       streamEvents.onDone(sessionId, () => {
         // Flush buffered deltas so the final chunk renders before reset.
         this.flushNow();
+        this.streamingToolCalls = [];
         // Reload history to get the assistant message from server
         this.loadHistory(sessionId);
         this.streaming = false;
@@ -104,6 +138,7 @@ class ChatStore {
       streamEvents.onError(sessionId, (message) => {
         console.error('Stream error:', message);
         this.flushNow();
+        this.streamingToolCalls = [];
         this.streaming = false;
         this.isGenerating = false;
         this.streamingText = '';
@@ -133,6 +168,7 @@ class ChatStore {
     this.isGenerating = false;
     this.streamingText = '';
     this.streamingReasoningText = '';
+    this.streamingToolCalls = [];
   }
 }
 

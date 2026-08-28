@@ -251,6 +251,37 @@ impl MemoryService {
         Ok(())
     }
 
+    /// 追加一条记忆条目到 global/projects/<name>/MEMORY.md，并重建该文件 FTS 索引。
+    /// 返回写入的文件路径。
+    pub async fn append_entry(
+        &self,
+        scope: &str,
+        project: Option<&str>,
+        content: &str,
+    ) -> Result<String, AppError> {
+        let dir = match scope {
+            "project" => self
+                .base_dir
+                .join("projects")
+                .join(project.unwrap_or("default")),
+            _ => self.base_dir.join("global"),
+        };
+        let path = dir.join("MEMORY.md");
+        tokio::fs::create_dir_all(&dir).await?;
+
+        let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let entry = format!("\n### {timestamp}\n{content}\n");
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .await?;
+        file.write_all(entry.as_bytes()).await?;
+
+        self.index_file(&path).await?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+
     /// 获取当前注入的记忆上下文（用于调试）
     pub async fn context_dump(&self) -> Result<Vec<MemoryDump>, AppError> {
         let mut dumps = Vec::new();

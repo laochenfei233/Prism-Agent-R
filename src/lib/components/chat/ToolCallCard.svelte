@@ -5,6 +5,7 @@
     argumentsText: string;
     status?: string;
     durationMs?: number;
+    output?: string;
   }
 
   let { call }: { call: unknown } = $props();
@@ -22,7 +23,14 @@
     const args = fn.arguments;
     if (typeof args === 'string') argumentsText = args;
     else if (args && typeof args === 'object') argumentsText = JSON.stringify(args, null, 2);
+    else if (typeof fn.argumentsText === 'string') argumentsText = fn.argumentsText;
     const status = typeof c.status === 'string' ? c.status : undefined;
+    let output: string | undefined;
+    const rawOutput = c.output ?? c.result;
+    if (typeof rawOutput === 'string') output = rawOutput;
+    else if (rawOutput && typeof rawOutput === 'object') {
+      output = JSON.stringify(rawOutput, null, 2);
+    }
     let durationMs: number | undefined;
     if (typeof c.duration_ms === 'number') durationMs = c.duration_ms;
     else if (typeof c.duration_ms === 'string') durationMs = Number(c.duration_ms);
@@ -34,6 +42,7 @@
       argumentsText,
       status,
       durationMs: durationMs && !Number.isNaN(durationMs) ? durationMs : undefined,
+      output,
     };
   }
 
@@ -41,7 +50,9 @@
 
   function statusLabel(): string {
     const s = info?.status;
-    if (!s) return '已完成';
+    if (!s || s === 'done' || s === 'completed') return '已完成';
+    if (s === 'running' || s === 'pending') return '执行中';
+    if (s === 'error' || s === 'failed') return '失败';
     return s;
   }
 </script>
@@ -75,16 +86,27 @@
         </svg>
       </span>
       <span class="tool-name">{info.name}</span>
+      {#if info.status === 'running'}
+        <span class="tool-running">…</span>
+      {/if}
       {#if info.durationMs !== undefined}
         <span class="tool-duration">{info.durationMs}ms</span>
       {/if}
-      <span class="tool-status"><span class="dot"></span>{statusLabel()}</span>
+      <span class="tool-status" class:error={info.status === 'error'} class:running={info.status === 'running'}>
+        <span class="dot"></span>{statusLabel()}
+      </span>
       <span class="tool-chevron" class:expanded>{expanded ? '▾' : '▸'}</span>
     </div>
     {#if expanded}
       <div class="tool-args">
         <pre>{info.argumentsText}</pre>
       </div>
+      {#if info.output !== undefined}
+        <div class="tool-result">
+          <div class="tool-result-label">{info.status === 'error' ? '错误' : '返回'}</div>
+          <pre>{info.output}</pre>
+        </div>
+      {/if}
     {/if}
   </div>
 {/if}
@@ -134,6 +156,26 @@
     white-space: nowrap;
   }
 
+  .tool-status.error {
+    color: var(--color-red);
+  }
+  .tool-status.error .dot {
+    background: var(--color-red);
+  }
+
+  .tool-status.running {
+    color: var(--color-fg-secondary);
+  }
+  .tool-status.running .dot {
+    background: var(--color-accent);
+    animation: pulse 1s infinite;
+  }
+
+  .tool-running {
+    color: var(--color-accent);
+    font-weight: var(--font-weight-bold);
+  }
+
   .dot {
     width: 6px;
     height: 6px;
@@ -171,5 +213,38 @@
     word-break: break-word;
     max-height: 200px;
     overflow-y: auto;
+  }
+
+  .tool-result {
+    padding: 8px 10px;
+    border-top: 1px solid var(--color-separator);
+    background: var(--color-bg);
+  }
+
+  .tool-result-label {
+    font-size: var(--text-caption2);
+    color: var(--color-fg-tertiary);
+    margin-bottom: 4px;
+  }
+
+  .tool-result pre {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-fg-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.4;
+    }
   }
 </style>

@@ -91,6 +91,15 @@ export interface StreamToolCall {
   call: { id: string; name: string; arguments: unknown };
 }
 
+export interface StreamToolResult {
+  session_id: string;
+  message_id: string;
+  call_id: string;
+  tool_name: string;
+  output: string;
+  is_error: boolean;
+}
+
 export interface StreamDone {
   session_id: string;
   message_id: string;
@@ -115,6 +124,10 @@ export const streamEvents = {
   onToolCall: (sessionId: string, handler: (call: StreamToolCall['call']) => void) =>
     listen<StreamToolCall>('chat:stream:tool_call', (e) => {
       if (e.session_id === sessionId) handler(e.call);
+    }),
+  onToolResult: (sessionId: string, handler: (result: StreamToolResult) => void) =>
+    listen<StreamToolResult>('chat:stream:tool_result', (e) => {
+      if (e.session_id === sessionId) handler(e);
     }),
   onDone: (sessionId: string, handler: () => void) =>
     listen<StreamDone>('chat:stream:done', (e) => {

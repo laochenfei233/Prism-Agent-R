@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use tauri::{Emitter, State};
 use tokio_util::sync::CancellationToken;
 
@@ -7,10 +6,10 @@ use crate::core::adk::model::GenerationRequest;
 use crate::core::adk::tool::{ToolApprovalResponse, ToolRegistry};
 use crate::core::rig::agent::{McpToolExecutor, RigAgent};
 use crate::core::rig::guardrails::GuardrailPipeline;
-use crate::core::rig::provider::OpenAiProvider;
-use crate::data::models::{MessageDto, ProviderRow};
+use crate::core::rig::provider::build_provider;
+use crate::data::models::{AgentDto, MessageDto, ProviderRow};
 use crate::data::services::trace_service::{AgentTrace, TraceService};
-use crate::data::services::ChatService;
+use crate::data::services::{ChatService, MemoryService};
 use crate::utils::error::AppError;
 
 #[tauri::command]
@@ -117,12 +116,14 @@ pub async fn chat_send(
     .await?
     .ok_or_else(|| AppError::LlmProvider(format!("Provider not found: {}", model_row.provider_id)))?;
 
-    let base_url = provider_row
-        .base_url
-        .unwrap_or_else(|| match provider_row.kind.as_str() {
-            "ollama" => "http://localhost:11434/v1".to_string(),
-            _ => "https://api.openai.com/v1".to_string(),
-        });
+    let base_url =
+        provider_row
+            .base_url
+            .clone()
+            .unwrap_or_else(|| match provider_row.kind.as_str() {
+                "ollama" => "http://localhost:11434/v1".to_string(),
+                _ => "https://api.openai.com/v1".to_string(),
+            });
 
     let api_key = provider_row
         .api_key_enc
@@ -148,22 +149,34 @@ pub async fn chat_send(
         });
     }
 
-    let system_prompt = agent_row
-        .system_prompt
-        .clone()
-        .unwrap_or_else(|| "你是一个有用的 AI 助手。请用中文回答用户的问题。".to_string());
+    // 5.5 查询启用技能 + 组装 AgentDto（PromptBuilder / disabled_tools / 技能路由共用）
+    let enabled_skills = {
+        let svc = crate::data::services::SkillService::new(state.db.clone());
+        svc.enabled_skills(&session_row.agent_id)
+            .await
+            .unwrap_or_default()
+    };
+    let agent_dto = AgentDto {
+        id: agent_row.id.clone(),
+        name: agent_row.name.clone(),
+        description: agent_row.description.clone(),
+        avatar: agent_row.avatar.clone(),
+        system_prompt: agent_row.system_prompt.clone(),
+        model_id: agent_row.model_id.clone(),
+        temperature: agent_row.temperature,
+        max_tokens: agent_row.max_tokens,
+        disabled_tools: serde_json::from_str(&agent_row.disabled_tools).unwrap_or_default(),
+        order_key: agent_row.order_key,
+    };
 
-    // 6. Create provider and agent
-    let provider = Arc::new(OpenAiProvider::new(
-        model_row.provider_id.clone(),
-        model_row
-            .display_name
-            .clone()
-            .unwrap_or_else(|| model_row.model_id.clone()),
-        api_key,
-        base_url,
-        model_row.model_id.clone(),
-    ));
+    // 6. Create provider and agent (dispatch by provider kind)
+    let provider = build_provider(&provider_row, &model_row, api_key, base_url);
+
+    // 7. System prompt：PromptBuilder 注入技能 + 项目/全局记忆
+    let prompt_builder = crate::core::adk::PromptBuilder::new(state.db.clone());
+    let system_prompt = prompt_builder
+        .build_system_prompt(&agent_dto, &session_id, &enabled_skills)
+        .await?;
 
     let message_id = uuid::Uuid::new_v4().to_string();
     let cancel = CancellationToken::new();
@@ -220,6 +233,24 @@ pub async fn chat_send(
         );
     };
 
+    let result_app = app.clone();
+    let result_sid = session_id.clone();
+    let result_mid = message_id.clone();
+    let on_tool_result =
+        move |call_id: &str, tool_name: &str, output: &crate::core::adk::model::ToolOutput| {
+            let _ = result_app.emit(
+                "chat:stream:tool_result",
+                serde_json::json!({
+                    "session_id": result_sid,
+                    "message_id": result_mid,
+                    "call_id": call_id,
+                    "tool_name": tool_name,
+                    "output": output.content,
+                    "is_error": output.is_error,
+                }),
+            );
+        };
+
     // Register MCP tools bound to this agent
     let mut registry = ToolRegistry::new();
     let mcp_links: Vec<(String,)> =
@@ -254,11 +285,28 @@ pub async fn chat_send(
     registry.register(Box::new(crate::core::adk::wiki_tool::WikiWriteTool::new(
         state.db.clone(),
     )));
+    registry.register(Box::new(crate::core::adk::wiki_tool::WikiSearchTool::new(
+        state.db.clone(),
+    )));
+
+    // 记忆工具（Agent 可自主搜索/保存记忆）
+    let memory_dir = crate::utils::paths::memory_dir();
+    registry.register(Box::new(
+        crate::core::adk::memory_tools::MemorySearchTool::new(state.db.clone(), memory_dir.clone()),
+    ));
+    registry.register(Box::new(
+        crate::core::adk::memory_tools::MemorySaveTool::new(state.db.clone(), memory_dir),
+    ));
 
     // 文件读写工具（Agent 可在对话中读写本地文件）
     registry.register(Box::new(crate::core::adk::file_tools::FileReadTool));
     registry.register(Box::new(crate::core::adk::file_tools::FileWriteTool));
+    registry.register(Box::new(crate::core::adk::file_tools::FileEditTool));
     registry.register(Box::new(crate::core::adk::file_tools::FileListTool));
+
+    // 代码搜索工具（grep / glob）
+    registry.register(Box::new(crate::core::adk::search_tools::GrepTool));
+    registry.register(Box::new(crate::core::adk::search_tools::GlobTool));
 
     // 任务管理工具（Agent 可自主管理看板任务）
     registry.register(Box::new(crate::core::adk::task_tools::TaskCreateTool));
@@ -266,16 +314,46 @@ pub async fn chat_send(
     registry.register(Box::new(crate::core::adk::task_tools::TaskListTool));
     registry.register(Box::new(crate::core::adk::task_tools::TaskDeleteTool));
 
-    // 文件读写工具（Agent 可在对话中读写本地文件）
-    registry.register(Box::new(crate::core::adk::file_tools::FileReadTool));
-    registry.register(Box::new(crate::core::adk::file_tools::FileWriteTool));
-    registry.register(Box::new(crate::core::adk::file_tools::FileListTool));
+    // M3: 按 agent.disabled_tools 过滤已注册工具
+    for name in &agent_dto.disabled_tools {
+        if registry.remove(name) {
+            tracing::debug!("agent {} 已禁用工具: {name}", session_row.agent_id);
+        }
+    }
 
-    // 任务管理工具（Agent 可自主管理看板任务）
-    registry.register(Box::new(crate::core::adk::task_tools::TaskCreateTool));
-    registry.register(Box::new(crate::core::adk::task_tools::TaskUpdateTool));
-    registry.register(Box::new(crate::core::adk::task_tools::TaskListTool));
-    registry.register(Box::new(crate::core::adk::task_tools::TaskDeleteTool));
+    // ── 加载启用技能内容（路由索引 + 按轮动态注入用） ──
+    let mut agent_skills = Vec::new();
+    {
+        use crate::core::rig::agent::AgentSkill;
+        for skill_id in &enabled_skills {
+            let row = sqlx::query_as::<_, (String, String, Option<String>)>(
+                "SELECT folder_name, name, description FROM skills WHERE id = ? AND is_enabled = 1",
+            )
+            .bind(skill_id)
+            .fetch_optional(&state.db.pool)
+            .await?;
+            if let Some((folder_name, name, description)) = row {
+                let skill_path = crate::utils::paths::skill_dir()
+                    .join(&folder_name)
+                    .join("SKILL.md");
+                if let Ok(content) = tokio::fs::read_to_string(&skill_path).await {
+                    agent_skills.push(AgentSkill {
+                        id: skill_id.clone(),
+                        name: name.clone(),
+                        description: description.unwrap_or_default(),
+                        content,
+                        keywords: vec![name, folder_name],
+                    });
+                }
+            }
+        }
+    }
+
+    // ── 记忆服务（运行前注入上下文 + 完成后自动记录） ──
+    let memory_service = std::sync::Arc::new(MemoryService::new(
+        state.db.clone(),
+        crate::utils::paths::memory_dir(),
+    ));
 
     // ── 构建 Agent 运行时（护栏 + 路由 + 反思 + 轨迹） ──
     let mut agent = RigAgent::new(provider, system_prompt, registry)
@@ -287,6 +365,9 @@ pub async fn chat_send(
         .with_on_delta(on_delta)
         .with_on_reasoning(on_reasoning)
         .with_on_tool_call(on_tool_call)
+        .with_on_tool_result(on_tool_result)
+        .with_memory(memory_service)
+        .with_skills(agent_skills)
         .with_mcp_runtime(state.mcp_runtime.clone());
 
     // 护栏：默认启用注入检测 + 长度限制（阈值与开关可从设置页调整）
@@ -307,6 +388,24 @@ pub async fn chat_send(
         use crate::data::settings::prefs;
         let budget = prefs::get_i64(&state.db.pool, "token_budget.chat", 100_000).await as usize;
         agent = agent.with_token_budget(budget);
+    }
+
+    // 长会话压缩（Compactor）：超过触发阈值时调用 LLM 摘要替换历史
+    {
+        use crate::core::rig::compaction::{CompactStrategy, Compactor};
+        use crate::data::settings::prefs;
+        let strategy = prefs::get_str(&state.db.pool, "compaction.strategy", "summarize").await;
+        let trigger_tokens =
+            prefs::get_i64(&state.db.pool, "compaction.trigger_tokens", 100_000).await as usize;
+        agent = agent.with_compaction(Compactor {
+            strategy: if strategy == "truncate" {
+                CompactStrategy::Truncate
+            } else {
+                CompactStrategy::Summarize
+            },
+            trigger_tokens,
+            ..Default::default()
+        });
     }
 
     // 反思循环：设置页开关启用后接线（默认关闭）

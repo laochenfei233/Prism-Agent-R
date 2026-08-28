@@ -29,7 +29,10 @@ impl PromptBuilder {
         // Inject enabled skills
         for skill_id in enabled_skills {
             if let Some(content) = self.load_skill_content(skill_id).await? {
-                parts.push(format!("\n---\n# Skill\n{}\n", content));
+                parts.push(format!(
+                    "\n---\n# Skill\n{}\n<!-- skill:{skill_id} -->\n",
+                    content
+                ));
             }
         }
 
