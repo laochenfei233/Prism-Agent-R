@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/laochenfei233/Prism-Agent-R/compare/v1.0.0...v1.1.0) (2026-08-28)
+
+### Features
+
+* **agent:** agent completeness fixes + multi-protocol providers ([7a7e27b](https://github.com/laochenfei233/Prism-Agent-R/commit/7a7e27ba06e36f9773a13aaadb2ba10a67b98056))
+
 ## 1.0.0 (2026-08-21)
 
 ### Features
