@@ -1,4 +1,5 @@
 pub mod agent_service;
+pub mod approval_service;
 pub mod chat_service;
 pub mod dashboard_service;
 pub mod glossary_service;
@@ -13,6 +14,7 @@ pub mod translate_service;
 pub mod wiki_service;
 
 pub use agent_service::AgentService;
+pub use approval_service::*;
 pub use chat_service::ChatService;
 pub use dashboard_service::DashboardService;
 pub use glossary_service::GlossaryService;

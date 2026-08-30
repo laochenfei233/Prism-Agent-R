@@ -72,6 +72,9 @@ pub struct AgentRow {
     pub disabled_tools: String,
     pub configuration: String,
     pub order_key: i32,
+    /// 是否为 Orchestrator（总智能体，可委派子任务给其他 Agent）
+    #[sqlx(default)]
+    pub is_orchestrator: i32,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -88,6 +91,37 @@ pub struct AgentDto {
     pub max_tokens: Option<i32>,
     pub disabled_tools: Vec<String>,
     pub order_key: i32,
+    /// 是否为 Orchestrator（总智能体）
+    pub is_orchestrator: bool,
+    /// Agent 扩展配置（含 sub_agent_capabilities 等）
+    pub configuration: serde_json::Value,
+}
+
+// ── Approval ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ApprovalRequestRow {
+    pub id: String,
+    pub kind: String,
+    pub status: String,
+    pub session_id: Option<String>,
+    pub parent_session_id: Option<String>,
+    pub agent_id: String,
+    pub parent_agent_id: Option<String>,
+    pub child_agent_id: Option<String>,
+    pub tool_name: Option<String>,
+    pub arguments: Option<String>,
+    pub task_summary: Option<String>,
+    pub capability_summary: Option<String>,
+    pub risk_level: String,
+    pub reason: Option<String>,
+    pub decision: Option<String>,
+    pub decision_reason: Option<String>,
+    pub decided_by: Option<String>,
+    pub decided_at: Option<i64>,
+    pub expires_at: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
 
 // ── Session ───────────────────────────────────────────────

@@ -38,7 +38,7 @@
   const paletteCommands = $derived.by<CommandItem[]>(() => [
     {
       id: 'open-dashboard',
-      title: '打开面板',
+      title: '打开工作区',
       icon: 'back',
       action: () => {
         agentStore.currentSession = null;

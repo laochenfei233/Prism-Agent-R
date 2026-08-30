@@ -13,6 +13,8 @@ export interface AgentDto {
   max_tokens: number | null;
   disabled_tools: string[];
   order_key: number;
+  is_orchestrator: boolean;
+  configuration: Record<string, unknown>;
 }
 
 export interface SessionDto {
@@ -49,6 +51,7 @@ export const agentApi = {
     if (data.description !== undefined) payload.description = data.description;
     if (data.system_prompt !== undefined) payload.systemPrompt = data.system_prompt;
     if (data.model_id !== undefined) payload.modelId = data.model_id;
+    if (data.configuration !== undefined) payload.configuration = data.configuration;
     return invoke<AgentDto>('agent_update', payload);
   },
   delete: (id: string) => invoke<void>('agent_delete', { id }),

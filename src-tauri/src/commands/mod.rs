@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod agent_eval;
+pub mod approval;
 pub mod asr;
 pub mod chat;
 pub mod compose;

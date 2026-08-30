@@ -3,6 +3,7 @@ import { agentApi, sessionApi, type AgentDto, type SessionDto } from '$lib/api';
 class AgentStore {
   agents = $state<AgentDto[]>([]);
   sessions = $state<SessionDto[]>([]);
+  sessionsByAgent = $state<Record<string, SessionDto[]>>({});
   currentAgent = $state<AgentDto | null>(null);
   currentSession = $state<SessionDto | null>(null);
   loading = $state(false);
@@ -20,9 +21,29 @@ class AgentStore {
 
   async loadSessions(agentId?: string) {
     try {
-      this.sessions = await sessionApi.list(agentId);
+      const sessions = await sessionApi.list(agentId);
+      this.sessions = sessions;
+      if (agentId) {
+        this.sessionsByAgent = {
+          ...this.sessionsByAgent,
+          [agentId]: sessions,
+        };
+      }
     } catch (e) {
       console.error('Failed to load sessions:', e);
+    }
+  }
+
+  async loadAllSessions() {
+    try {
+      const sessions = await sessionApi.list();
+      this.sessions = sessions;
+      this.sessionsByAgent = sessions.reduce<Record<string, SessionDto[]>>((grouped, session) => {
+        grouped[session.agent_id] = [...(grouped[session.agent_id] ?? []), session];
+        return grouped;
+      }, {});
+    } catch (e) {
+      console.error('Failed to load all sessions:', e);
     }
   }
 
@@ -40,12 +61,19 @@ class AgentStore {
     }
   }
 
+  private insertSession(session: SessionDto) {
+    const nextByAgent = {
+      ...this.sessionsByAgent,
+      [session.agent_id]: [session, ...(this.sessionsByAgent[session.agent_id] ?? [])],
+    };
+    this.sessionsByAgent = nextByAgent;
+    this.sessions = [session, ...this.sessions];
+  }
+
   async createSession(agentId: string, title?: string) {
     try {
-      console.log('Creating session:', { agentId, title });
       const session = await sessionApi.create(agentId, title);
-      console.log('Session created:', session);
-      this.sessions = [session, ...this.sessions];
+      this.insertSession(session);
       this.currentSession = session;
       return session;
     } catch (e) {
@@ -55,8 +83,17 @@ class AgentStore {
   }
 
   async deleteSession(id: string) {
+    const session = this.sessions.find((item) => item.id === id);
     await sessionApi.delete(id);
-    this.sessions = this.sessions.filter((s) => s.id !== id);
+    this.sessions = this.sessions.filter((item) => item.id !== id);
+    if (session) {
+      this.sessionsByAgent = {
+        ...this.sessionsByAgent,
+        [session.agent_id]: (this.sessionsByAgent[session.agent_id] ?? []).filter(
+          (item) => item.id !== id,
+        ),
+      };
+    }
     if (this.currentSession?.id === id) {
       this.currentSession = null;
     }
@@ -64,7 +101,12 @@ class AgentStore {
 
   selectAgent(agent: AgentDto) {
     this.currentAgent = agent;
-    this.loadSessions(agent.id);
+    if (this.currentSession?.agent_id !== agent.id) {
+      this.currentSession = null;
+    }
+    if (!this.sessionsByAgent[agent.id]) {
+      void this.loadSessions(agent.id);
+    }
   }
 
   selectSession(session: SessionDto) {

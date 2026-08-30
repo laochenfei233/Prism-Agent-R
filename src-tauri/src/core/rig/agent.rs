@@ -624,52 +624,115 @@ impl RigAgent {
         if matches!(&risk, RiskLevel::High | RiskLevel::Critical) {
             // Already always-approved: skip the gate.
             if let Some(store) = &self.approval_store {
-                if store.is_always_approved(&call.name).await {
+                if store
+                    .is_always_approved(
+                        self.agent_id.as_deref().unwrap_or_default(),
+                        &call.name,
+                        &call.arguments,
+                    )
+                    .await
+                {
                     return self.run_tool(call).await;
                 }
             }
 
-            let request = ToolApprovalRequest {
-                call_id: call.id.clone(),
-                tool_name: call.name.clone(),
-                arguments: call.arguments.clone(),
-                agent_id: self.agent_id.clone().unwrap_or_default(),
-                risk_level: risk,
-                description: format!("工具「{}」请求执行（风险等级: High/Critical）", call.name),
-            };
-            if let Some(app) = &self.app_handle {
-                let _ = app.emit("tool:approval-request", &request);
+            if risk == RiskLevel::Critical {
+                let first = self.request_tool_approval(call, &risk, Some(1)).await;
+                if !matches!(
+                    first,
+                    ToolApprovalResponse::Approved | ToolApprovalResponse::AlwaysApprove(_)
+                ) {
+                    return self.approval_error(call, &first);
+                }
+                let second = self.request_tool_approval(call, &risk, Some(2)).await;
+                return match second {
+                    ToolApprovalResponse::Approved => self.run_tool(call).await,
+                    ToolApprovalResponse::AlwaysApprove(_) => ToolOutput::error(format!(
+                        "工具「{}」二次确认不允许 AlwaysApprove，未执行",
+                        call.name
+                    )),
+                    other => self.approval_error(call, &other),
+                };
             }
 
-            // Wait for a response, or treat timeout / missing store as Defer.
-            let response = match &self.approval_store {
-                Some(store) => {
-                    let rx = store.request_approval(call.id.clone()).await;
-                    match tokio::time::timeout(Duration::from_secs(30), rx).await {
-                        Ok(Ok(resp)) => resp,
-                        _ => ToolApprovalResponse::Defer,
-                    }
-                }
-                None => ToolApprovalResponse::Defer,
-            };
-
+            let response = self.request_tool_approval(call, &risk, None).await;
             match response {
-                ToolApprovalResponse::Approved => self.run_tool(call).await,
-                ToolApprovalResponse::AlwaysApprove(_) => {
-                    if let Some(store) = &self.approval_store {
-                        store.add_always_approve(&call.name).await;
-                    }
+                ToolApprovalResponse::Approved | ToolApprovalResponse::AlwaysApprove(_) => {
                     self.run_tool(call).await
                 }
-                ToolApprovalResponse::Rejected(reason) => {
-                    ToolOutput::error(format!("工具「{}」被用户拒绝: {}", call.name, reason))
-                }
-                ToolApprovalResponse::Defer => {
-                    ToolOutput::error(format!("工具「{}」审批超时或已搁置，未执行", call.name))
-                }
+                other => self.approval_error(call, &other),
             }
         } else {
             self.run_tool(call).await
+        }
+    }
+
+    /// 构建并发送审批请求，等待用户响应。
+    async fn request_tool_approval(
+        &self,
+        call: &ToolCall,
+        risk: &RiskLevel,
+        confirm_step: Option<u32>,
+    ) -> ToolApprovalResponse {
+        let call_id = match confirm_step {
+            Some(2) => format!("{}:confirm2", call.id),
+            _ => call.id.clone(),
+        };
+        let request = ToolApprovalRequest {
+            call_id: call_id.clone(),
+            tool_name: call.name.clone(),
+            arguments: call.arguments.clone(),
+            agent_id: self.agent_id.clone().unwrap_or_default(),
+            risk_level: risk.clone(),
+            description: match confirm_step {
+                Some(2) => format!(
+                    "工具「{}」为 Critical 操作，请再次确认执行（第 2 次）",
+                    call.name
+                ),
+                _ => format!("工具「{}」请求执行（风险等级: {:?}）", call.name, risk),
+            },
+            kind: crate::core::adk::tool::ApprovalRequestKind::Tool,
+            session_id: self.session_id.clone(),
+            parent_session_id: None,
+            parent_agent_id: None,
+            child_agent_id: None,
+            task_summary: None,
+            capability_summary: None,
+            confirm_step,
+        };
+        if let Some(app) = &self.app_handle {
+            let _ = app.emit("tool:approval-request", &request);
+        }
+
+        match &self.approval_store {
+            Some(store) => {
+                let rx = store.request_approval(request).await;
+                let timeout_secs = store.timeout_seconds().await;
+                if timeout_secs == 0 {
+                    return match rx.await {
+                        Ok(resp) => resp,
+                        Err(_) => ToolApprovalResponse::Defer,
+                    };
+                }
+                match tokio::time::timeout(Duration::from_secs(timeout_secs as u64), rx).await {
+                    Ok(Ok(resp)) => resp,
+                    Ok(Err(_)) => ToolApprovalResponse::Defer,
+                    Err(_) => {
+                        store.abandon(&call_id, "expired", "审批超时").await;
+                        ToolApprovalResponse::Defer
+                    }
+                }
+            }
+            None => ToolApprovalResponse::Defer,
+        }
+    }
+
+    fn approval_error(&self, call: &ToolCall, response: &ToolApprovalResponse) -> ToolOutput {
+        match response {
+            ToolApprovalResponse::Rejected(reason) => {
+                ToolOutput::error(format!("工具「{}」被用户拒绝: {}", call.name, reason))
+            }
+            _ => ToolOutput::error(format!("工具「{}」审批超时或已搁置，未执行", call.name)),
         }
     }
 

@@ -1997,6 +1997,9 @@
           Agent（短视频脚本师、文案优化师、品牌定位顾问等），也可在 Agent 页面手动创建自定义 Agent。
         </p>
       </div>
+      {#each specsOf('agent') as spec (spec.key)}
+        {@render SettingRow(spec, (v) => saveSpec(spec, v))}
+      {/each}
     {:else if section === 'mcp'}
       <div class="content-header">
         <h2 class="content-title">MCP 服务器</h2>
