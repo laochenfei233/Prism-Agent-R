@@ -48,6 +48,7 @@ pub async fn agent_update(
     description: Option<String>,
     system_prompt: Option<String>,
     model_id: Option<String>,
+    configuration: Option<serde_json::Value>,
 ) -> Result<AgentDto, AppError> {
     let svc = AgentService::new(state.db.pool.clone());
     svc.update(
@@ -56,6 +57,7 @@ pub async fn agent_update(
         description.as_deref(),
         system_prompt.as_deref(),
         model_id.as_deref(),
+        configuration,
     )
     .await
 }

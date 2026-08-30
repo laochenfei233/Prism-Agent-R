@@ -136,9 +136,58 @@ impl AgentService {
         Ok(())
     }
 
+    /// 幂等补齐 Orchestrator（总智能体）：不存在 is_orchestrator = 1 的 Agent 时创建。
+    /// order_key = -1（九宫格第一张卡），model_id 留空由用户在 Agent 页选择。
+    pub async fn ensure_orchestrator(&self) -> Result<(), AppError> {
+        Self::ensure_source_column(&self.pool).await?;
+
+        let existing: Option<String> =
+            sqlx::query_scalar("SELECT id FROM agents WHERE is_orchestrator = 1 LIMIT 1")
+                .fetch_optional(&self.pool)
+                .await?;
+        if existing.is_some() {
+            return Ok(());
+        }
+
+        // 生成 Orchestrator System Prompt：列出当前所有专业 Agent
+        let agents = self.list().await?;
+        let mut prompt =
+            String::from("你是一个智能任务协调者。你可以将子任务委派给以下专业 Agent：\n\n");
+        for a in &agents {
+            prompt.push_str(&format!(
+                "- {}: {} — {}\n",
+                a.id,
+                a.name,
+                a.description.as_deref().unwrap_or("")
+            ));
+        }
+        prompt.push_str(
+            "\n使用 delegate_to_agent 工具将子任务委派给最合适的 Agent。\n\
+             收到所有子 Agent 结果后，综合整理并输出最终回复。\n\
+             如果需求简单到只需要你自己处理，直接回复，不必委派。",
+        );
+
+        let id = Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().timestamp_millis();
+        sqlx::query(
+            "INSERT INTO agents (id, name, description, system_prompt, model_id, temperature, max_tokens, disabled_tools, configuration, order_key, is_orchestrator, created_at, updated_at, source) VALUES (?, ?, ?, ?, NULL, 0.7, 8192, '[]', '{}', -1, 1, ?, ?, 'builtin')"
+        )
+        .bind(&id)
+        .bind("Orchestrator")
+        .bind("智能任务协调者——把需求交给它，它会调用合适的 Agent 完成任务")
+        .bind(prompt)
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        tracing::info!("orchestrator agent seeded: {id}");
+        Ok(())
+    }
+
     pub async fn list(&self) -> Result<Vec<AgentDto>, AppError> {
         let rows = sqlx::query_as::<_, AgentRow>(
-            "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at FROM agents ORDER BY order_key"
+            "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, is_orchestrator, created_at, updated_at FROM agents ORDER BY order_key"
         )
         .fetch_all(&self.pool)
         .await?;
@@ -148,7 +197,7 @@ impl AgentService {
 
     pub async fn get(&self, id: &str) -> Result<AgentDto, AppError> {
         let row = sqlx::query_as::<_, AgentRow>(
-            "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at FROM agents WHERE id = ?"
+            "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, is_orchestrator, created_at, updated_at FROM agents WHERE id = ?"
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -215,6 +264,7 @@ impl AgentService {
         description: Option<&str>,
         system_prompt: Option<&str>,
         model_id: Option<&str>,
+        configuration: Option<serde_json::Value>,
     ) -> Result<AgentDto, AppError> {
         let now = chrono::Utc::now().timestamp_millis();
 
@@ -250,6 +300,31 @@ impl AgentService {
                 .execute(&self.pool)
                 .await?;
         }
+        if let Some(config) = configuration {
+            let existing: Option<String> =
+                sqlx::query_scalar("SELECT configuration FROM agents WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(&self.pool)
+                    .await?;
+            let mut merged: serde_json::Value = existing
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
+            if config.is_object() {
+                if let Some(obj) = config.as_object() {
+                    for (key, value) in obj {
+                        merged[key] = value.clone();
+                    }
+                }
+            } else {
+                merged = config;
+            }
+            sqlx::query("UPDATE agents SET configuration = ?, updated_at = ? WHERE id = ?")
+                .bind(serde_json::to_string(&merged).unwrap_or_default())
+                .bind(now)
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+        }
 
         self.get(id).await
     }
@@ -278,6 +353,8 @@ impl From<AgentRow> for AgentDto {
             max_tokens: r.max_tokens,
             disabled_tools,
             order_key: r.order_key,
+            is_orchestrator: r.is_orchestrator != 0,
+            configuration: serde_json::from_str(&r.configuration).unwrap_or_default(),
         }
     }
 }
@@ -344,5 +421,56 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&dir2);
+    }
+
+    /// Orchestrator：ensure 后存在一张 order_key = -1 的 Orchestrator 卡，排在首位
+    #[tokio::test]
+    async fn ensure_orchestrator_seeds_first_card() {
+        let (db, dir) = temp_db().await;
+        let svc = AgentService::new(db.pool.clone());
+        svc.ensure_builtin_agents().await.unwrap();
+        svc.ensure_orchestrator().await.unwrap();
+
+        let agents = svc.list().await.unwrap();
+        assert_eq!(agents.len(), 9, "8 个内置 OPC Agent + 1 个 Orchestrator");
+        let first = agents.first().unwrap();
+        assert_eq!(first.name, "Orchestrator");
+        assert_eq!(first.order_key, -1);
+        assert!(first.is_orchestrator);
+        assert!(
+            first
+                .system_prompt
+                .as_deref()
+                .unwrap_or("")
+                .contains("delegate_to_agent"),
+            "Orchestrator system prompt 应包含委派说明"
+        );
+        assert!(
+            agents
+                .iter()
+                .filter(|a| a.name != "Orchestrator")
+                .all(|a| !a.is_orchestrator),
+            "普通 Agent 不应标记为 orchestrator"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Orchestrator：二次 ensure 不重复插入
+    #[tokio::test]
+    async fn ensure_orchestrator_is_idempotent() {
+        let (db, dir) = temp_db().await;
+        let svc = AgentService::new(db.pool.clone());
+        svc.ensure_orchestrator().await.unwrap();
+        svc.ensure_orchestrator().await.unwrap();
+
+        let agents = svc.list().await.unwrap();
+        assert_eq!(
+            agents.iter().filter(|a| a.is_orchestrator).count(),
+            1,
+            "二次 ensure 不应重复创建 Orchestrator"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

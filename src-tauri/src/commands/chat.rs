@@ -50,7 +50,7 @@ pub async fn chat_send(
     .ok_or_else(|| AppError::SessionNotFound(session_id.clone()))?;
 
     let agent_row = sqlx::query_as::<_, crate::data::models::AgentRow>(
-        "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at FROM agents WHERE id = ?"
+        "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, is_orchestrator, created_at, updated_at FROM agents WHERE id = ?"
     )
     .bind(&session_row.agent_id)
     .fetch_optional(&state.db.pool)
@@ -167,6 +167,8 @@ pub async fn chat_send(
         max_tokens: agent_row.max_tokens,
         disabled_tools: serde_json::from_str(&agent_row.disabled_tools).unwrap_or_default(),
         order_key: agent_row.order_key,
+        is_orchestrator: agent_row.is_orchestrator != 0,
+        configuration: serde_json::from_str(&agent_row.configuration).unwrap_or_default(),
     };
 
     // 6. Create provider and agent (dispatch by provider kind)
@@ -313,6 +315,20 @@ pub async fn chat_send(
     registry.register(Box::new(crate::core::adk::task_tools::TaskUpdateTool));
     registry.register(Box::new(crate::core::adk::task_tools::TaskListTool));
     registry.register(Box::new(crate::core::adk::task_tools::TaskDeleteTool));
+
+    // Orchestrator 专属：delegate_to_agent 委派子任务给其他 Agent（普通 Agent 不注册）
+    if agent_row.is_orchestrator != 0 {
+        registry.register(Box::new(
+            crate::core::rig::delegate::DelegateToAgentTool::new(
+                state.db.pool.clone(),
+                state.mcp_runtime.clone(),
+                state.approval_store.clone(),
+                app.clone(),
+                session_id.clone(),
+                session_row.agent_id.clone(),
+            ),
+        ));
+    }
 
     // M3: 按 agent.disabled_tools 过滤已注册工具
     for name in &agent_dto.disabled_tools {
@@ -569,21 +585,17 @@ pub async fn tool_approval_respond(
     state: State<'_, crate::AppState>,
     call_id: String,
     response: String,
+    reason: Option<String>,
 ) -> Result<bool, AppError> {
     // The UI sends plain strings; map them onto the response enum.
     let parsed = match response.as_str() {
         "Approved" => ToolApprovalResponse::Approved,
         "AlwaysApprove" => ToolApprovalResponse::AlwaysApprove(String::new()),
         "Defer" => ToolApprovalResponse::Defer,
-        other => ToolApprovalResponse::Rejected(other.to_string()),
+        "Rejected" => ToolApprovalResponse::Rejected(reason.unwrap_or_default()),
+        other => ToolApprovalResponse::Rejected(reason.unwrap_or_else(|| other.to_string())),
     };
 
-    // If always-approve was chosen, persist it
-    if let ToolApprovalResponse::AlwaysApprove(tool_name) = &parsed {
-        if !tool_name.is_empty() {
-            state.approval_store.add_always_approve(tool_name).await;
-        }
-    }
     Ok(state.approval_store.respond(&call_id, parsed).await)
 }
 

@@ -48,7 +48,19 @@ pub fn run() {
                 .block_on(Database::new(&app_data_dir))
                 .expect("failed to init database");
 
+            // 启动时 seed 内置 OPC Agent + Orchestrator（幂等）
+            {
+                let agent_svc = data::services::AgentService::new(db.pool.clone());
+                if let Err(e) = rt.block_on(async {
+                    agent_svc.ensure_builtin_agents().await?;
+                    agent_svc.ensure_orchestrator().await
+                }) {
+                    tracing::warn!("agent seed failed: {e}");
+                }
+            }
+
             let mcp_runtime = McpRuntime::new();
+            let approval_store = std::sync::Arc::new(ToolApprovalStore::with_pool(db.pool.clone()));
 
             // 注册内置 ASR 后端（动态注册表，后续自定义后端可追加）
             data::services::asr::backends::builtin_register();
@@ -78,7 +90,7 @@ pub fn run() {
                 db,
                 active_cancels: Mutex::new(HashMap::new()),
                 mcp_runtime,
-                approval_store: std::sync::Arc::new(ToolApprovalStore::new()),
+                approval_store,
                 audio_streams: std::sync::Arc::new(AudioStreamManager::new()),
                 session_state: std::sync::Arc::new(SessionStateManager::new()),
                 translate_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
@@ -95,6 +107,7 @@ pub fn run() {
             commands::agent::agent_create,
             commands::agent::agent_update,
             commands::agent::agent_delete,
+            commands::approval::approval_history,
             commands::agent::context_agent,
             commands::agent::session_inject_file,
             commands::session::session_list,

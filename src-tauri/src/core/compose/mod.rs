@@ -315,7 +315,7 @@ async fn create_provider(
 ) -> Result<Arc<dyn ModelProvider>, AppError> {
     // Get agent config
     let agent_row = sqlx::query_as::<_, crate::data::models::AgentRow>(
-        "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, created_at, updated_at FROM agents WHERE id = ?"
+        "SELECT id, name, description, avatar, system_prompt, model_id, plan_model_id, small_model_id, temperature, max_tokens, disabled_tools, configuration, order_key, is_orchestrator, created_at, updated_at FROM agents WHERE id = ?"
     )
     .bind(agent_id)
     .fetch_optional(db)
