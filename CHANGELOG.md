@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/laochenfei233/Prism-Agent-R/compare/v1.1.0...v1.2.0) (2026-10-02)
+
+### Features
+
+* **agent:** orchestrator subagents + approval governance ([e1a5bfb](https://github.com/laochenfei233/Prism-Agent-R/commit/e1a5bfb1f33e6f60fc8cedf3cc715346735c04c3))
+
 ## [1.1.0](https://github.com/laochenfei233/Prism-Agent-R/compare/v1.0.0...v1.1.0) (2026-08-28)
 
 ### Features
