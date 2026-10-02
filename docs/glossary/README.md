@@ -1,6 +1,7 @@
 # 术语库（Glossary）资源
 
-本目录存放可直接导入 prism-agent 翻译术语表的 CSV 文件。
+CSV 数据统一存放在 `src-tauri/resources/glossary/`（构建时经 `bundle.resources`
+打包为应用内置词库），本目录只保留说明与转换脚本。
 导入格式与 `glossary_import_csv` 一致：
 
 ```
@@ -9,11 +10,11 @@ en,zh,FOB,船上交货,外贸术语
 ```
 
 > 注意：导入器用 `splitn(5, ',')` 解析且无引号转义，词条内含逗号会错位。
-> 本目录所有 CSV 已过滤含逗号的词条，可安全导入。
+> resources 下所有 CSV 已过滤含逗号的词条，可安全导入。
 
 ## 文件清单
 
-| 文件 | 词条数 | 覆盖 | 来源 |
+| 文件（`src-tauri/resources/glossary/`） | 词条数 | 覆盖 | 来源 |
 |------|--------|------|------|
 | `microsoft_terms_zh-CN.csv` | 33,542 | 微软通用术语（IT/商务/系统 UI） | Microsoft Terminology Collection（官方 TBX 导出，GitHub 镜像 [sumpler/Microsoft-Terminology-Collection-And-Style-Guides](https://github.com/sumpler/Microsoft-Terminology-Collection-And-Style-Guides)） |
 | `foreign_trade_terms.csv` | 118 | INCOTERMS 2020 + 外贸单证/结算/物流/报关 | 手工整理（国际商会 INCOTERMS 2020 官方定义） |
@@ -25,7 +26,7 @@ en,zh,FOB,船上交货,外贸术语
 
 ## 使用方法
 
-应用内：设置 → 翻译 → 术语表 → 导入 CSV（选择本目录文件路径）。
+应用内：设置 → 翻译 → 术语表 → 导入 CSV（选择 `src-tauri/resources/glossary/` 下文件路径）。
 
 ## 一键导入（推荐）
 

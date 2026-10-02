@@ -1,5 +1,4 @@
 pub mod agent;
-pub mod agent_eval;
 pub mod approval;
 pub mod asr;
 pub mod chat;
@@ -13,11 +12,9 @@ pub mod mcp;
 pub mod meeting;
 pub mod memory;
 pub mod model;
-pub mod monitor;
 pub mod ocr;
 pub mod project_index;
 pub mod rag;
-pub mod router;
 pub mod search;
 pub mod session;
 pub mod settings;

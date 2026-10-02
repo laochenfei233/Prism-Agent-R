@@ -1,4 +1,3 @@
-pub mod catalog;
 pub mod runtime;
 pub mod transport;
 

@@ -146,39 +146,6 @@ pub async fn workspace_open_file(
     Ok(())
 }
 
-/// 写指令文件（仅允许写入当前工作区目录内的文件）
-#[tauri::command]
-pub async fn workspace_write_instructions(
-    state: State<'_, crate::AppState>,
-    path: String,
-    content: String,
-) -> Result<(), AppError> {
-    let workspace = load_workspace_info(&state.db.pool).await?;
-    let root = std::fs::canonicalize(&workspace.current_dir)?;
-
-    let target = if Path::new(&path).is_absolute() {
-        PathBuf::from(&path)
-    } else {
-        root.join(&path)
-    };
-
-    let parent = target.parent().unwrap_or(Path::new("."));
-    let canon_parent = std::fs::canonicalize(parent)
-        .map_err(|_| AppError::Forbidden(format!("目标路径无效: {path}")))?;
-    if !canon_parent.starts_with(&root) {
-        return Err(AppError::Forbidden(format!(
-            "只能写入工作区目录内的文件: {}",
-            target.display()
-        )));
-    }
-
-    if let Some(parent_dir) = target.parent() {
-        tokio::fs::create_dir_all(parent_dir).await?;
-    }
-    tokio::fs::write(&target, content).await?;
-    Ok(())
-}
-
 // ── 共享辅助（agent::context_agent 复用） ────────────────
 
 /// 读取 preferences 中的工作区记录；无 current_dir 记录时返回 None

@@ -54,3 +54,8 @@ bzip2 = "0.4"
 sha2 = "0.10"
 pdf-extract = "0.12"
 docx-rs = "0.4"
+
+[profile.dev]
+# 默认 debug=2 写入全量调试信息，叠加 staticlib/cdylib/rlib 三份主库产物，
+# 会让 .lib/.pdb 膨胀到 GB 级；只保留行号表即可满足断点调试与带行号的 backtrace。
+debug = "line-tables-only"

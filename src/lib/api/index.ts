@@ -412,33 +412,7 @@ export const ragApi = {
   rerankConfig: (enabled: boolean) =>
     invoke<{ enabled: boolean }>('rag_rerank_config', { enabled }),
   rerankStatus: () => invoke<{ enabled: boolean }>('rag_rerank_status'),
-  eval: (wikiId?: string, suite?: string, topK?: number) =>
-    invoke<EvalReportDto>('rag_eval', { wikiId, suite, topK }),
-  evalAdd: (case_: Record<string, unknown>) => invoke<string>('rag_eval_add', { case: case_ }),
-  evalReport: () => invoke<EvalReportDto[]>('rag_eval_report'),
 };
-
-export interface EvalMetricsDto {
-  recall_at_k: number;
-  page_acc: number;
-  table_acc: number;
-  ocr_completeness: number;
-  chart_acc: number;
-}
-
-export interface EvalReportDto {
-  suite: string;
-  case_count: number;
-  metrics: EvalMetricsDto;
-  cases: Array<{
-    id: string;
-    question: string;
-    passed: boolean;
-    hit_count: number;
-    detail: string;
-  }>;
-  created_at: number;
-}
 
 export interface EmbeddingStatusDto {
   mode: string;
@@ -678,29 +652,6 @@ export interface AgentTraceDto {
   outcome: string;
 }
 
-// ── Router API（Skill/MCP 路由调试） ──────────────────────
-
-export interface RouteItemDto {
-  id: string;
-  kind: 'Skill' | 'McpTool';
-  name: string;
-  description: string;
-  keywords: string[];
-  server_id: string | null;
-}
-
-export interface RouteResultDto {
-  skills: RouteItemDto[];
-  tools: RouteItemDto[];
-  semantic_used: boolean;
-}
-
-export const routerApi = {
-  route: (query: string, topK?: number) => invoke<RouteResultDto>('router_route', { query, topK }),
-  indexStatus: () =>
-    invoke<{ skills: number; mcp_tools: number; updated_at: number }>('router_index_status'),
-};
-
 // ── Compose API ─────────────────────────────────────────
 
 export const composeApi = {
@@ -722,11 +673,6 @@ export interface TaskItem {
   created_at: number;
   updated_at: number;
 }
-
-export const taskApi = {
-  list: (agentId?: string, status?: string) =>
-    invoke<TaskItem[]>('dashboard_tasks', { agentId, status }),
-};
 
 // ── 项目级自动索引 API（§10.2.1） ─────────────────────────
 
@@ -756,58 +702,6 @@ export const workspaceApi = {
   get: () => invoke<WorkspaceInfoDto>('workspace_get'),
   set: (path: string, agentId?: string) =>
     invoke<WorkspaceInfoDto>('workspace_set', { path, agentId }),
-};
-
-// ── TTS 播报 API（§10.3.9） ───────────────────────────────
-
-export interface TtsSpeakResultDto {
-  backend: string;
-  segments: string[];
-  lang: string;
-  rate: number;
-}
-
-export interface TtsVoiceInfoDto {
-  backend: string;
-  available: boolean;
-  lang: string | null;
-  rate: number;
-}
-
-export const ttsApi = {
-  speak: (text: string, lang?: string, rate?: number) =>
-    invoke<TtsSpeakResultDto>('tts_speak', { text, lang, rate }),
-  stop: () => invoke<void>('tts_stop'),
-  voices: () => invoke<TtsVoiceInfoDto>('tts_voices'),
-};
-
-// ── Search API (§15) ─────────────────────────────────────
-
-export interface SearchConfigResult {
-  provider: string;
-  api_key_set: boolean;
-  searxng_url: string | null;
-  fallback_provider: string | null;
-}
-
-export interface SearchTestResult {
-  success: boolean;
-  provider: string;
-  first_result_title: string | null;
-  first_result_url: string | null;
-  elapsed_ms: number;
-  error: string | null;
-}
-
-export const searchApi = {
-  config: () => invoke<SearchConfigResult>('search_config'),
-  saveConfig: (data: {
-    provider?: string;
-    api_key?: string;
-    searxng_url?: string;
-    fallback_provider?: string;
-  }) => invoke<void>('search_config_save', data),
-  test: () => invoke<SearchTestResult>('search_test'),
 };
 
 // ── Session Lifecycle API (§17.1) ────────────────────────

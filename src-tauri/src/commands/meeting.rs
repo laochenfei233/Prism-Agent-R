@@ -143,37 +143,6 @@ pub async fn meeting_push_to_agent(
         .await
 }
 
-/// §10.3.5 离线二次转写（换 ASR 模型重新识别录音）
-#[tauri::command]
-pub async fn meeting_retranscribe(
-    state: State<'_, crate::AppState>,
-    id: String,
-    asr_config: AsrConfigInput,
-) -> Result<Vec<TranscriptSegmentDto>, AppError> {
-    use crate::data::services::asr::AsrBackendConfig;
-    let backend_cfg = AsrBackendConfig::from_input(
-        &asr_config.kind,
-        asr_config.base_url,
-        asr_config.api_key,
-        asr_config.model,
-        asr_config.lang,
-        asr_config.model_path,
-        asr_config.extra,
-    );
-    let svc = MeetingService::new(state.db.clone(), paths::meetings_dir());
-    let segs = svc.retranscribe(&id, &backend_cfg).await?;
-    Ok(segs
-        .into_iter()
-        .map(|s| TranscriptSegmentDto {
-            index: s.index,
-            text: s.text,
-            is_final: s.is_final,
-            translated: s.translated,
-            speaker_id: s.speaker_id,
-        })
-        .collect())
-}
-
 fn meeting_to_dto(m: Meeting) -> MeetingDto {
     MeetingDto {
         id: m.id,

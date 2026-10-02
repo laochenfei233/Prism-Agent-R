@@ -57,7 +57,6 @@ fn candidate(id: &str) -> Option<&'static Candidate> {
 
 struct RunningServer {
     child: tokio::process::Child,
-    cmd: String,
 }
 
 fn registry() -> &'static Mutex<HashMap<String, RunningServer>> {
@@ -86,38 +85,6 @@ pub async fn lsp_detect(workdir: String) -> Result<Vec<LspServerInfo>, AppError>
                 install_hint: Some(cand.install_hint.into()),
             });
         }
-    }
-
-    Ok(servers)
-}
-
-/// 返回已启动的 LSP 服务器（自动剔除已退出的进程）
-#[tauri::command]
-pub async fn lsp_list() -> Result<Vec<LspServerInfo>, AppError> {
-    let mut guard = registry().lock().unwrap();
-    let mut servers = Vec::new();
-    let mut dead = Vec::new();
-
-    for (id, server) in guard.iter() {
-        if server.child.id().is_some_and(pid_alive) {
-            servers.push(LspServerInfo {
-                id: id.clone(),
-                cmd: server.cmd.clone(),
-                status: "running".into(),
-                langs: candidate(id)
-                    .map(|c| c.langs.iter().map(|s| s.to_string()).collect())
-                    .unwrap_or_default(),
-                index_file_count: None,
-                last_error: None,
-                install_hint: None,
-            });
-        } else {
-            dead.push(id.clone());
-        }
-    }
-
-    for id in dead {
-        guard.remove(&id);
     }
 
     Ok(servers)
@@ -166,7 +133,6 @@ pub async fn lsp_start(
         server_id.clone(),
         RunningServer {
             child,
-            cmd: cand.cmd.into(),
         },
     );
 
@@ -205,26 +171,3 @@ fn binary_exists(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn pid_alive(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        std::process::Command::new("kill")
-            .arg("-0")
-            .arg(pid.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    }
-    #[cfg(windows)]
-    {
-        std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    }
-}

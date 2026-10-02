@@ -43,8 +43,8 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@shikijs/markdown-it": "^4.4.3",
     "@tauri-apps/api": "^2.0.0",
-    "markdown-it": "^15.0.0"
+    "markdown-it": "^15.0.0",
+    "shiki": "^4.4.3"
   }
 }

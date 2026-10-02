@@ -5,7 +5,7 @@
 
 use tauri::State;
 
-use crate::data::services::tts_service::{split_for_speech, TtsVoiceInfo};
+use crate::data::services::tts_service::split_for_speech;
 use crate::utils::error::AppError;
 
 /// 播报文本：服务端按句分段，返回分段数组供前端队列播放
@@ -33,16 +33,4 @@ pub async fn tts_speak(
         "lang": lang.unwrap_or_else(|| "zh-CN".into()),
         "rate": rate.unwrap_or(1.0),
     }))
-}
-
-/// 停止播报（系统 TTS 在前端停止；云端任务接入后在此取消）
-#[tauri::command]
-pub async fn tts_stop() -> Result<(), AppError> {
-    Ok(())
-}
-
-/// 可用音色/后端状态
-#[tauri::command]
-pub async fn tts_voices(state: State<'_, crate::AppState>) -> Result<TtsVoiceInfo, AppError> {
-    crate::data::services::tts_service::voices_status(&state.db).await
 }
